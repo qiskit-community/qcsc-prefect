@@ -1,0 +1,5 @@
+[api]
+url="https://qii-kawasaki-miyabi-serv.cspp.cc.u-tokyo.ac.jp/prefect/api"
+
+[server.ephemeral]
+enabled = false
