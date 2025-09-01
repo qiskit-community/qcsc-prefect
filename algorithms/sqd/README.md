@@ -125,7 +125,7 @@ Ensure the following environment variable is set:
 To run mpi launchers, make sure the necessary module is loaded:
 
 ```yaml
-["load mpi/openmpi-x86_64"]
+["mpi/openmpi-x86_64"]
 ```
 
 Use the following block names:
