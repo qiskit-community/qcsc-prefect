@@ -8,6 +8,9 @@ The experiment requires a [custom DICE solver](https://github.com/caleb-johnson/
 
 ## Getting Started
 
+```bash
+module load mpi/openmpi-x86_64
+```
 ### 1. Install DICE Solver
 
 First, load `openmpi` or an equivalent module to enable a C++ compiler with MPI support (e.g., `mpicxx`):
@@ -20,8 +23,12 @@ If the module is not available (`module avail`), install it manually. The module
 
 After loading the module, build the solver:
 
+> [!NOTE]
+> Run `build_dish.sh` exclusively within the `algorithms/sqd/` directory; executing it elsewhere may result in failure.
 ```bash
-sh build_dice.sh
+pwd 
+>> /home/prefectuser/qii-miyabi-kawasaki/algorithms/sqd
+sh ../../framework/prefect-dice/build_dice.sh
 ```
 
 This process may take some time. Upon successful build, the `bin` directory will contain the `Dice` binary:
@@ -77,8 +84,9 @@ uv pip list | grep qii-miyabi-kawasaki
 Example output:
 
 ```
+prefect-dice              0.1.0       /home/prefectuser/qii-miyabi-kawasaki/framework/prefect-dice
 prefect-miyabi            0.1.0       /home/prefectuser/qii-miyabi-kawasaki/framework/prefect-miyabi
-sqd-dice                  0.1.0       /home/prefectuser/qii-miyabi-kawasaki/algorithms/sqd
+sqd-dice                  1.0.0       /home/prefectuser/qii-miyabi-kawasaki/algorithms/sqd
 ```
 
 > [!NOTE]
@@ -103,17 +111,30 @@ PREFECT_SERVER_ALLOW_EPHEMERAL_MODE='False' (from prefect.toml)
 ```
 
 By default, the endpoint connects to `qii-kawasaki-miyabi-serv`, a virtual machine hosted by [mdx](https://mdx.jp/). Modify `PREFECT_API_URL` to connect to your own Prefect server if needed.
+You can export `PREFECT_API_URL` in your shell to apply the setting to all flow runs within that session:
+```
+export PREFECT_API_URL=your/endpoint/url/prefect/api
+```
+Alternatively, you can persist the configuration by directly editing `prefect.toml`.
 
+### 4. Configure `QuantumRuntime` block
 Register the data schema for dependency blocks so they can be configured via the Prefect console GUI:
 
 ```bash
 prefect block register -m prefect_qiskit
 prefect block register -m prefect_qiskit.vendors
-prefect block register -m sqd_dice.dice_job
+prefect block register -m prefect_dice
 ```
 
 Refer to the [Prefect Qiskit tutorial](https://qiskit-community.github.io/prefect-qiskit/tutorials/01_getting_started/) for guidance on setting up the `QuantumRuntime` block for primitive executions.
 
+Specifically, use the following block settings:
+- Block Name: `"sqd-runner-{$USER}"`
+- ToDo
+  - Add reference to example-setting folder. 
+  - Add note that if you use an uniform sampler, you do not have to configure `QuantumRuntime` block.
+
+### 5. Configure `DiceSHCISolverJob` block
 Similarly, configure the `DiceSHCISolverJob` block to specify the path to the `Dice` executable and the working directory. In the Miyabi environment, both must reside in shared storage (e.g., `/work`) so compute nodes can access them.
 
 Ensure the following environment variable is set:

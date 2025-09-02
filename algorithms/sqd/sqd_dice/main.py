@@ -31,7 +31,7 @@ from qiskit_addon_sqd.fermion import SCIResult, bitstring_matrix_to_ci_strs
 from qiskit_addon_sqd.subsampling import postselect_and_subsample
 from qiskit_ibm_runtime.transpiler.passes import FoldRzzAngle
 
-from .dice_job import DiceSHCISolverJob
+from prefect_dice import DiceSHCISolverJob
 
 RUNNER_BLOCK = f"sqd-runner-{os.getlogin()}"
 SOLVER_BLOCK = f"sqd-solver-{os.getlogin()}"
