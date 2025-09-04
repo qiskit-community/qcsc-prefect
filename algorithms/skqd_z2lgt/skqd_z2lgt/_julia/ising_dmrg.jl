@@ -4,20 +4,25 @@ using ITensorMPS: siteinds, OpSum, MPO, MPS, random_mps, dmrg
 function ising_dmrg(filename)
     fp = h5open(filename, "r+")
 
-    sites = siteinds("Qubit", read(fp["N"]))
+    sites = siteinds("Qubit", read(fp["num_qubits"]))
     os = OpSum()
 
-    data_zz = read(fp["ZZ"])
-    nzz = length(data_zz) ÷ 2
+    indices = read(fp["zz_indices"])
+    coeffs = read(fp["zz_coeffs"])
+    nzz = length(indices) ÷ 2
     for iop in 1:nzz
-        os += "Z", data_zz[1, iop] + 1, "Z", data_zz[2, iop] + 1
+        os += coeffs[iop], "Z", indices[1, iop] + 1, "Z", indices[2, iop] + 1
     end
-    for index in read(fp["Z"])
-        os += "Z", index + 1
+    indices = read(fp["z_indices"])
+    coeffs = read(fp["z_coeffs"])
+    for iop in 1:length(indices)
+        os += coeffs[iop], "Z", indices[iop] + 1
     end
-    kval = read(fp["K"])
-    for index in read(fp["X"])
-        os += kval, "X", index + 1
+
+    indices = read(fp["x_indices"])
+    coeffs = read(fp["x_coeffs"])
+    for iop in 1:length(indices)
+        os += coeffs[iop], "X", indices[iop] + 1
     end
 
     H = MPO(os, sites)
