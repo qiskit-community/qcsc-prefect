@@ -1,7 +1,7 @@
 """Functions to pre- and postprocess data for correction learning."""
 import numpy as np
 from heavyhex_qft.plaquette_dual import PlaquetteDual
-from .mwpm import make_matching, mwpm_correct
+from skqd_z2lgt.mwpm import make_matching, mwpm_correct
 
 
 def preprocess(
@@ -30,7 +30,7 @@ def preprocess(
         link_state, syndrome = mwpm_correct(link_state, lattice, matching)
         plaquette_state = dual_lattice.map_link_state(link_state)
         if as_counts:
-            out[(tuple(syndrome), tuple(plaquette_state))] = count
+            out[(tuple(syndrome.tolist()), tuple(plaquette_state.tolist()))] = int(count)
         else:
             out[pos:pos + count, :lattice.num_vertices] = syndrome[None, :]
             out[pos:pos + count, lattice.num_vertices:] = plaquette_state[None, :]
