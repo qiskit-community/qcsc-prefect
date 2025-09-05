@@ -73,3 +73,31 @@ def ising_dmrg(
         os.unlink(filename)
 
     return energy
+
+
+def get_mps_probs(
+    filename: str,
+    num_samples: int = 100000,
+    julia_bin: str = 'julia'
+) -> tuple[np.ndarray, np.ndarray]:
+    """Call mps_sparsity.jl and get the list of probable computational basis states."""
+    program = os.path.join(
+        os.path.dirname(__file__),
+        '_julia',
+        'mps_sparsity.jl'
+    )
+
+    proc = subprocess.run([julia_bin, program, filename, str(num_samples)],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+        sys.stdout.flush()
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
+        sys.stderr.flush()
+
+    with h5py.File(filename, 'r') as source:
+        states = source['states'][()]
+        probs = source['probs'][()]
+
+    return states, probs
