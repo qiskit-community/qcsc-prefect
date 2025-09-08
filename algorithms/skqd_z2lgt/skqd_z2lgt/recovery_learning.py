@@ -24,7 +24,7 @@ def preprocess(
     if as_counts:
         out = {}
     else:
-        out = np.empty((shots, lattice.num_vertices + lattice.num_plaquettes), dtype=int)
+        out = np.empty((shots, lattice.num_vertices + lattice.num_plaquettes), dtype=np.uint8)
     pos = 0
     for link_state, count in generator:
         link_state, syndrome = mwpm_correct(link_state, lattice, matching)
