@@ -16,8 +16,12 @@ classifiers = [
 ]
 dependencies = [
     "numpy",
+    "scipy",
+    "h5py",
     "jax",
     "optax",
+    "orbax-checkpoint",
+    "flax",
     "qiskit>=2.1.0",
     "qiskit_aer>=0.17.0",
     "rustworkx",
@@ -26,4 +30,4 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-heavyhex_qft = { path = "../../libs/heavyhex_qft", editable = true }
+heavyhex_qft = { path = "../../libs/heavyhex-qft", editable = true }
