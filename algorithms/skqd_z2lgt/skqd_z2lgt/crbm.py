@@ -126,6 +126,7 @@ def train_crbm(
     test_dataset: np.ndarray,
     batch_size: int,
     num_epochs: int,
+    metrics_history: Optional[dict[str, list]] = None,
     eval_every: int = 10,
     optax_fn: Optional[Callable] = None,
     seed: int = 0,
@@ -166,12 +167,11 @@ def train_crbm(
     test_u = jax.device_put(test_dataset[:, :num_u])
     test_v = jax.device_put(test_dataset[:, num_u:])
 
-    metrics_history = {
-        'train_loss': [],
-        'train_free_energy': [],
-        'test_loss': [],
-        'test_free_energy': []
-    }
+    if metrics_history is None:
+        metrics_history = {}
+
+    for key in ['train_loss', 'train_free_energy', 'test_loss', 'test_free_energy']:
+        metrics_history.setdefault(key, [])
 
     for iepoch in range(num_epochs):
         LOG.info('Starting epoch %d/%d', iepoch, num_epochs)
