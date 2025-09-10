@@ -1,6 +1,7 @@
 """Definition of SQD workflow."""
 
 import asyncio
+import io
 from typing import NamedTuple
 
 import ffsim
@@ -284,6 +285,12 @@ def compute_molecular_integrals(
 ) -> ElectronicProperties:
     """Precompute molecular orbital property with classical methods."""
     
+    # PySCF doesn't use the standard Python logging and Prefect cannot capture it.
+    # The logs are directly written in the stdout or in a file.
+    # To forward the logs to the Prefect logging sytem,
+    # we set an in-memory buffer to the PySCF logging system and read from there.
+    buf = io.StringIO()
+
     if isinstance(mol_params, MoleculeGeometry):
         mol = gto.Mole()
         mol.build(
@@ -291,6 +298,8 @@ def compute_molecular_integrals(
             basis=mol_params.basis,
             symmetry=mol_params.symmetry,
         )
+        mol.stdout = buf
+        mol.verbose = 4
         mf = scf.RHF(mol).run()
         norb = mf.mo_coeff.shape[1]
 
@@ -304,6 +313,8 @@ def compute_molecular_integrals(
         norb = data["NORB"]
         
         mf = tools.fcidump.to_scf(mol_params.fcidump_file)
+        mf.mol.verbose = 4
+        mf.mol.stdout = buf
 
         # Run HF calculation with Newton method.
         # HF convergence is important, as we assume 
@@ -313,7 +324,7 @@ def compute_molecular_integrals(
         dm0 = np.zeros((norb, norb))
         for i in range(mf.mol.nelectron // 2):
             dm0[i,i] = 2.0
-        mf.kernel(dm0)
+        mf.kernel(dm0=dm0)
         
         # MO integrals. These are raw Hamiltonian.
         hcore = mf.get_hcore()
@@ -333,7 +344,6 @@ def compute_molecular_integrals(
     
     nuclear_repulsion_energy = mf.mol.energy_nuc()
     num_elec_a, num_elec_b = mf.mol.nelec
-    mf.mol.verbose = 4
 
     # Run CCSD
     mycc = cc.CCSD(mf)
@@ -345,6 +355,9 @@ def compute_molecular_integrals(
     rdm1_ccsd = mf.make_rdm1()
     occ_ccsd, _ = scipy.linalg.eigh(rdm1_ccsd)
     occ_ccsd /= 2.0
+
+    # Get PySCF logs dumped into in-memory buffer
+    get_run_logger().info(buf.getvalue())
     
     return ElectronicProperties(
         one_body_tensor=h1,
@@ -455,7 +468,7 @@ def transpile_circuit(
     )
     logger.info(
         f"Circuit depth = {gate_depth}\n"
-        f"Instruction counts = {dict(isa_circuit.count_ops())}¥n"
+        f"Instruction counts = {dict(isa_circuit.count_ops())}\n"
     )
     return isa_circuit
 
