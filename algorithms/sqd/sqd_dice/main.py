@@ -1,11 +1,12 @@
 """Definition of SQD workflow."""
 
 import asyncio
+from typing import NamedTuple
 
 import ffsim
 import numpy as np
-import pyscf
-import pyscf.mcscf
+import scipy
+from pyscf import tools, ao2mo, mcscf, cc, gto, scf
 from ffsim.qiskit import PRE_INIT
 from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_table_artifact
@@ -32,41 +33,58 @@ from qiskit_ibm_runtime.transpiler.passes import FoldRzzAngle
 
 from prefect_dice import DiceSHCISolverJob
 
-from .subsample import postselect, subsample
+from sqd_dice.subsample import postselect, subsample
 
 
-class Parameters(BaseModel):
-    """Workflow parameters to configure sqd_2405_05068 workflow."""
+class MoleculeGeometry(BaseModel):
+    """Molecule definition by geometory and basis."""
 
     atom: str = Field(
         description="Definition for molecule structure.",
         title="Atom",
-    )
-    spin_sq: float = Field(
-        default=0.0,
-        description="Target value for the total spin squared for the ground state.",
-        title="Total Spin Squared",
     )
     basis: str = Field(
         default="6-31g",
         description="Name of basis set.",
         title="Basis Set",
     )
-    n_frozen: int = Field(
-        default=0,
-        description="Number of non-excitation orbitals.",
-        title="Frozen Orbitals",
-        ge=0,
-    )
     symmetry: str | bool = Field(
         default=False,
         description="Whether to use symmetry, otherwise string of point group name.",
         title="Symmetry",
     )
-    symmetrize_spin: bool = Field(
-        default=True,
-        description="Whether to always merge spin-alpha and spin-beta CI strings into a single list.",
-        title="Symmetrize Spin",
+    spin_sq: float = Field(
+        default=0.0,
+        description="Target value for the total spin squared for the ground state.",
+        title="Total Spin Squared",
+    )
+
+
+class FCIDumpFile(BaseModel):
+    """Molecule definition by FCIDump file."""
+
+    fcidump_file: str = Field(
+        default="",
+        description=(
+            "Location of FCIDump file storing 1-electron and 2-electron integrals. "
+            "We assume these are precomputed in the MO basis."
+        ),
+        title="FCIDump File",
+    )
+    spin_sq: float = Field(
+        default=0.0,
+        description="Target value for the total spin squared for the ground state.",
+        title="Total Spin Squared",
+    )
+
+
+class Parameters(BaseModel):
+    """Workflow parameters to configure sqd_2405_05068 workflow."""
+
+    target_molecule: MoleculeGeometry | FCIDumpFile = Field(
+        default_factory=MoleculeGeometry,
+        title="Molecule",
+        description="PySCF definition of the molecule to solve for.",
     )
     sqd_subspace_dim: int = Field(
         description="SQD: Dimension d of subsampled bitstrings for diagonalization.",
@@ -116,6 +134,20 @@ class Parameters(BaseModel):
     )
 
 
+class ElectronicProperties(NamedTuple):
+    """Electronic properties of target molecule pre-computed by PySCF."""
+
+    one_body_tensor: np.ndarray
+    two_body_tensor: np.ndarray
+    t2: np.ndarray
+    initial_occupancy: np.ndarray
+    nuclear_repulsion_energy: float
+    num_orbitals: int
+    num_electrons: tuple[int, int]
+    open_shell: bool
+    spin_sq: float
+
+
 @flow
 async def sqd_2405_05068(
     parameters: Parameters,
@@ -127,9 +159,7 @@ async def sqd_2405_05068(
     logger = get_run_logger()
 
     # Compute molecular integrals
-    hcore, eri, t2, nuclear_repulsion_energy, norb, nelec = compute_molecular_integrals(
-        parameters
-    )
+    elec_props = compute_molecular_integrals(parameters.target_molecule)
 
     # Sample bitstrings
     try:
@@ -139,9 +169,9 @@ async def sqd_2405_05068(
 
         ansatz_circuit = create_ansatz_circuits(
             parameters=parameters,
-            one_body_tensor=hcore,
-            num_electrons=nelec,
-            t2=t2,
+            num_orbitals=elec_props.num_orbitals,
+            num_electrons=elec_props.num_electrons,
+            t2=elec_props.t2,
         )
         isa_circuit = transpile_circuit(
             circuit=ansatz_circuit,
@@ -160,54 +190,63 @@ async def sqd_2405_05068(
             f"Runner block {runner_name} is not defined. "
             "Falling back into random uniform sampling."
         )
-        bit_array = generate_bit_array_uniform(10_000, norb * 2, rand_seed=rng)
+        bit_array = generate_bit_array_uniform(
+            100_000,
+            elec_props.num_orbitals * 2,
+            rand_seed=rng,
+        )
 
     # Convert BitArray into bitstring and probability arrays
     raw_bitstrings, raw_probs = bit_array_to_arrays(bit_array)
-    n_alpha, n_beta = nelec
+    n_alpha, n_beta = elec_props.num_electrons
 
     # Run configuration recovery loop
     sci_solver = await DiceSHCISolverJob.load(solver_name)
     sqd_artifact = []
-    current_occupancies = None
+    current_occupancies = elec_props.initial_occupancy
     best_result = None
     for round_idx in range(parameters.sqd_max_iterations):
-        if current_occupancies is None:
-            bitstrings, probs = raw_bitstrings, raw_probs
-        else:
-            bitstrings, probs = recover_configurations(
-                raw_bitstrings,
-                raw_probs,
-                current_occupancies,
-                n_alpha,
-                n_beta,
-                rand_seed=rng,
-            )
-        bitstrings, probs = postselect(
+        bitstrings, probs = recover_configurations(
+            raw_bitstrings,
+            raw_probs,
+            current_occupancies,
+            n_alpha,
+            n_beta,
+            rand_seed=rng,
+        )        
+        bitstrings_post, probs_post = postselect(
             bitstring_matrix=bitstrings,
             probabilities=probs,
             hamming_right=n_alpha,
             hamming_left=n_beta,
         )
+        logger.info(
+            f"Number of post-selected bitstrings: {len(bitstrings_post)}"
+        )
+        if len(bitstrings_post) == 0:
+            raise RuntimeError(
+                "The input bit array did not contain any valid bitstrings. "
+                "Pass a bit array that contains at least one valid bitstring."
+            )
         # Convert bitstrings to CI strings and diagonalize
         coros = []
         subspace_dims = []
         for ci_strings in subsample(
-            bitstring_matrix=bitstrings,
-            probabilities=probs,
+            bitstring_matrix=bitstrings_post,
+            probabilities=probs_post,
             subspace_dim=parameters.sqd_subspace_dim,
             num_batches=parameters.sqd_num_batches,
             rng=rng,
-            open_shell=not parameters.symmetrize_spin,
+            open_shell=elec_props.open_shell,
         ):
             subspace_dims.append(int(len(ci_strings[0]) * len(ci_strings[1])))
             coro = sci_solver.run(
                 ci_strings=ci_strings,
-                one_body_tensor=hcore,
-                two_body_tensor=eri,
-                norb=norb,
-                nelec=nelec,
-                spin_sq=parameters.spin_sq,
+                one_body_tensor=elec_props.one_body_tensor,
+                two_body_tensor=elec_props.two_body_tensor,
+                norb=elec_props.num_orbitals,
+                nelec=elec_props.num_electrons,
+                spin_sq=elec_props.spin_sq,
             )
             coros.append(coro)
         results: list[SCIResult] = await asyncio.gather(*coros)
@@ -222,12 +261,13 @@ async def sqd_2405_05068(
             new_record = dict(
                 round=int(round_idx),
                 subspace=int(subspace_idx),
-                energy=float(result.energy + nuclear_repulsion_energy),
+                energy=float(result.energy + elec_props.nuclear_repulsion_energy),
                 dimension=subspace_dims[subspace_idx],
             )
             sqd_artifact.append(new_record)
         logger.info(
-            f"Best energy in SQD iteration {round_idx}: {best_result_in_batch.energy + nuclear_repulsion_energy} Ha."
+            f"Best energy in SQD iteration {round_idx}: "
+            f"{best_result_in_batch.energy + elec_props.nuclear_repulsion_energy} Ha."
         )
 
     # Upload artifact
@@ -235,59 +275,98 @@ async def sqd_2405_05068(
         table=sqd_artifact,
         key="sqd-configuration-recovery",
     )
-    return best_result.energy + nuclear_repulsion_energy
+    return best_result.energy + elec_props.nuclear_repulsion_energy
 
 
-@task
+@task(log_prints=True)
 def compute_molecular_integrals(
-    parametrers: Parameters,
-) -> tuple[np.ndarray, np.ndarray, float, int, tuple[int, int]]:
-    """Compute molecular property with the classical method."""
-    # Specify molecule properties
-    mol = pyscf.gto.Mole()
-    mol.build(
-        atom=parametrers.atom,
-        basis=parametrers.basis,
-        symmetry=parametrers.symmetry,
-    )
-    # Define active space
-    active_space = range(parametrers.n_frozen, mol.nao_nr())
-    # Get molecular integrals
-    scf = pyscf.scf.RHF(mol).run()
-    num_orbitals = len(active_space)
-    n_electrons = int(sum(scf.mo_occ[active_space]))
-    num_elec_a = (n_electrons + mol.spin) // 2
-    num_elec_b = (n_electrons - mol.spin) // 2
-    cas = pyscf.mcscf.CASCI(scf, num_orbitals, (num_elec_a, num_elec_b))
-    mo = cas.sort_mo(active_space, base=0)
-    hcore, nuclear_repulsion_energy = cas.get_h1cas(mo)
-    eri = pyscf.ao2mo.restore(1, cas.get_h2cas(mo), num_orbitals)
-    # Get CCSD t2 amplitudes for initializing the ansatz
-    ccsd = pyscf.cc.CCSD(
-        scf,
-        frozen=[i for i in range(mol.nao_nr()) if i not in active_space],
-    ).run()
+    mol_params: MoleculeGeometry | FCIDumpFile,
+) -> ElectronicProperties:
+    """Precompute molecular orbital property with classical methods."""
+    
+    if isinstance(mol_params, MoleculeGeometry):
+        mol = gto.Mole()
+        mol.build(
+            atom=mol_params.atom,
+            basis=mol_params.basis,
+            symmetry=mol_params.symmetry,
+        )
+        mf = scf.RHF(mol).run()
+        norb = mf.mo_coeff.shape[1]
 
-    return (
-        hcore,
-        eri,
-        ccsd.t2,
-        nuclear_repulsion_energy,
-        num_orbitals,
-        (num_elec_a, num_elec_b),
+        # AO integrals
+        hcore = mf.get_hcore()
+        eri = mol.intor("int2e")
+        spin_sq = mol_params.spin_sq
+
+    elif isinstance(mol_params, FCIDumpFile):
+        data = tools.fcidump.read(mol_params.fcidump_file)
+        norb = data["NORB"]
+        
+        mf = tools.fcidump.to_scf(mol_params.fcidump_file)
+
+        # Run HF calculation with Newton method.
+        # HF convergence is important, as we assume 
+        # the FCIdump file is created with a converged result.
+        mf = scf.newton(mf)
+        mf.symmetry = False
+        dm0 = np.zeros((norb, norb))
+        for i in range(mf.mol.nelectron // 2):
+            dm0[i,i] = 2.0
+        mf.kernel(dm0)
+        
+        # MO integrals. These are raw Hamiltonian.
+        hcore = mf.get_hcore()
+        eri = ao2mo.restore(1, mf._eri, norb)        
+        spin_sq = mol_params.spin_sq
+
+    else:
+        raise TypeError("Unreachable.")
+
+    # Apply unitary transform with obtained MO coefficient.
+    # The FCIdump file already gives you these integrals in MO basis, 
+    # but the HF calculation may give you correction to these integrals.
+    # For example, phase may change with this unitary transform.
+    # When started with Mole object, AO → MO transform is performed in here.
+    h1 = mf.mo_coeff.T @ hcore @ mf.mo_coeff
+    h2 = ao2mo.full(eri, mf.mo_coeff, compact=False).reshape(norb, norb, norb, norb)
+    
+    nuclear_repulsion_energy = mf.mol.energy_nuc()
+    num_elec_a, num_elec_b = mf.mol.nelec
+    mf.mol.verbose = 4
+
+    # Run CCSD
+    mycc = cc.CCSD(mf)
+    mycc.kernel()
+    t2 = mycc.t2
+    
+    # Diagonalize RDM to obtain the occupancies
+    # Eigenvectors are the natual molecular orbitals
+    rdm1_ccsd = mf.make_rdm1()
+    occ_ccsd, _ = scipy.linalg.eigh(rdm1_ccsd)
+    occ_ccsd /= 2.0
+    
+    return ElectronicProperties(
+        one_body_tensor=h1,
+        two_body_tensor=h2,
+        t2=t2,
+        initial_occupancy=(occ_ccsd[::-1], occ_ccsd[::-1]),
+        nuclear_repulsion_energy=nuclear_repulsion_energy,
+        num_orbitals=norb,
+        num_electrons=(num_elec_a, num_elec_b),
+        open_shell=num_elec_a != num_elec_b,
+        spin_sq=spin_sq,
     )
 
 
 @task
 def create_ansatz_circuits(
     parameters: Parameters,
-    one_body_tensor: np.ndarray,
+    num_orbitals: int,
     num_electrons: tuple[int, int],
     t2: np.ndarray,
 ) -> QuantumCircuit:
     """Create LUCJ ansatz circuit with T2 parameter."""
-    num_orbitals = one_body_tensor.shape[0]
-
     alpha_alpha_indices = [(p, p + 1) for p in range(num_orbitals - 1)]
     alpha_beta_indices = [(p, p) for p in range(0, num_orbitals, 4)]
     interaction_pairs = alpha_alpha_indices, alpha_beta_indices
