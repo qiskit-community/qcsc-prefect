@@ -14,8 +14,9 @@ from prefect.artifacts import create_table_artifact
 from prefect.variables import Variable
 from prefect_qiskit.runtime import QuantumRuntime
 from pydantic import BaseModel, Field
-from qiskit import QuantumCircuit, QuantumRegister
+from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.passmanager import ConditionalController
+from qiskit.primitives.containers import BitArray
 from qiskit.transpiler import Target, generate_preset_pass_manager
 from qiskit.transpiler.passes import (
     ApplyLayout,
@@ -108,6 +109,15 @@ class Parameters(BaseModel):
         title="LUCJ Layers",
         ge=1,
     )
+    use_reset_mitigation: bool = Field(
+        default=False,
+        description=(
+            "Use reset mitigation scheme that post-selects outcomes with non-ground initial state. "
+            "This post-selection reduces the net shot number and its retention rate depends on "
+            "the quality of hardware reset instruction."
+        ),
+        title="Reset Mitigation",
+    )
     optimization_level: int = Field(
         default=3,
         description="Transpile: Optimization level of transpiler",
@@ -184,7 +194,19 @@ async def sqd_2405_05068(
             sampler_pubs=[(isa_circuit,)],
             options=options,
         )
-        bit_array = pub_result[0].data.meas
+        meas_bits = pub_result[0].data.meas
+        if parameters.use_reset_mitigation:
+            test_bits = pub_result[0].data.test
+            bit_array = meas_bits.get_bitstrings(test_bits.bitcount() == 0)
+            bit_array = BitArray.from_samples(bit_array, num_bits=meas_bits.num_bits)
+            logger.info(
+                "Reset mitigation result:\n"
+                f"  Before: {meas_bits.num_shots} bitstrings\n"
+                f"  After: {bit_array.num_shots} bitstrings\n"
+                f"  Retention rate: {bit_array.num_shots / meas_bits.num_shots}\n"
+            )
+        else:
+            bit_array = meas_bits
     except ValueError:
         # Uniform sampling when runtime is not defined.
         logger.warning(
@@ -385,7 +407,17 @@ def create_ansatz_circuits(
     interaction_pairs = alpha_alpha_indices, alpha_beta_indices
 
     qreg = QuantumRegister(2 * num_orbitals, name="q")
-    circ = QuantumCircuit(qreg)
+    creg_test = ClassicalRegister(2 * num_orbitals, name="test")
+    creg_meas = ClassicalRegister(2 * num_orbitals, name="meas")
+
+    regs = [qreg, creg_meas]
+    if parameters.use_reset_mitigation:
+        regs.append(creg_test)
+        
+    circ = QuantumCircuit(*regs)
+    if parameters.use_reset_mitigation:
+        circ.measure(qreg, creg_test)
+        circ.barrier()
     circ.append(
         ffsim.qiskit.PrepareHartreeFockJW(
             norb=num_orbitals,
@@ -404,7 +436,7 @@ def create_ansatz_circuits(
         ),
         qargs=qreg,
     )
-    circ.measure_all()
+    circ.measure(qreg, creg_meas)
 
     return circ
 
