@@ -2,22 +2,25 @@
 
 import asyncio
 import io
-from typing import NamedTuple
+from typing import Annotated
 
 import ffsim
 import numpy as np
 import scipy
-from pyscf import tools, ao2mo, mcscf, cc, gto, scf
+from pyscf import tools, ao2mo, cc, gto, scf
 from ffsim.qiskit import PRE_INIT
 from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_table_artifact
+from prefect.cache_policies import NO_CACHE, INPUTS
 from prefect.variables import Variable
 from prefect_qiskit.runtime import QuantumRuntime
 from pydantic import BaseModel, Field
+from pydantic.dataclasses import dataclass
+from pydantic_numpy.helper.annotation import NpArrayPydanticAnnotation
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.passmanager import ConditionalController
 from qiskit.primitives.containers import BitArray
-from qiskit.transpiler import Target, generate_preset_pass_manager
+from qiskit.transpiler import generate_preset_pass_manager
 from qiskit.transpiler.passes import (
     ApplyLayout,
     BarrierBeforeFinalMeasurements,
@@ -36,6 +39,29 @@ from qiskit_ibm_runtime.transpiler.passes import FoldRzzAngle
 from prefect_dice import DiceSHCISolverJob
 
 from sqd_dice.subsample import postselect, subsample
+
+
+# Pydantic Types
+NpStrict1DArrayF64 = Annotated[
+    np.ndarray[tuple[int, ], np.dtype[np.float64]],
+    NpArrayPydanticAnnotation.factory(
+        data_type=np.float64, dimensions=1, strict_data_typing=True
+    ),
+]
+
+NpStrict2DArrayF64 = Annotated[
+    np.ndarray[tuple[int, int], np.dtype[np.float64]],
+    NpArrayPydanticAnnotation.factory(
+        data_type=np.float64, dimensions=2, strict_data_typing=True
+    ),
+]
+
+NpStrict4DArrayF64 = Annotated[
+    np.ndarray[tuple[int, int, int, int], np.dtype[np.float64]],
+    NpArrayPydanticAnnotation.factory(
+        data_type=np.float64, dimensions=4, strict_data_typing=True
+    ),
+]
 
 
 class MoleculeGeometry(BaseModel):
@@ -80,29 +106,9 @@ class FCIDumpFile(BaseModel):
     )
 
 
-class Parameters(BaseModel):
-    """Workflow parameters to configure sqd_2405_05068 workflow."""
+class CircuitParameters(BaseModel):
+    """Configuration for ansatz circuit."""
 
-    target_molecule: MoleculeGeometry | FCIDumpFile = Field(
-        default_factory=MoleculeGeometry,
-        title="Molecule",
-        description="PySCF definition of the molecule to solve for.",
-    )
-    sqd_subspace_dim: int = Field(
-        description="SQD: Dimension d of subsampled bitstrings for diagonalization.",
-        title="Subspace Dimension",
-        ge=1,
-    )
-    sqd_num_batches: int = Field(
-        description="SQD: Number of batches of configurations used by the different calls to the eigenstate solver.",
-        title="Batch Number",
-        ge=1,
-    )
-    sqd_max_iterations: int = Field(
-        description="SQD: Number of self-consistent configuration recovery iterations.",
-        title="Max Iteration",
-        ge=1,
-    )
     n_lucj_layers: int = Field(
         default=1,
         description="Number of repetition of the unit layer of LUCJ ansatz.",
@@ -145,13 +151,56 @@ class Parameters(BaseModel):
     )
 
 
-class ElectronicProperties(NamedTuple):
-    """Electronic properties of target molecule pre-computed by PySCF."""
+class SQDParameters(BaseModel):
+    """Configuration for SQD algorithm execution."""
 
-    one_body_tensor: np.ndarray
-    two_body_tensor: np.ndarray
-    t2: np.ndarray
-    initial_occupancy: np.ndarray
+    subspace_dim: int = Field(
+        description="SQD: Dimension d of subsampled bitstrings for diagonalization.",
+        title="Subspace Dimension",
+        ge=1,
+    )
+    num_batches: int = Field(
+        description="SQD: Number of batches of configurations used by the different calls to the eigenstate solver.",
+        title="Batch Number",
+        ge=1,
+    )
+    max_iterations: int = Field(
+        description="SQD: Number of self-consistent configuration recovery iterations.",
+        title="Max Iteration",
+        ge=1,
+    )
+
+
+class Parameters(BaseModel):
+    """Workflow parameters to configure sqd_2405_05068 workflow."""
+
+    molecule: MoleculeGeometry | FCIDumpFile = Field(
+        default_factory=MoleculeGeometry,
+        description="PySCF definition of the molecule to solve for.",
+        title="Molecule",
+    )
+
+    circuit: CircuitParameters = Field(
+        default_factory=CircuitParameters,
+        description="Ansatz circuit definition and transpiler settings.",
+        title="Circuit",
+    )
+
+    sqd: SQDParameters = Field(
+        default_factory=SQDParameters,
+        description="Control of SQD algorithm execution and solver parameters.",
+        title="SQD",
+    )
+
+
+@dataclass
+class ElectronicProperties:
+    """Intermediate data representing the electronic properties."""
+
+    one_body_tensor: NpStrict2DArrayF64
+    two_body_tensor: NpStrict4DArrayF64
+    t2: NpStrict4DArrayF64
+    initial_occupancy: tuple[NpStrict1DArrayF64, NpStrict1DArrayF64]
     nuclear_repulsion_energy: float
     num_orbitals: int
     num_electrons: tuple[int, int]
@@ -164,60 +213,39 @@ async def sqd_2405_05068(
     parameters: Parameters,
     runner_name: str = "sqd-runner",
     solver_name: str = "sqd-solver",
-):
-    """SQD Experiment from arXiv2405.05068."""
+    cache_compute_integrals: bool = False,
+    cache_sampling: bool = False,
+) -> float:
+    """SQD Experiment from arXiv2405.05068.
+
+    Args:
+        parameters: Workflow parameters.
+        runner_name: Name of QuantumRunner block to load.
+        solver_name: Name of DiceSHCISolverJob block to load.
+        cache_compute_integrals: Set True to cache compute_molecular_integrals task.
+        cache_sampling: Set True to cache sample_bitstrings task.
+
+    Returns:
+        Minimum ground state energy solved by SQD.
+    """
     rng = np.random.default_rng(24)
     logger = get_run_logger()
 
-    # Compute molecular integrals
-    elec_props = compute_molecular_integrals(parameters.target_molecule)
+    # Compute integrals
+    elec_props = compute_molecular_integrals.with_options(
+        cache_policy=INPUTS if cache_compute_integrals else NO_CACHE,
+    )(
+        mol_params=parameters.molecule,
+    )
 
     # Sample bitstrings
-    try:
-        # Run on a real hardware when credentials are found.
-        runtime = await QuantumRuntime.load(runner_name)
-        options = await Variable.get("sampler_options")
-
-        ansatz_circuit = create_ansatz_circuits(
-            parameters=parameters,
-            num_orbitals=elec_props.num_orbitals,
-            num_electrons=elec_props.num_electrons,
-            t2=elec_props.t2,
-        )
-        isa_circuit = transpile_circuit(
-            circuit=ansatz_circuit,
-            target=await runtime.get_target(),
-            parameters=parameters,
-            seed=rng,
-        )
-        pub_result = await runtime.sampler(
-            sampler_pubs=[(isa_circuit,)],
-            options=options,
-        )
-        meas_bits = pub_result[0].data.meas
-        if parameters.use_reset_mitigation:
-            test_bits = pub_result[0].data.test
-            bit_array = meas_bits.get_bitstrings(test_bits.bitcount() == 0)
-            bit_array = BitArray.from_samples(bit_array, num_bits=meas_bits.num_bits)
-            logger.info(
-                "Reset mitigation result:\n"
-                f"  Before: {meas_bits.num_shots} bitstrings\n"
-                f"  After: {bit_array.num_shots} bitstrings\n"
-                f"  Retention rate: {bit_array.num_shots / meas_bits.num_shots}\n"
-            )
-        else:
-            bit_array = meas_bits
-    except ValueError:
-        # Uniform sampling when runtime is not defined.
-        logger.warning(
-            f"Runner block {runner_name} is not defined. "
-            "Falling back into random uniform sampling."
-        )
-        bit_array = generate_bit_array_uniform(
-            100_000,
-            elec_props.num_orbitals * 2,
-            rand_seed=rng,
-        )
+    bit_array = await sample_bitstrings.with_options(
+        cache_policy=INPUTS if cache_sampling else NO_CACHE,
+    )(
+        circuit_params=parameters.circuit,
+        elec_props=elec_props,
+        runner_name=runner_name,
+    )
 
     # Convert BitArray into bitstring and probability arrays
     raw_bitstrings, raw_probs = bit_array_to_arrays(bit_array)
@@ -228,7 +256,7 @@ async def sqd_2405_05068(
     sqd_artifact = []
     current_occupancies = elec_props.initial_occupancy
     best_result = None
-    for round_idx in range(parameters.sqd_max_iterations):
+    for round_idx in range(parameters.sqd.max_iterations):
         bitstrings, probs = recover_configurations(
             raw_bitstrings,
             raw_probs,
@@ -257,8 +285,8 @@ async def sqd_2405_05068(
         for ci_strings in subsample(
             bitstring_matrix=bitstrings_post,
             probabilities=probs_post,
-            subspace_dim=parameters.sqd_subspace_dim,
-            num_batches=parameters.sqd_num_batches,
+            subspace_dim=parameters.sqd.subspace_dim,
+            num_batches=parameters.sqd.num_batches,
             rng=rng,
             open_shell=elec_props.open_shell,
         ):
@@ -301,7 +329,10 @@ async def sqd_2405_05068(
     return best_result.energy + elec_props.nuclear_repulsion_energy
 
 
-@task(log_prints=True)
+@task(
+    persist_result=True,
+    result_serializer="compressed/json",
+)
 def compute_molecular_integrals(
     mol_params: MoleculeGeometry | FCIDumpFile,
 ) -> ElectronicProperties:
@@ -394,71 +425,86 @@ def compute_molecular_integrals(
     )
 
 
-@task
-def create_ansatz_circuits(
-    parameters: Parameters,
-    num_orbitals: int,
-    num_electrons: tuple[int, int],
-    t2: np.ndarray,
-) -> QuantumCircuit:
-    """Create LUCJ ansatz circuit with T2 parameter."""
-    alpha_alpha_indices = [(p, p + 1) for p in range(num_orbitals - 1)]
-    alpha_beta_indices = [(p, p) for p in range(0, num_orbitals, 4)]
+@task(
+    persist_result=True,
+    result_serializer="compressed/pickle",
+)
+async def sample_bitstrings(
+    circuit_params: CircuitParameters,
+    elec_props: ElectronicProperties,
+    runner_name: str,
+) -> BitArray:
+    """Sample bitstring with quantum computer.
+
+    Args:
+        circuit_params: Flow parameters to construct ansatz quantum circuit.
+        elec_props: Electronic properties of molecule to solver for.
+        runner_name: Block name of QuantumRuntime to execute primitives on.
+
+    Returns:
+        Sampled bitstrings representing determinants.
+    """
+    logger = get_run_logger()
+
+    try:
+        # Run on a real hardware when credentials are found.
+        runtime = await QuantumRuntime.load(runner_name)
+        options = await Variable.get("sampler_options")
+    except ValueError:
+        # Uniform sampling when runtime is not defined.
+        logger.warning(
+            f"QuantumRuntime block '{runner_name}' is not defined. "
+            "Falling back into random uniform sampling."
+        )
+        return generate_bit_array_uniform(
+            100_000,
+            elec_props.num_orbitals * 2,
+        )
+
+    # Create ansatz circuits
+    logger.info("Creating ansatz circuit...")
+    alpha_alpha_indices = [(p, p + 1) for p in range(elec_props.num_orbitals - 1)]
+    alpha_beta_indices = [(p, p) for p in range(0, elec_props.num_orbitals, 4)]
     interaction_pairs = alpha_alpha_indices, alpha_beta_indices
 
-    qreg = QuantumRegister(2 * num_orbitals, name="q")
-    creg_test = ClassicalRegister(2 * num_orbitals, name="test")
-    creg_meas = ClassicalRegister(2 * num_orbitals, name="meas")
+    qreg = QuantumRegister(2 * elec_props.num_orbitals, name="q")
+    creg_test = ClassicalRegister(2 * elec_props.num_orbitals, name="test")
+    creg_meas = ClassicalRegister(2 * elec_props.num_orbitals, name="meas")
 
     regs = [qreg, creg_meas]
-    if parameters.use_reset_mitigation:
+    if circuit_params.use_reset_mitigation:
         regs.append(creg_test)
         
-    circ = QuantumCircuit(*regs)
-    if parameters.use_reset_mitigation:
-        circ.measure(qreg, creg_test)
-        circ.barrier()
-    circ.append(
+    lucj_circ = QuantumCircuit(*regs)
+    if circuit_params.use_reset_mitigation:
+        lucj_circ.measure(qreg, creg_test)
+        lucj_circ.barrier()
+    lucj_circ.append(
         ffsim.qiskit.PrepareHartreeFockJW(
-            norb=num_orbitals,
-            nelec=num_electrons,
+            norb=elec_props.num_orbitals,
+            nelec=elec_props.num_electrons,
         ),
         qargs=qreg,
     )
     ucj_op = ffsim.UCJOpSpinBalanced.from_t_amplitudes(
-        t2=t2,
-        n_reps=parameters.n_lucj_layers,
+        t2=elec_props.t2,
+        n_reps=circuit_params.n_lucj_layers,
         interaction_pairs=interaction_pairs,
     )
-    circ.append(
+    lucj_circ.append(
         ffsim.qiskit.UCJOpSpinBalancedJW(
             ucj_op=ucj_op,
         ),
         qargs=qreg,
     )
-    circ.measure(qreg, creg_meas)
+    lucj_circ.measure(qreg, creg_meas)
 
-    return circ
-
-
-@task
-def transpile_circuit(
-    circuit: QuantumCircuit,
-    target: Target,
-    parameters: Parameters,
-    seed: np.random.Generator,
-) -> QuantumCircuit:
-    """Custom transpiler with massive layout search."""
-    logger = get_run_logger()
-
-    if isinstance(seed, np.random.Generator):
-        seed = seed.integers(np.iinfo(int).max, size=1).item()
+    # Transpile
+    target = await runtime.get_target()
     coupling_map = target.build_coupling_map()
 
-    # Define a custom pass manager
     passmanager = generate_preset_pass_manager(
-        optimization_level=parameters.optimization_level,
-        seed_transpiler=seed,
+        optimization_level=circuit_params.optimization_level,
         target=target,
     )
     passmanager.pre_init = PRE_INIT
@@ -469,10 +515,9 @@ def transpile_circuit(
             ),
             SabreLayout(
                 coupling_map=coupling_map,
-                seed=seed,
-                max_iterations=parameters.sabre_max_iterations,
-                layout_trials=parameters.sabre_layout_trials,
-                swap_trials=parameters.sabre_swap_trials,
+                max_iterations=circuit_params.sabre_max_iterations,
+                layout_trials=circuit_params.sabre_layout_trials,
+                swap_trials=circuit_params.sabre_swap_trials,
             ),
             ConditionalController(
                 tasks=[
@@ -493,8 +538,8 @@ def transpile_circuit(
             ]
         )
 
-    # Transpile
-    isa_circuit = passmanager.run(circuit)
+    logger.info("Transpiling ansatz circuit...")
+    isa_circuit = passmanager.run(lucj_circ)
     gate_depth = isa_circuit.depth(
         lambda inst: inst.operation.name not in ("rz", "barrier", "measure")
     )
@@ -502,7 +547,29 @@ def transpile_circuit(
         f"Circuit depth = {gate_depth}\n"
         f"Instruction counts = {dict(isa_circuit.count_ops())}\n"
     )
-    return isa_circuit
+
+    # Run primitive
+    pub_result = await runtime.sampler(
+        sampler_pubs=[(isa_circuit,)],
+        options=options,
+    )
+
+    # Post-process bitstrings
+    meas_bits = pub_result[0].data.meas
+    if circuit_params.use_reset_mitigation:
+        test_bits = pub_result[0].data.test
+        bit_array = meas_bits.get_bitstrings(test_bits.bitcount() == 0)
+        bit_array = BitArray.from_samples(bit_array, num_bits=meas_bits.num_bits)
+        logger.info(
+            "Reset mitigation result:\n"
+            f"  Before: {meas_bits.num_shots} bitstrings\n"
+            f"  After: {bit_array.num_shots} bitstrings\n"
+            f"  Retention rate: {bit_array.num_shots / meas_bits.num_shots}\n"
+        )
+    else:
+        bit_array = meas_bits
+
+    return bit_array
 
 
 def deploy():
