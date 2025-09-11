@@ -63,45 +63,68 @@ class ConditionalRBM(nnx.Module):
         self,
         u_state: jax.Array,
         v_state: jax.Array,
-        size: Optional[int | tuple[int, ...]] = None,
+        size: int | tuple[int, ...] = 1,
         final_state_only: bool = False
     ) -> jax.Array:
-        def generate_v_state(module, u_state, v_state):
-            ph = module.h_activation(u_state, v_state)
-            h_state = jax.random.binomial(module.rngs.sample(), 1, ph).astype(np.uint8)
-            pv = module.v_activation(u_state, h_state)
-            return jax.random.binomial(module.rngs.sample(), 1, pv).astype(np.uint8)
+        """MCMC sample generation."""
+        batch_size = np.prod(u_state.shape[:-1])
+        num_v = batch_size * self.bias_v.shape[0]
+        num_h = batch_size * self.bias_h.shape[0]
+        uniform_size = num_v + (num_v + num_h) * np.prod(size)
+        uniform = jax.random.uniform(self.rngs.sample(), (uniform_size,))
+        return self._gibbs_sample(u_state, v_state, uniform, size=size,
+                                  final_state_only=final_state_only)
 
-        if size is None:
-            return generate_v_state(self, u_state, v_state)
+    @partial(nnx.jit, static_argnames=['size', 'final_state_only'])
+    def _gibbs_sample(
+        self,
+        u_state: jax.Array,
+        v_state: jax.Array,
+        uniform: jax.Array,
+        size: int | tuple[int, ...] = 1,
+        final_state_only: bool = False
+    ) -> jax.Array:
+        """MCMC sample generation."""
+        batch_size = np.prod(u_state.shape[:-1])
+        num_v = batch_size * self.bias_v.shape[0]
+        num_h = batch_size * self.bias_h.shape[0]
+
+        def generate_v_state(module, u_state, v_state, uniform):
+            ph = module.h_activation(u_state, v_state)
+            h_state = (uniform[:num_h].reshape(ph.shape) < ph).astype(np.uint8)
+            pv = module.v_activation(u_state, h_state)
+            return (uniform[num_h:].reshape(pv.shape) < pv).astype(np.uint8)
 
         if not isinstance(size, tuple):
             size = (int(size),)
         flat_size = np.prod(size)
 
-        if final_state_only:
-            def fill_samples(_, val):
-                module, u_state, v_state = val
-                v_state = generate_v_state(module, u_state, v_state)
-                return module, u_state, v_state
+        def loop_body_generate(istep, val):
+            module, u_state, v_state, uniform = val
+            start = (num_h + num_v) * istep
+            unif = jax.lax.dynamic_slice(uniform, [start], [num_h + num_v])
+            v_state = generate_v_state(module, u_state, v_state, unif)
+            return module, u_state, v_state, uniform
 
-            init_val = (self, u_state, v_state)
+        if final_state_only:
+            loop_body = loop_body_generate
+            init_val = (self, u_state, v_state, uniform)
         else:
-            def fill_samples(isample, val):
-                module, u_state, v_state, out = val
-                v_state = generate_v_state(module, u_state, v_state)
-                return module, u_state, v_state, out.at[isample].set(v_state)
+            def loop_body(istep, val):
+                module, u_state, v_state, uniform = loop_body_generate(istep, val[:-1])
+                out = val[-1]
+                return module, u_state, v_state, uniform, out.at[istep].set(v_state)
 
             out = jnp.empty((flat_size,) + v_state.shape, dtype=np.uint8)
-            init_val = (self, u_state, v_state, out)
+            init_val = (self, u_state, v_state, uniform, out)
 
         final_val = nnx.fori_loop(
             0, flat_size,
-            fill_samples,
+            loop_body,
             init_val
         )
         if final_state_only:
-            return final_val[-1]
+            return final_val[2]
         return final_val[-1].reshape(size + v_state.shape)
 
     @partial(nnx.jit, static_argnames=['num_gen'])
@@ -124,13 +147,23 @@ class ConditionalRBM(nnx.Module):
     def sample(
         self,
         u_state: jax.Array,
-        size: Optional[int | tuple[int, ...]] = None,
+        size: int | tuple[int, ...] = 1,
         therm_steps: int = 100
     ):
+        batch_size = np.prod(u_state.shape[:-1])
+        num_v = batch_size * self.bias_v.shape[0]
+        num_h = batch_size * self.bias_h.shape[0]
+        uniform_size = num_v + (num_v + num_h) * (therm_steps + np.prod(size))
+        uniform = jax.random.uniform(self.rngs.sample(), (uniform_size,))
+
         pv = nnx.sigmoid(u_state @ self.weights_vu.T + self.bias_v)
-        v_state = jax.random.binomial(self.rngs.sample(), 1, pv).astype(np.uint8)
-        v_state = self.gibbs_sample(u_state, v_state, size=therm_steps, final_state_only=True)
-        return self.gibbs_sample(u_state, v_state, size=size)
+        v_state = (uniform[:num_v].reshape(pv.shape) < pv).astype(np.uint8)
+        start = num_v
+        end = num_v + (num_v + num_h) * therm_steps
+        v_state = self._gibbs_sample(u_state, v_state, uniform[start:end], size=therm_steps,
+                                     final_state_only=True)
+        start = end
+        return self._gibbs_sample(u_state, v_state, uniform[start:], size=size)
 
 
 @nnx.jit
@@ -203,6 +236,7 @@ def train_crbm(
             LOG.debug('Batch %d/%d', ibatch, num_batches)
             end = start + batch_size
             u_batch, v_batch = samples_u[start:end], samples_v[start:end]
+
             train_step(model, optimizer, metrics, u_batch, v_batch, cdpl_num_gen)
             start = end
 
