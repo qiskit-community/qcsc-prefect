@@ -14,13 +14,12 @@ LOG = logging.getLogger(__name__)
 class ConditionalRBM(nnx.Module):
     """Conditional restricted Boltzmann machine."""
     def __init__(self, num_u: int, num_v: int, num_h: int, *, rngs: nnx.Rngs):
-        weights_init = nnx.initializers.lecun_normal()
-        bias_init = nnx.initializers.normal()
-        self.weights_vu = nnx.Param(weights_init(rngs.params(), (num_v, num_u), jnp.float32))
-        self.weights_hu = nnx.Param(weights_init(rngs.params(), (num_h, num_u), jnp.float32))
-        self.weights_hv = nnx.Param(weights_init(rngs.params(), (num_h, num_v), jnp.float32))
-        self.bias_v = nnx.Param(bias_init(rngs.params(), (num_v,), jnp.float32))
-        self.bias_h = nnx.Param(bias_init(rngs.params(), (num_h,), jnp.float32))
+        init = nnx.initializers.normal(0.01)
+        self.weights_vu = nnx.Param(init(rngs.params(), (num_v, num_u), jnp.float32))
+        self.weights_hu = nnx.Param(init(rngs.params(), (num_h, num_u), jnp.float32))
+        self.weights_hv = nnx.Param(init(rngs.params(), (num_h, num_v), jnp.float32))
+        self.bias_v = nnx.Param(init(rngs.params(), (num_v,), jnp.float32))
+        self.bias_h = nnx.Param(init(rngs.params(), (num_h,), jnp.float32))
         self.rngs = rngs
         self.therm_steps = 100
         self.vhat_size = 100
@@ -94,7 +93,6 @@ class ConditionalRBM(nnx.Module):
         return f_val
 
     vfree_energy = nnx.jit(nnx.vmap(free_energy, in_axes=(None, None, 0)))
-    bvfree_energy = nnx.jit(nnx.vmap(vfree_energy, in_axes=(None, 0, None)))
 
     @nnx.jit
     def conditional_logz(self, u_state: jax.Array) -> tuple[jax.Array, jax.Array]:
@@ -108,10 +106,10 @@ class ConditionalRBM(nnx.Module):
         num_v = self.bias_v.shape[0]
         all_v = ((jnp.arange(2 ** num_v)[:, None] >> jnp.arange(num_v)[None, :])
                  % 2).astype(np.uint8)
-        all_f = self.bvfree_energy(u_state, all_v)
-        norm = jnp.mean(all_f, axis=1)
-        all_f -= norm[:, None]
-        return jnp.log(jnp.sum(jnp.exp(-all_f), axis=1)), norm
+        all_f = self.vfree_energy(u_state, all_v)
+        norm = jnp.mean(all_f, axis=0)
+        all_f -= norm[None, ...]
+        return jnp.log(jnp.sum(jnp.exp(-all_f), axis=0)), norm
 
     @nnx.jit
     def conditional_nll(self, u_state: jax.Array, v_state: jax.Array) -> jax.Array:
