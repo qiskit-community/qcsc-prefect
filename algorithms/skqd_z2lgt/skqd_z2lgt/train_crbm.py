@@ -43,6 +43,7 @@ class BaseCallback(nnx.Module):
         model: ConditionalRBM,
         test_u: jax.Array,
         test_v: jax.Array,
+        loss: jax.Array,
         iepoch: int,
         records: dict[str, Any]
     ):
@@ -102,10 +103,9 @@ class DefaultCallback(BaseCallback):
         self,
         model: ConditionalRBM,
         test_u: jax.Array,
-        test_v: jax.Array
+        test_v: jax.Array,
+        loss: jax.Array
     ):
-        vhat = model.percloss_states(test_u)
-        loss = loss_fn(model, test_u, test_v, vhat)
         free_energy = jnp.mean(model.free_energy(test_u, test_v))
         updates = {'loss': loss, 'free_energy': free_energy}
         updates |= self._test_update_ext(model, test_u, test_v, updates)
@@ -119,10 +119,11 @@ class DefaultCallback(BaseCallback):
         model: ConditionalRBM,
         test_u: jax.Array,
         test_v: jax.Array,
+        loss: jax.Array,
         iepoch: int,
         records: dict[str, Any]
     ):
-        self._test_update(model, test_u, test_v)
+        self._test_update(model, test_u, test_v, loss)
         for metric, value in self.metrics.compute().items():
             records[f'test_{metric}'].append(float(value))
         self.metrics.reset()
@@ -133,9 +134,16 @@ def loss_fn(
     model: ConditionalRBM,
     u_state: jax.Array,
     v_state: jax.Array,
-    vhat_state: jax.Array
+    vhat_state: jax.Array,
+    l2_weight: jax.Array
 ):
-    return jnp.mean(model.percloss(u_state, v_state, vhat_state))
+    loss = jnp.mean(model.percloss(u_state, v_state, vhat_state))
+    loss += l2_weight * jnp.mean(jnp.square(model.weights_vu))
+    loss += l2_weight * jnp.mean(jnp.square(model.weights_hu))
+    loss += l2_weight * jnp.mean(jnp.square(model.weights_hv))
+    loss += l2_weight * jnp.mean(jnp.square(model.bias_v))
+    loss += l2_weight * jnp.mean(jnp.square(model.bias_h))
+    return loss
 
 
 grad_fn = nnx.jit(nnx.value_and_grad(loss_fn))
@@ -146,11 +154,12 @@ def train_step(
     model: ConditionalRBM,
     u_batch: jax.Array,
     v_batch: jax.Array,
+    l2_weight: jax.Array,
     optimizer: nnx.optimizer.Optimizer,
     callback: BaseCallback
 ):
     vhat_batch = model.percloss_states(u_batch)
-    loss, grads = grad_fn(model, u_batch, v_batch, vhat_batch)
+    loss, grads = grad_fn(model, u_batch, v_batch, vhat_batch, l2_weight)
     callback.train_step(model, u_batch, v_batch, loss)
     optimizer.update(model, grads)
 
@@ -161,12 +170,14 @@ def train_crbm(
     test_dataset: np.ndarray,
     batch_size: int,
     num_epochs: int,
+    lr: float = 0.001,
+    l2_weight: float = 1.,
     optax_fn: Optional[Callable] = None,
     seed: int = 0,
     callback: Optional[BaseCallback] = None,
     records: Optional[dict[str, Any]] = None
 ):
-    optax_fn = optax_fn or optax.adamw(learning_rate=0.005)
+    optax_fn = optax_fn or optax.adamw(learning_rate=lr)
     optimizer = nnx.Optimizer(model, optax_fn, wrt=nnx.Param)
     callback = callback or BaseCallback()
     records = records or callback.init_records()
@@ -177,6 +188,7 @@ def train_crbm(
 
     test_u = jax.device_put(test_dataset[:, :num_u])
     test_v = jax.device_put(test_dataset[:, num_u:])
+    l2_weight = jax.device_put(l2_weight)
 
     for iepoch in range(num_epochs):
         LOG.info('Starting epoch %d/%d', iepoch, num_epochs)
@@ -190,10 +202,12 @@ def train_crbm(
             LOG.debug('Batch %d/%d', ibatch, num_batches)
             end = start + batch_size
             u_batch, v_batch = samples_u[start:end], samples_v[start:end]
-            train_step(model, u_batch, v_batch, optimizer, callback)
+            train_step(model, u_batch, v_batch, l2_weight, optimizer, callback)
             start = end
             callback.train_eval(model, iepoch, ibatch, records)
 
-        callback.test(model, test_u, test_v, iepoch, records)
+        vhat = model.percloss_states(test_u)
+        loss = loss_fn(model, test_u, test_v, vhat, l2_weight)
+        callback.test(model, test_u, test_v, loss, iepoch, records)
 
     return records
