@@ -52,10 +52,11 @@ class BaseCallback(nnx.Module):
 
 class DefaultCallback(BaseCallback):
     """Default callback module for recording loss and free energy histories."""
-    def __init__(self, eval_every: int = 10):
+    def __init__(self, eval_every: int = 100, **metrics):
         self.metrics = nnx.metrics.MultiMetric(
             loss=nnx.metrics.Average('loss'),
-            free_energy=nnx.metrics.Average('free_energy')
+            free_energy=nnx.metrics.Average('free_energy'),
+            **metrics
         )
         self.eval_every = eval_every
 
@@ -129,39 +130,63 @@ class DefaultCallback(BaseCallback):
         self.metrics.reset()
 
 
-@nnx.jit
-def loss_fn(
-    model: ConditionalRBM,
-    u_state: jax.Array,
-    v_state: jax.Array,
-    vhat_state: jax.Array,
-    l2_weight: jax.Array
-):
-    loss = jnp.mean(model.percloss(u_state, v_state, vhat_state))
-    loss += l2_weight * jnp.mean(jnp.square(model.weights_vu))
-    loss += l2_weight * jnp.mean(jnp.square(model.weights_hu))
-    loss += l2_weight * jnp.mean(jnp.square(model.weights_hv))
-    loss += l2_weight * jnp.mean(jnp.square(model.bias_v))
-    loss += l2_weight * jnp.mean(jnp.square(model.bias_h))
-    return loss
+class NLLCallback(DefaultCallback):
+    """Callback with NLL calculation."""
+    def __init__(self, eval_every=100):
+        super().__init__(eval_every=eval_every, nll=nnx.metrics.Average('nll'))
+
+    @nnx.jit
+    def _train_step_ext(self, model, u_batch, v_batch, updates):
+        """Callback within train_step."""
+        logz, norm = model.conditional_logz(u_batch)
+        nll = updates['free_energy'] + jnp.mean(-norm + logz)
+        return {'nll': nll}
+
+    @nnx.jit
+    def _test_update_ext(self, model, test_u, test_v, updates):
+        return self._train_step_ext(model, test_u, test_v, updates)
 
 
-grad_fn = nnx.jit(nnx.value_and_grad(loss_fn))
+def cd_percloss(l2_weight: float):
+    """Construct a loss function for CD-PercLoss with L2 regularization."""
+    @nnx.jit
+    def loss_fn(
+        model: ConditionalRBM,
+        u_state: jax.Array,
+        v_state: jax.Array
+    ):
+        vhat_state = jax.lax.stop_gradient(model.percloss_states(u_state))
+        loss = jnp.mean(model.percloss(u_state, v_state, vhat_state))
+        loss += l2_regularization(model, l2_weight)
+        return loss
+
+    return loss_fn
 
 
-@nnx.jit
-def train_step(
-    model: ConditionalRBM,
-    u_batch: jax.Array,
-    v_batch: jax.Array,
-    l2_weight: jax.Array,
-    optimizer: nnx.optimizer.Optimizer,
-    callback: BaseCallback
-):
-    vhat_batch = model.percloss_states(u_batch)
-    loss, grads = grad_fn(model, u_batch, v_batch, vhat_batch, l2_weight)
-    callback.train_step(model, u_batch, v_batch, loss)
-    optimizer.update(model, grads)
+def nll_loss(l2_weight: float):
+    """Construct a loss function based on NLL with L2 regularization."""
+    @nnx.jit
+    def loss_fn(
+        model: ConditionalRBM,
+        u_state: jax.Array,
+        v_state: jax.Array
+    ):
+        loss = jnp.mean(model.conditional_nll(u_state, v_state))
+        loss += l2_regularization(model, l2_weight)
+        return loss
+
+    return loss_fn
+
+
+def l2_regularization(model, l2_weight):
+    """L2 regularization term."""
+    return l2_weight * (
+        jnp.mean(jnp.square(model.weights_vu))
+        + jnp.mean(jnp.square(model.weights_hu))
+        + jnp.mean(jnp.square(model.weights_hv))
+        + jnp.mean(jnp.square(model.bias_v))
+        + jnp.mean(jnp.square(model.bias_h))
+    )
 
 
 def train_crbm(
@@ -170,13 +195,26 @@ def train_crbm(
     test_dataset: np.ndarray,
     batch_size: int,
     num_epochs: int,
+    loss_fn: Callable[[ConditionalRBM, jax.Array, jax.Array], jax.Array],
     lr: float = 0.001,
-    l2_weight: float = 1.,
     optax_fn: Optional[Callable] = None,
     seed: int = 0,
     callback: Optional[BaseCallback] = None,
     records: Optional[dict[str, Any]] = None
 ):
+    @nnx.jit
+    def train_step(
+        model: ConditionalRBM,
+        u_batch: jax.Array,
+        v_batch: jax.Array,
+        optimizer: nnx.optimizer.Optimizer,
+        callback: BaseCallback
+    ):
+        grad_fn = nnx.value_and_grad(loss_fn)
+        loss, grads = grad_fn(model, u_batch, v_batch)
+        callback.train_step(model, u_batch, v_batch, loss)
+        optimizer.update(model, grads)
+
     optax_fn = optax_fn or optax.adamw(learning_rate=lr)
     optimizer = nnx.Optimizer(model, optax_fn, wrt=nnx.Param)
     callback = callback or BaseCallback()
@@ -188,7 +226,6 @@ def train_crbm(
 
     test_u = jax.device_put(test_dataset[:, :num_u])
     test_v = jax.device_put(test_dataset[:, num_u:])
-    l2_weight = jax.device_put(l2_weight)
 
     for iepoch in range(num_epochs):
         LOG.info('Starting epoch %d/%d', iepoch, num_epochs)
@@ -197,17 +234,19 @@ def train_crbm(
         samples_u = jax.device_put(train_dataset[sample_indices][:, :num_u])
         samples_v = jax.device_put(train_dataset[sample_indices][:, num_u:])
 
-        start = 0
-        for ibatch in range(num_batches):
-            LOG.debug('Batch %d/%d', ibatch, num_batches)
-            end = start + batch_size
-            u_batch, v_batch = samples_u[start:end], samples_v[start:end]
-            train_step(model, u_batch, v_batch, l2_weight, optimizer, callback)
-            start = end
-            callback.train_eval(model, iepoch, ibatch, records)
+        try:
+            start = 0
+            for ibatch in range(num_batches):
+                LOG.debug('Batch %d/%d', ibatch, num_batches)
+                end = start + batch_size
+                u_batch, v_batch = samples_u[start:end], samples_v[start:end]
+                train_step(model, u_batch, v_batch, optimizer, callback)
+                start = end
+                callback.train_eval(model, iepoch, ibatch, records)
+        except KeyboardInterrupt:
+            pass
 
-        vhat = model.percloss_states(test_u)
-        loss = loss_fn(model, test_u, test_v, vhat, l2_weight)
+        loss = loss_fn(model, test_u, test_v)
         callback.test(model, test_u, test_v, loss, iepoch, records)
 
     return records
