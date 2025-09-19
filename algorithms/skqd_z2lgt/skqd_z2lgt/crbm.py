@@ -219,6 +219,16 @@ class ConditionalRBM(nnx.Module):
     ) -> jax.Array:
         return self.free_energy(u_state, v_state) - self.free_energy(u_state, vhat_state)
 
+    @nnx.jit
+    def meanloss(
+        self,
+        u_state: jax.Array,
+        v_state: jax.Array,
+        vg_states: jax.Array
+    ) -> jax.Array:
+        return (self.free_energy(u_state, v_state)
+                - jnp.mean(self.vfree_energy(u_state, vg_states), axis=0))
+
     @partial(nnx.jit, static_argnames=['size'])
     def sample(
         self,

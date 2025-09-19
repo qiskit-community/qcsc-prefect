@@ -124,10 +124,21 @@ class DefaultCallback(BaseCallback):
         iepoch: int,
         records: dict[str, Any]
     ):
+        self._test_ext(model, test_u, test_v, loss, iepoch)
         self._test_update(model, test_u, test_v, loss)
         for metric, value in self.metrics.compute().items():
             records[f'test_{metric}'].append(float(value))
         self.metrics.reset()
+
+    def _test_ext(
+        self,
+        model: ConditionalRBM,
+        test_u: jax.Array,
+        test_v: jax.Array,
+        loss: jax.Array,
+        iepoch: int
+    ):
+        pass
 
 
 class NLLCallback(DefaultCallback):
@@ -147,46 +158,60 @@ class NLLCallback(DefaultCallback):
         return self._train_step_ext(model, test_u, test_v, updates)
 
 
-def cd_percloss(l2_weight: float):
-    """Construct a loss function for CD-PercLoss with L2 regularization."""
-    @nnx.jit
-    def loss_fn(
-        model: ConditionalRBM,
-        u_state: jax.Array,
-        v_state: jax.Array
-    ):
-        vhat_state = jax.lax.stop_gradient(model.percloss_states(u_state))
-        loss = jnp.mean(model.percloss(u_state, v_state, vhat_state))
-        loss += l2_regularization(model, l2_weight)
-        return loss
-
-    return loss_fn
+@nnx.jit
+def cd_percloss(
+    model: ConditionalRBM,
+    u_state: jax.Array,
+    v_state: jax.Array
+):
+    vhat_state = jax.lax.stop_gradient(model.percloss_states(u_state))
+    return jnp.mean(model.percloss(u_state, v_state, vhat_state))
 
 
-def nll_loss(l2_weight: float):
-    """Construct a loss function based on NLL with L2 regularization."""
-    @nnx.jit
-    def loss_fn(
-        model: ConditionalRBM,
-        u_state: jax.Array,
-        v_state: jax.Array
-    ):
-        loss = jnp.mean(model.conditional_nll(u_state, v_state))
-        loss += l2_regularization(model, l2_weight)
-        return loss
-
-    return loss_fn
+@nnx.jit
+def cd_meanloss(
+    model: ConditionalRBM,
+    u_state: jax.Array,
+    v_state: jax.Array
+):
+    vg_states = jax.lax.stop_gradient(model.sample(u_state, model.vhat_size))
+    return jnp.mean(model.meanloss(u_state, v_state, vg_states))
 
 
-def l2_regularization(model, l2_weight):
+@nnx.jit
+def nll_loss(
+    model: ConditionalRBM,
+    u_state: jax.Array,
+    v_state: jax.Array
+):
+    return jnp.mean(model.conditional_nll(u_state, v_state))
+
+
+def l2_regularization(model, l2w_weights, l2w_biases):
     """L2 regularization term."""
-    return l2_weight * (
-        jnp.mean(jnp.square(model.weights_vu))
-        + jnp.mean(jnp.square(model.weights_hu))
-        + jnp.mean(jnp.square(model.weights_hv))
-        + jnp.mean(jnp.square(model.bias_v))
-        + jnp.mean(jnp.square(model.bias_h))
+    return (
+        l2w_weights * (
+            jnp.mean(jnp.square(model.weights_vu))
+            + jnp.mean(jnp.square(model.weights_hu))
+            + jnp.mean(jnp.square(model.weights_hv))
+        )
+        + l2w_biases * (
+            jnp.mean(jnp.square(model.bias_v))
+            + jnp.mean(jnp.square(model.bias_h))
+        )
     )
+
+
+def make_l2_loss_fn(loss_fn: Callable, l2w_weights: float, l2w_biases: float):
+    """Construct a loss function with L2 regularization."""
+    def fn(
+        model: ConditionalRBM,
+        u_state: jax.Array,
+        v_state: jax.Array
+    ):
+        return loss_fn(model, u_state, v_state) + l2_regularization(model, l2w_weights, l2w_biases)
+
+    return nnx.jit(fn)
 
 
 def train_crbm(
@@ -202,18 +227,49 @@ def train_crbm(
     callback: Optional[BaseCallback] = None,
     records: Optional[dict[str, Any]] = None
 ):
-    @nnx.jit
-    def train_step(
-        model: ConditionalRBM,
-        u_batch: jax.Array,
-        v_batch: jax.Array,
-        optimizer: nnx.optimizer.Optimizer,
-        callback: BaseCallback
-    ):
-        grad_fn = nnx.value_and_grad(loss_fn)
-        loss, grads = grad_fn(model, u_batch, v_batch)
-        callback.train_step(model, u_batch, v_batch, loss)
-        optimizer.update(model, grads)
+    if isinstance(loss_fn, tuple) and loss_fn[0] == 'cd':
+        l2w_weights, l2w_biases = loss_fn[1:]
+
+        loss_fn = make_l2_loss_fn(cd_percloss, l2w_weights, l2w_biases)
+
+        @nnx.jit
+        def _loss_fn(
+            model: ConditionalRBM,
+            u_state: jax.Array,
+            v_state: jax.Array,
+            vhat_state: jax.Array
+        ):
+            loss = jnp.mean(model.percloss(u_state, v_state, vhat_state))
+            loss += l2_regularization(model, l2w_weights, l2w_biases)
+            return loss
+
+        @nnx.jit
+        def train_step(
+            model: ConditionalRBM,
+            u_batch: jax.Array,
+            v_batch: jax.Array,
+            optimizer: nnx.optimizer.Optimizer,
+            callback: BaseCallback
+        ):
+            grad_fn = nnx.value_and_grad(_loss_fn)
+            vhat_batch = model.percloss_states(u_batch)
+            loss, grads = grad_fn(model, u_batch, v_batch, vhat_batch)
+            callback.train_step(model, u_batch, v_batch, loss)
+            optimizer.update(model, grads)
+
+    else:
+        @nnx.jit
+        def train_step(
+            model: ConditionalRBM,
+            u_batch: jax.Array,
+            v_batch: jax.Array,
+            optimizer: nnx.optimizer.Optimizer,
+            callback: BaseCallback
+        ):
+            grad_fn = nnx.value_and_grad(loss_fn)
+            loss, grads = grad_fn(model, u_batch, v_batch)
+            callback.train_step(model, u_batch, v_batch, loss)
+            optimizer.update(model, grads)
 
     optax_fn = optax_fn or optax.adamw(learning_rate=lr)
     optimizer = nnx.Optimizer(model, optax_fn, wrt=nnx.Param)
