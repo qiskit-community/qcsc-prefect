@@ -143,7 +143,7 @@ class ConditionalRBM(nnx.Module):
         final_state_only: bool = False
     ) -> jax.Array:
         """MCMC sample generation."""
-        batch_size = np.prod(u_state.shape[:-1]).astype(int)
+        batch_size = u_state.size // u_state.shape[-1]
         num_v = batch_size * self.bias_v.shape[0]
         num_h = batch_size * self.bias_h.shape[0]
         uniform_size = num_v + (num_v + num_h) * np.prod(size).astype(int)
@@ -161,7 +161,7 @@ class ConditionalRBM(nnx.Module):
         final_state_only: bool = False
     ) -> jax.Array:
         """MCMC sample generation."""
-        batch_size = np.prod(u_state.shape[:-1]).astype(int)
+        batch_size = u_state.size // u_state.shape[-1]
         num_v = batch_size * self.bias_v.shape[0]
         num_h = batch_size * self.bias_h.shape[0]
 
@@ -235,7 +235,7 @@ class ConditionalRBM(nnx.Module):
         u_state: jax.Array,
         size: Optional[int | tuple[int, ...]] = None
     ):
-        batch_size = np.prod(u_state.shape[:-1]).astype(int)
+        batch_size = u_state.size // u_state.shape[-1]
         num_v = batch_size * self.bias_v.shape[0]
         num_h = batch_size * self.bias_h.shape[0]
         if size is None:
