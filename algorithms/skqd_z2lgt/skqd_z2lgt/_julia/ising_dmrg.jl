@@ -1,5 +1,5 @@
 using HDF5: h5open, read, write
-using ITensorMPS: siteinds, OpSum, MPO, MPS, random_mps, dmrg
+using ITensorMPS: expect, siteinds, OpSum, MPO, MPS, random_mps, dmrg
 
 function ising_dmrg(filename)
     fp = h5open(filename, "r+")
@@ -33,8 +33,10 @@ function ising_dmrg(filename)
     cutoff = [1.e-10]
 
     energy, psi = dmrg(H, psi0; nsweeps, maxdim, cutoff)
+    zexp = expect(psi, "Z")
 
     write(fp, "energy", energy)
+    write(fp, "zexp", zexp)
     write(fp, "psi", psi)
     close(fp)
 end

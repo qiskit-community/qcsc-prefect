@@ -12,7 +12,7 @@ from qiskit.quantum_info import SparsePauliOp
 def ising_dmrg(
     hamiltonian: SparsePauliOp,
     filename: Optional[str] = None,
-    julia_bin: str = 'julia'
+    julia_bin: str | list[str] = 'julia'
 ):
     """Call ising_dmrg.jl. There must be a much smarter way to do this."""
     zz_indices = []
@@ -57,7 +57,10 @@ def ising_dmrg(
         'ising_dmrg.jl'
     )
 
-    proc = subprocess.run([julia_bin, program, filename],
+    if isinstance(julia_bin, str):
+        julia_bin = [julia_bin]
+
+    proc = subprocess.run(julia_bin + [program, filename],
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
     if proc.stdout:
         sys.stdout.write(proc.stdout)
@@ -78,7 +81,7 @@ def ising_dmrg(
 def get_mps_probs(
     filename: str,
     num_samples: int = 100000,
-    julia_bin: str = 'julia'
+    julia_bin: str | list[str] = 'julia'
 ) -> tuple[np.ndarray, np.ndarray]:
     """Call mps_sparsity.jl and get the list of probable computational basis states."""
     program = os.path.join(
@@ -87,7 +90,10 @@ def get_mps_probs(
         'mps_sparsity.jl'
     )
 
-    proc = subprocess.run([julia_bin, program, filename, str(num_samples)],
+    if isinstance(julia_bin, str):
+        julia_bin = [julia_bin]
+
+    proc = subprocess.run(julia_bin + [program, filename, str(num_samples)],
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
     if proc.stdout:
         sys.stdout.write(proc.stdout)
