@@ -107,3 +107,43 @@ def get_mps_probs(
         probs = source['probs'][()]
 
     return states, probs
+
+
+def get_mps_coverage(
+    filename: str,
+    samples_filename: str,
+    icp: int,
+    ndt: int,
+    nstep: int,
+    nexp: int,
+    julia_bin: str | list[str] = 'julia'
+) -> float:
+    program = os.path.join(
+        os.path.dirname(__file__),
+        '_julia',
+        'mps_coverage.jl'
+    )
+
+    if isinstance(julia_bin, str):
+        julia_bin = [julia_bin]
+
+    with tempfile.NamedTemporaryFile() as tfile:
+        out_filename = tfile.name
+
+    args = [filename, samples_filename, f'{icp}', f'{ndt}', f'{nstep}', f'{nexp}', out_filename]
+
+    proc = subprocess.run(julia_bin + [program] + args,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+        sys.stdout.flush()
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
+        sys.stderr.flush()
+
+    with h5py.File(out_filename, 'r') as source:
+        probs = source['probs'][()]
+
+    os.unlink(out_filename)
+
+    return probs
