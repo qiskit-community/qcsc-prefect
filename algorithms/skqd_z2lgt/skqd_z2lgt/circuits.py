@@ -8,7 +8,7 @@ def make_step_circuits(lattice, plaquette_energy, delta_t, basis_2q):
     """Make circuits."""
     circuits = []
 
-    circuit = QuantumCircuit(lattice.num_links + lattice.num_plaquettes, lattice.num_links)
+    circuit = QuantumCircuit(lattice.qubit_graph.num_nodes(), lattice.num_links)
     circuit.compose(lattice.electric_evolution(0.5 * delta_t), inplace=True)
     circuit.compose(lattice.magnetic_evolution(plaquette_energy, delta_t, basis_2q=basis_2q),
                     inplace=True)
@@ -18,19 +18,19 @@ def make_step_circuits(lattice, plaquette_energy, delta_t, basis_2q):
     circuit.compose(lattice.electric_evolution(0.5 * delta_t), inplace=True)
     circuits.append(circuit)
 
-    circuit = QuantumCircuit(lattice.num_links + lattice.num_plaquettes, lattice.num_links)
+    circuit = QuantumCircuit(lattice.qubit_graph.num_nodes(), lattice.num_links)
     circuit.compose(lattice.electric_evolution(0.5 * delta_t), inplace=True)
     circuit.compose(lattice.magnetic_evolution(plaquette_energy, delta_t, basis_2q=basis_2q),
                     inplace=True)
     circuits.append(circuit)
 
-    circuit = QuantumCircuit(lattice.num_links + lattice.num_plaquettes, lattice.num_links)
+    circuit = QuantumCircuit(lattice.qubit_graph.num_nodes(), lattice.num_links)
     circuit.compose(lattice.magnetic_evolution(plaquette_energy, -delta_t, basis_2q=basis_2q),
                     inplace=True)
     circuit.compose(lattice.electric_evolution(-0.5 * delta_t), inplace=True)
     circuits.append(circuit)
 
-    circuit = QuantumCircuit(lattice.num_links + lattice.num_plaquettes, lattice.num_links)
+    circuit = QuantumCircuit(lattice.qubit_graph.num_nodes(), lattice.num_links)
     circuit.measure(range(lattice.num_links), range(lattice.num_links))
     circuits.append(circuit)
 
