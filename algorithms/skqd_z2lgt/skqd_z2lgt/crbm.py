@@ -24,43 +24,55 @@ class ConditionalRBM(nnx.Module):
         self.therm_steps = 100
         self.vhat_size = 100
 
-    def save(self, filename: str):
+    def save(self, file: str | h5py.Group):
         params_state, rngs_state = map(nnx.pure, nnx.state(self, nnx.Param, ...))
-        with h5py.File(filename, 'w') as out:
-            params = out.create_group('params')
-            for key, value in params_state.items():
-                params.create_dataset(key, data=value)
+        if isinstance(file, str):
+            out = h5py.File(file, 'w')
+        else:
+            out = file
 
-            rngs = out.create_group('rngs')
-            for key, state in rngs_state['rngs'].items():
-                group = rngs.create_group(key)
-                group.create_dataset('count', data=state['count'])
-                group.create_dataset('key', data=jax.random.key_data(state['key']))
+        params = out.create_group('params')
+        for key, value in params_state.items():
+            params.create_dataset(key, data=value)
 
-            out.create_dataset('therm_steps', data=self.therm_steps)
-            out.create_dataset('vhat_size', data=self.vhat_size)
+        rngs = out.create_group('rngs')
+        for key, state in rngs_state['rngs'].items():
+            group = rngs.create_group(key)
+            group.create_dataset('count', data=state['count'])
+            group.create_dataset('key', data=jax.random.key_data(state['key']))
+
+        out.create_dataset('therm_steps', data=self.therm_steps)
+        out.create_dataset('vhat_size', data=self.vhat_size)
+
+        if isinstance(file, str):
+            out.close()
 
     @staticmethod
-    def load(filename: str, groupname: Optional[str] = None) -> 'ConditionalRBM':
-        with h5py.File(filename, 'r') as source:
-            if groupname:
-                source = source[groupname]
-            params = {key: data[()] for key, data in source['params'].items()}
-            rngs_state = {}
-            for key, state in source['rngs'].items():
-                rngs_state[key] = {}
-                try:
-                    rngs_state[key]['count'] = state['count'][()]
-                except KeyError:
-                    LOG.error('Failed to load rngs/%s/count', key)
-                    rngs_state[key]['count'] = np.uint32(0)
-                try:
-                    rngs_state[key]['key'] = jax.random.wrap_key_data(state['key'][()])
-                except KeyError:
-                    LOG.error('Failed to load rngs/%s/count', key)
-                    rngs_state[key]['key'] = np.array([0, 0], dtype=np.uint32)
-            therm_steps = source['therm_steps'][()]
-            vhat_size = source['vhat_size'][()]
+    def load(file: str | h5py.Group) -> 'ConditionalRBM':
+        if isinstance(file, str):
+            source = h5py.File(file)
+        else:
+            source = file
+
+        params = {key: data[()] for key, data in source['params'].items()}
+        rngs_state = {}
+        for key, state in source['rngs'].items():
+            rngs_state[key] = {}
+            try:
+                rngs_state[key]['count'] = state['count'][()]
+            except KeyError:
+                LOG.error('Failed to load rngs/%s/count', key)
+                rngs_state[key]['count'] = np.uint32(0)
+            try:
+                rngs_state[key]['key'] = jax.random.wrap_key_data(state['key'][()])
+            except KeyError:
+                LOG.error('Failed to load rngs/%s/count', key)
+                rngs_state[key]['key'] = np.array([0, 0], dtype=np.uint32)
+        therm_steps = source['therm_steps'][()]
+        vhat_size = source['vhat_size'][()]
+
+        if isinstance(file, str):
+            source.close()
 
         rngs = nnx.Rngs(**{key: state['key'] for key, state in rngs_state.items()})
         for key, state in rngs_state.items():
