@@ -5,27 +5,14 @@ from functools import partial
 import numpy as np
 import jax
 import jax.numpy as jnp
-from jax.sharding import PartitionSpec, NamedSharding
 from jax.experimental.sparse import BCOO
 from qiskit.quantum_info import SparsePauliOp
-
-PAULI_ROW_INDICES = np.array([
-    [0, 1],  # I
-    [1, 0],  # X
-    [1, 0],  # Y
-    [0, 1]  # Z
-], dtype=np.uint8)
-PAULI_ELEMENTS = np.array([
-    [1., 1.],  # I
-    [1., 1.],  # X
-    [1.j, -1.j],  # Y
-    [1., -1.]  # Z
-])
 
 
 def to_bcoo(
     op: SparsePauliOp,
-    states: Optional[np.ndarray] = None
+    states: Optional[np.ndarray] = None,
+    pmap: bool = False
 ) -> BCOO:
     """Convert a SparsePauliOp to a sparse (COO) array, with optional subspace projection.
 
@@ -49,32 +36,24 @@ def to_bcoo(
         states = jnp.array(states, dtype=np.uint8)
 
     num_terms = len(op)
-    if num_terms >= jax.device_count():
+    if pmap:
         num_dev = jax.device_count()
         terms_per_device = int(np.ceil(num_terms / num_dev).astype(int))
         pad_to_length = num_dev * terms_per_device
+        pauli_strings, op_coeffs = op_to_arrays(op, pad_to_length=pad_to_length)
+        pauli_strings = pauli_strings.reshape((num_dev, terms_per_device, op.num_qubits))
     else:
-        num_dev = 1
-        terms_per_device = num_terms
-        pad_to_length = 0
+        pauli_strings, op_coeffs = op_to_arrays(op)
 
-    pauli_strings, op_coeffs = op_to_arrays(op, pad_to_length=pad_to_length)
-    # Reshape for pmapping
-    pauli_strings = pauli_strings.reshape((num_dev, terms_per_device, op.num_qubits))
-    if num_dev > 1:
-        mesh = jax.make_mesh((jax.device_count(), 1), ('device', 'dum'))
-        pauli_strings = jax.device_put(pauli_strings, NamedSharding(mesh, PartitionSpec('device')))
-
-    if states is None:
-        rows, phases = multi_pauli_map(pauli_strings)
-    else:
-        rows, phases = multi_subspace_pauli_map(pauli_strings, states)
+    rows, signs, imaginary = multi_pauli_map(pauli_strings, states)
 
     # Remove the device axis and truncate at the original number of op terms
-    proj_dim = rows.shape[-1]
+    subspace_dim = rows.shape[-1]
     rows = rows[:num_terms].reshape(-1)
-    cols = jnp.tile(jnp.arange(proj_dim), num_terms)
-    data = ((1.j ** phases) * op_coeffs[:, None])[:num_terms].reshape(-1)
+    cols = jnp.tile(jnp.arange(subspace_dim), num_terms)
+    op_coeffs *= jnp.array([1., 1.j])[imaginary]
+    data = op_coeffs[:, None] * (1. - 2. * signs)
+    data = data[:num_terms].reshape(-1)
 
     if states is not None:
         filt = jnp.not_equal(rows, -1)
@@ -83,7 +62,7 @@ def to_bcoo(
         cols = cols[filt]
 
     coords = jnp.stack([rows, cols], axis=1)
-    return BCOO((data, coords), shape=(proj_dim, proj_dim))
+    return BCOO((data, coords), shape=(subspace_dim, subspace_dim))
 
 
 def op_to_arrays(
@@ -116,8 +95,43 @@ def op_to_arrays(
     return index_array, coeff_array
 
 
+def multi_pauli_map(
+    pauli_strings: jax.Array,
+    states: Optional[jax.Array] = None
+) -> tuple[jax.Array, jax.Array, bool]:
+    if states is None:
+        match pauli_strings.ndim:
+            case 2:
+                rows, signs = _v_pauli_map(pauli_strings)
+            case 3:
+                rows, signs = _pv_pauli_map(pauli_strings)
+            case _:
+                raise ValueError('Too many dimensions in pauli_strings')
+
+        subspace_dim = 2 ** pauli_strings.shape[-1]
+    else:
+        subspace = jnp.packbits(states, axis=1)
+        match pauli_strings.ndim:
+            case 2:
+                rows, signs = _v_subspace_pauli_map(pauli_strings, states, subspace)
+            case 3:
+                rows, signs = _sv_subspace_pauli_map(pauli_strings, states, subspace)
+            case 4:
+                rows, signs = _psv_subspace_pauli_map(pauli_strings, states, subspace)
+            case _:
+                raise ValueError('Too many dimensions in pauli_strings')
+
+        subspace_dim = states.shape[0]
+
+    imaginary = (jnp.sum(jnp.equal(pauli_strings, 2), axis=-1) % 2).astype(np.uint8)
+
+    shape = (-1, subspace_dim)
+    # pylint: disable-next=used-before-assignment
+    return rows.reshape(shape), signs.reshape(shape), imaginary.reshape(-1)
+
+
 @jax.jit
-def pauli_map(pauli_string: jax.Array) -> tuple[jax.Array, jax.Array]:
+def _pauli_map(pauli_string: jax.Array) -> tuple[jax.Array, jax.Array]:
     """Return the row indices and matrix element phases of nonzero entries of the Pauli unitary.
 
     Phases are integers in units of pi/2.
@@ -129,7 +143,7 @@ def pauli_map(pauli_string: jax.Array) -> tuple[jax.Array, jax.Array]:
         pauli_string: Array of {0,1,2,3} pauli indices, shape [num_qubits].
 
     Returns:
-        Row indices (shape [2 ** num_qubits]) and matrix element phases ([2 ** num_qubits]) of
+        Row indices (shape [2 ** num_qubits]) and matrix element signs ([2 ** num_qubits]) of the
         nonzero entries of the Pauli unitary, ordered by columns.
     """
     return jax.lax.cond(
@@ -140,74 +154,31 @@ def pauli_map(pauli_string: jax.Array) -> tuple[jax.Array, jax.Array]:
     )
 
 
-v_pauli_map = jax.jit(jax.vmap(pauli_map))
-pv_pauli_map = jax.pmap(v_pauli_map, axis_name='device')
-
-
-def multi_pauli_map(pauli_strings: jax.Array) -> tuple[jax.Array, jax.Array]:
-    match pauli_strings.ndim:
-        case 2:
-            rows, phases = v_pauli_map(pauli_strings)
-        case 3:
-            rows, phases = pv_pauli_map(pauli_strings)
-            shape = (np.prod(pauli_strings.shape[:-1]), 2 ** pauli_strings.shape[-1])
-            rows = rows.reshape(shape)
-            phases = phases.reshape(shape)
-        case _:
-            raise ValueError('Too many dimensions in pauli_strings')
-
-    return rows, phases
+_v_pauli_map = jax.jit(jax.vmap(_pauli_map))
+_pv_pauli_map = jax.pmap(_v_pauli_map, axis_name='device')
 
 
 @jax.jit
-def subspace_pauli_map(pauli_string: jax.Array, states: jax.Array) -> tuple[jax.Array, jax.Array]:
-    subspace = jnp.packbits(states, axis=-1)
-    return _subspace_pauli_map(pauli_string, states, subspace)
-
-
-def multi_subspace_pauli_map(
-    pauli_strings: jax.Array,
-    states: jax.Array
-) -> tuple[jax.Array, jax.Array]:
-    subspace = jnp.packbits(states, axis=-1)
-    match pauli_strings.ndim:
-        case 2:
-            rows, phases = _v_subspace_pauli_map(pauli_strings, states, subspace)
-        case 3:
-            rows, phases = _sv_subspace_pauli_map(pauli_strings, states, subspace)
-        case 4:
-            rows, phases = _psv_subspace_pauli_map(pauli_strings, states, subspace)
-        case _:
-            raise ValueError('Too many dimensions in pauli_strings')
-
-    shape = (np.prod(pauli_strings.shape[:-1]), np.prod(states.shape[:-1]))
-    rows = rows.reshape(shape)
-    phases = phases.reshape(shape)
-
-    return rows, phases
-
-
-@jax.jit
-def _pauli_map_diagonal(pauli_string: jax.Array) -> jax.Array:
+def _pauli_map_diagonal(pauli_string: jax.Array) -> tuple[jax.Array, jax.Array]:
     num_qubits = pauli_string.shape[0]
     rows = jnp.arange(2 ** num_qubits, dtype=np.int64)
-    phases = jnp.zeros((2,) * num_qubits, dtype=np.uint8)
+    signs = jnp.zeros((2,) * num_qubits, dtype=np.uint8)
 
     for iq in range(num_qubits):
-        phases = jax.lax.cond(
+        signs = jax.lax.cond(
             jnp.equal(pauli_string[iq], 3),
-            lambda: jnp.moveaxis(jnp.moveaxis(phases, iq, 0).at[1].add(2), 0, iq),
-            lambda: phases
+            lambda: jnp.moveaxis(jnp.moveaxis(signs, iq, 0).at[1].add(1), 0, iq),
+            lambda: signs
         )
-    phases %= 4
-    return rows, phases.reshape(-1)
+    signs %= 2
+    return rows, signs.reshape(-1)
 
 
 @jax.jit
-def _pauli_map_nondiagonal(pauli_string: jax.Array) -> jax.Array:
+def _pauli_map_nondiagonal(pauli_string: jax.Array) -> tuple[jax.Array, jax.Array]:
     num_qubits = pauli_string.shape[0]
     rows = jnp.arange(2 ** num_qubits, dtype=np.int64).reshape((2,) * num_qubits)
-    phases = jnp.zeros((2,) * num_qubits, dtype=np.uint8)
+    signs = jnp.zeros((2,) * num_qubits, dtype=np.uint8)
 
     for iq in range(num_qubits):
         rows = jax.lax.cond(
@@ -215,15 +186,13 @@ def _pauli_map_nondiagonal(pauli_string: jax.Array) -> jax.Array:
             lambda: jnp.flip(rows, axis=iq),
             lambda: rows
         )
-        phases += jnp.equal(pauli_string[iq], 2).astype(np.uint8)
-        phases = jax.lax.cond(
+        signs = jax.lax.cond(
             jnp.greater(pauli_string[iq], 1),
-            lambda: jnp.moveaxis(jnp.moveaxis(phases, iq, 0).at[1].add(2), 0, iq),
-            lambda: phases
+            lambda: jnp.moveaxis(jnp.moveaxis(signs, iq, 0).at[1].add(1), 0, iq),
+            lambda: signs
         )
-    phases %= 4
-
-    return rows.reshape(-1), phases.reshape(-1)
+    signs %= 2
+    return rows.reshape(-1), signs.reshape(-1)
 
 
 @jax.jit
@@ -258,8 +227,8 @@ def _sv_subspace_pauli_map(
     """Temporally vectorized rows_and_elements. Cannot fullly vmap because of memory footprint."""
     def body_fn(carry, pauli_string_block):
         _states, _subspace = carry
-        rows, phases = _v_subspace_pauli_map(pauli_string_block, _states, _subspace)
-        return carry, (rows, phases)
+        rows, signs = _v_subspace_pauli_map(pauli_string_block, _states, _subspace)
+        return carry, (rows, signs)
 
     return jax.lax.scan(
         body_fn, (states, subspace), pauli_strings
@@ -274,11 +243,10 @@ _psv_subspace_pauli_map = jax.pmap(_sv_subspace_pauli_map, axis_name='device',
 def _subspace_pauli_map_diagonal(
     pauli_string: jax.Array,
     states: jax.Array
-) -> jax.Array:
+) -> tuple[jax.Array, jax.Array]:
     rows = jnp.arange(np.prod(states.shape[:-1]), dtype=np.int32).reshape(states.shape[:-1])
-    phases = jnp.sum(states * jnp.equal(pauli_string, 3).astype(np.uint8), axis=-1) * 2
-    phases %= 4
-    return rows, phases
+    signs = jnp.sum(states * jnp.equal(pauli_string, 3).astype(np.uint8), axis=-1) % 2
+    return rows, signs
 
 
 @jax.jit
@@ -288,48 +256,23 @@ def _subspace_pauli_map_nondiagonal(
     subspace: jax.Array
 ) -> jax.Array:
     mapped_states = states ^ jnp.not_equal(pauli_string % 3, 0).astype(np.uint8)
-    packed_mapped_states = jnp.packbits(mapped_states, axis=-1)
-    if packed_mapped_states.ndim == 2:
-        packed_mapped_states = packed_mapped_states.reshape((1,) + packed_mapped_states.shape)
+    packed_mapped_states = jnp.packbits(mapped_states, axis=1)
     rows = subspace_indices(packed_mapped_states, subspace)
-    phases = jnp.sum(states * jnp.greater(pauli_string, 1).astype(np.uint8), axis=-1) * 2
-    phases += jnp.sum(jnp.equal(pauli_string, 2).astype(np.uint8))
-    phases %= 4
-    return rows, phases
+    signs = jnp.sum(states * jnp.greater(pauli_string, 1).astype(np.uint8), axis=-1) % 2
+    return rows, signs
 
 
 @jax.jit
-def subspace_index(state: jax.Array, subspace: jax.Array) -> int:
-    """Return the position of the bitstring in the pool, or -1 if not found."""
-    matches = jnp.all(jnp.equal(state, subspace), axis=1)
-    idx = jnp.argmax(matches).astype(np.int32)
-    zero = np.int32(0)
-    inv = np.int32(-1)
-    return jax.lax.select(jnp.equal(idx, zero), jax.lax.select(matches[0], zero, inv), idx)
+def subspace_indices(states: jax.Array, subspace: jax.Array) -> int:
+    """Return the positions of the states in the subspace, or -1 if not found."""
+    # Borrowing from jax._src.lax.lax_numpy._searchsorted_via_sort
+    def _rank(x):
+        idx = jnp.arange(x.shape[0], dtype=np.int32)
+        return jnp.empty_like(idx).at[jnp.lexsort(x.T[::-1])].set(idx)
 
-
-v_subspace_index = jax.jit(jax.vmap(subspace_index, in_axes=(0, None)))
-"""Bitstring position finder vectorized on bitstrings."""
-
-
-@jax.jit
-def subspace_indices(states: jax.Array, subspace: jax.Array) -> jax.Array:
-    """Build an array of index blocks with shape (num_blocks, block_size).
-
-    Args:
-        states: Bit-packed states. Shape [num_block, block_size, ceil(num_qubits / 8)]
-        subspace: Shape [pool_size, ceil(num_qubits / 8)]
-
-    Returns:
-        Index array of shape [num_block * block_size].
-    """
-    def body_fn(_subspace, state_block):
-        indices = v_subspace_index(state_block, _subspace)
-        return _subspace, indices
-
-    return jax.lax.scan(
-        body_fn, subspace, states
-    )[1].reshape((-1,))
+    index = _rank(jnp.concatenate([states, subspace], axis=0))[:states.shape[0]]
+    positions = (index - _rank(states)) % subspace.shape[0]
+    return jnp.where(jnp.all(jnp.equal(states, subspace[positions]), axis=1), positions, -1)
 
 
 @jax.jit
