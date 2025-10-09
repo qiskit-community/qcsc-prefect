@@ -41,8 +41,10 @@ class ConditionalRBM(nnx.Module):
             out.create_dataset('vhat_size', data=self.vhat_size)
 
     @staticmethod
-    def load(filename: str) -> 'ConditionalRBM':
+    def load(filename: str, groupname: Optional[str] = None) -> 'ConditionalRBM':
         with h5py.File(filename, 'r') as source:
+            if groupname:
+                source = source[groupname]
             params = {key: data[()] for key, data in source['params'].items()}
             rngs_state = {}
             for key, state in source['rngs'].items():
