@@ -25,7 +25,7 @@ def to_bcoo(
         A COO array encoding the op projected onto the subspace.
     """
     if states is not None:
-        states = np.asarray(states)
+        states = np.unique(states, axis=0)
         if states.ndim == 1:
             states = np.sort(states)
             # Convert integer indices to binary
