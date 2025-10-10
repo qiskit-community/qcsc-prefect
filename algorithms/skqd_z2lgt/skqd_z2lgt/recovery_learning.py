@@ -24,7 +24,11 @@ def preprocess(
     if as_counts:
         out = {}
     else:
-        out = np.empty((shots, lattice.num_vertices + lattice.num_plaquettes), dtype=np.uint8)
+        out = (
+            np.empty((shots, lattice.num_vertices), dtype=np.uint8),
+            np.empty((shots, lattice.num_plaquettes), dtype=np.uint8)
+        )
+
     pos = 0
     for link_state, count in generator:
         link_state, syndrome = mwpm_correct(link_state, lattice, matching)
@@ -32,11 +36,13 @@ def preprocess(
         if as_counts:
             out[(tuple(syndrome.tolist()), tuple(plaquette_state.tolist()))] = int(count)
         else:
-            out[pos:pos + count, :lattice.num_vertices] = syndrome[None, :]
-            out[pos:pos + count, lattice.num_vertices:] = plaquette_state[None, :]
+            out[0][pos:pos + count] = syndrome[None, :]
+            out[1][pos:pos + count] = plaquette_state[None, :]
             pos += count
 
     if not as_counts and shuffle:
-        np.random.shuffle(out)
+        indices = np.arange(pos)
+        np.random.default_rng().shuffle(indices)
+        out = (out[0][indices], out[1][indices])
 
     return out
