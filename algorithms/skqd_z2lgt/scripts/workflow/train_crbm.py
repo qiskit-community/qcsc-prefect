@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 from skqd_z2lgt.crbm import ConditionalRBM
-from skqd_z2lgt.train_crbm import make_l2_loss_fn, cd_meanloss, train_crbm
+from skqd_z2lgt.train_crbm import DefaultCallback, make_l2_loss_fn, cd_meanloss, train_crbm
 
 LOG = logging.getLogger('train_crbm')
 
@@ -63,7 +63,8 @@ if __name__ == '__main__':
 
     loss_fn = make_l2_loss_fn(cd_meanloss, options.l2w_weights, options.l2w_biases)
     records = train_crbm(model, train_u, train_v, test_u, test_v,
-                         options.batch_size, options.num_epochs, loss_fn, options.learning_rate)
+                         options.batch_size, options.num_epochs, loss_fn,
+                         lr=options.learning_rate, callback=DefaultCallback())
 
     out_filename = options.out or options.filename
     groupname = f'crbm_step{options.istep}'  # pylint: disable=invalid-name
