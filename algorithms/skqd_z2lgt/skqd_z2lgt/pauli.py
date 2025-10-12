@@ -38,6 +38,7 @@ def op_to_arrays(
     return index_array, coeff_array
 
 
+@jax.jit
 def multi_pauli_map(
     pauli_strings: jax.Array,
     states: Optional[jax.Array] = None

@@ -1,5 +1,6 @@
 """Sample-based Krylov quantum diagonalization."""
 from collections.abc import Iterable
+from functools import partial
 import logging
 import time
 from typing import Optional
@@ -8,7 +9,7 @@ from scipy.sparse import csr_array, coo_array
 from scipy.sparse.linalg import eigsh
 import jax
 import jax.numpy as jnp
-from jax.experimental.sparse import BCOO, bcoo_dot_general, bcoo_sum_duplicates
+from jax.experimental.sparse import BCOO, bcoo_dot_general
 from qiskit.quantum_info import SparsePauliOp
 from qiskit_addon_sqd.qubit import sort_and_remove_duplicates, project_operator_to_subspace
 from skqd_z2lgt.jax_experimental_sparse_linalg import lobpcg_standard
@@ -93,24 +94,32 @@ def to_bcoo(
     else:
         pauli_strings, op_coeffs = op_to_arrays(op)
 
-    rows, signs, imaginary = multi_pauli_map(pauli_strings, states)
-
-    # Truncate at the original number of op terms
-    subspace_dim = rows.shape[-1]
-    rows = rows[:num_terms].reshape(-1)
-    cols = jnp.tile(jnp.arange(subspace_dim), num_terms)
-    op_coeffs *= jnp.array([1., 1.j])[imaginary]
-    data = op_coeffs[:, None] * (1. - 2. * signs)
-    data = data[:num_terms].reshape(-1)
+    data, coords, shape = _make_bcoo_data(pauli_strings, op_coeffs, states, num_terms)
 
     if states is not None:
-        filt = jnp.not_equal(rows, -1)
+        filt = jnp.not_equal(coords[:, 0], -1)
         data = data[filt]
-        rows = rows[filt]
-        cols = cols[filt]
+        coords = coords[filt]
 
-    coords = jnp.stack([rows, cols], axis=1)
-    return bcoo_sum_duplicates(BCOO((data, coords), shape=(subspace_dim, subspace_dim)))
+    return BCOO((data, coords), shape=shape)
+
+
+@partial(jax.jit, static_argnums=[3])
+def _make_bcoo_data(pauli_strings, op_coeffs, states, num_terms):
+    """Truncate at the original number of op terms and flatten."""
+    rows, signs, imaginary = multi_pauli_map(pauli_strings, states)
+    subspace_dim = rows.shape[-1]
+    phases = jnp.array([1., 1.j])[imaginary]
+    data = (op_coeffs * phases)[:, None] * (1. - 2. * signs)
+    if num_terms != rows.shape[0]:
+        rows = rows[:num_terms]
+        data = data[:num_terms]
+    coords = jnp.empty(rows.shape + (2,), dtype=rows.dtype)
+    coords = coords.at[..., 0].set(rows)
+    coords = coords.at[..., 1].set(jnp.arange(subspace_dim)[None, :])
+    coords = coords.reshape((-1, 2))
+    data = data.reshape(-1)
+    return data, coords, (subspace_dim, subspace_dim)
 
 
 @jax.jit
