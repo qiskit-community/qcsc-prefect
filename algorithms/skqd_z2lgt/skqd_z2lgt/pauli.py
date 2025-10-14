@@ -38,7 +38,6 @@ def op_to_arrays(
     return index_array, coeff_array
 
 
-@jax.jit
 def multi_pauli_map(
     pauli_strings: jax.Array,
     states: Optional[jax.Array] = None
@@ -105,7 +104,7 @@ _pv_pauli_map = jax.pmap(_v_pauli_map, axis_name='device')
 @jax.jit
 def _pauli_map_diagonal(pauli_string: jax.Array) -> tuple[jax.Array, jax.Array]:
     num_qubits = pauli_string.shape[0]
-    rows = jnp.arange(2 ** num_qubits, dtype=np.int64)
+    rows = jnp.arange(2 ** num_qubits, dtype=np.int32)
     signs = jnp.zeros((2,) * num_qubits, dtype=np.uint8)
 
     for iq in range(num_qubits):
@@ -121,7 +120,7 @@ def _pauli_map_diagonal(pauli_string: jax.Array) -> tuple[jax.Array, jax.Array]:
 @jax.jit
 def _pauli_map_nondiagonal(pauli_string: jax.Array) -> tuple[jax.Array, jax.Array]:
     num_qubits = pauli_string.shape[0]
-    rows = jnp.arange(2 ** num_qubits, dtype=np.int64).reshape((2,) * num_qubits)
+    rows = jnp.arange(2 ** num_qubits, dtype=np.int32).reshape((2,) * num_qubits)
     signs = jnp.zeros((2,) * num_qubits, dtype=np.uint8)
 
     for iq in range(num_qubits):
