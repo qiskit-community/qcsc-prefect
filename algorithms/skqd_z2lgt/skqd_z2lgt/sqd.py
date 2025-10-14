@@ -28,17 +28,21 @@ def sqd(
     states: np.ndarray,
     jax_device_id: Optional[int] = None
 ) -> tuple[np.ndarray, csr_array, float, np.ndarray]:
+    pmap = False
     if jax_device_id is None:
         device = None
+    elif jax_device_id < 0:
+        device = None
+        pmap = True
     else:
         device = jax.devices()[jax_device_id]
 
     with jax.default_device(device):
         start = time.time()
-        states = uniquify_and_sort_states(states, hamiltonian.num_qubits)
+        states = uniquify_states(states, hamiltonian.num_qubits)
         LOG.info('%f seconds to sort %d bitstrings', time.time() - start, states.shape[0])
         start = time.time()
-        hproj = to_bcoo(hamiltonian, states)
+        hproj = to_bcoo(hamiltonian, states, pmap=pmap)
         LOG.info('%f seconds to project the Hamiltonian onto subspace', time.time() - start)
         start = time.time()
         eigval, eigvec = ground_state_lobpcg(hproj)
@@ -57,15 +61,13 @@ def sqd(
     return np.array(states), ham_proj, eigval, eigvec
 
 
-def uniquify_and_sort_states(states: np.ndarray, num_qubits: Optional[int] = None) -> jax.Array:
+def uniquify_states(states: np.ndarray, num_qubits: Optional[int] = None) -> jax.Array:
+    """Uniquify the states array. Note that np.unique performs the desired lexicographic sort."""
     states = jnp.unique(states, axis=0)
     if states.ndim == 1:
-        states = jnp.sort(states)
         # Convert integer indices to binary
         states = (states[:, None] >> jnp.arange(num_qubits)[None, ::-1]) % 2
-    else:
-        indices = jnp.lexsort(states.T[::-1])
-        states = states[indices]
+
     return states.astype(np.uint8)
 
 
@@ -90,11 +92,13 @@ def to_bcoo(
         terms_per_device = int(np.ceil(num_terms / num_dev).astype(int))
         pad_to_length = num_dev * terms_per_device
         pauli_strings, op_coeffs = op_to_arrays(op, pad_to_length=pad_to_length)
-        pauli_strings = pauli_strings.reshape((num_dev, terms_per_device, op.num_qubits))
+        pauli_strings = pauli_strings.reshape((num_dev, 1, terms_per_device, op.num_qubits))
     else:
         pauli_strings, op_coeffs = op_to_arrays(op)
 
-    data, coords, shape = _make_bcoo_data(pauli_strings, op_coeffs, states, num_terms)
+    # Possible extension: Adjust the pauli_strings shape when the next line fails with OOM
+    rows, signs, imaginary = multi_pauli_map(pauli_strings, states)
+    data, coords, shape = _make_bcoo_data(rows, signs, imaginary, op_coeffs, num_terms)
 
     if states is not None:
         filt = jnp.not_equal(coords[:, 0], -1)
@@ -104,10 +108,9 @@ def to_bcoo(
     return BCOO((data, coords), shape=shape)
 
 
-@partial(jax.jit, static_argnums=[3])
-def _make_bcoo_data(pauli_strings, op_coeffs, states, num_terms):
+@partial(jax.jit, static_argnums=[4])
+def _make_bcoo_data(rows, signs, imaginary, op_coeffs, num_terms):
     """Truncate at the original number of op terms and flatten."""
-    rows, signs, imaginary = multi_pauli_map(pauli_strings, states)
     subspace_dim = rows.shape[-1]
     phases = jnp.array([1., 1.j])[imaginary]
     data = (op_coeffs * phases)[:, None] * (1. - 2. * signs)
@@ -116,7 +119,7 @@ def _make_bcoo_data(pauli_strings, op_coeffs, states, num_terms):
         data = data[:num_terms]
     coords = jnp.empty(rows.shape + (2,), dtype=rows.dtype)
     coords = coords.at[..., 0].set(rows)
-    coords = coords.at[..., 1].set(jnp.arange(subspace_dim)[None, :])
+    coords = coords.at[..., 1].set(jnp.arange(subspace_dim, dtype=rows.dtype)[None, :])
     coords = coords.reshape((-1, 2))
     data = data.reshape(-1)
     return data, coords, (subspace_dim, subspace_dim)
