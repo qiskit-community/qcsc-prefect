@@ -37,7 +37,7 @@ if __name__ == '__main__':
         device_id = 0
     else:
         device_id = -1
-    sqd_states, ham_proj, energy, eigvec = sqd(ising_hamiltonian, states, jax_device_id=device_id)
+    energy, eigvec, sqd_states, ham_proj = sqd(ising_hamiltonian, states, jax_device_id=device_id)
 
     with h5py.File(options.filename, 'r+') as out:
         try:

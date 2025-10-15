@@ -52,7 +52,7 @@ if __name__ == '__main__':
         device_id = 0
     else:
         device_id = -1
-    sqd_states, ham_proj, energy, _ = sqd(ising_hamiltonian, states, jax_device_id=device_id)
+    energy, eigvec, sqd_states, ham_proj = sqd(ising_hamiltonian, states, jax_device_id=device_id)
 
     out_filename = options.out or options.filename
     groupname = f'skqd_rnd_{options.iexp}'  # pylint: disable=invalid-name
@@ -66,6 +66,7 @@ if __name__ == '__main__':
         group.create_dataset('num_plaq', data=num_plaq)
         group.create_dataset('sqd_states', data=np.packbits(sqd_states, axis=1))
         group.create_dataset('energy', data=energy)
+        group.create_dataset('eigvec', data=eigvec)
         subgroup = group.create_group('ham_proj')
         subgroup.create_dataset('data', data=ham_proj.data)
         subgroup.create_dataset('indices', data=ham_proj.indices)
