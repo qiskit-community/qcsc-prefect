@@ -82,7 +82,12 @@ def sqd(
     retval = (float(eigval), np.array(eigvec))
 
     if return_states:
-        retval += (np.array(jnp.unpackbits(states, axis=1)[:, :hamiltonian.num_qubits]),)
+        states = np.unpackbits(states, axis=1)
+        if states_size is None:
+            states = states[:, :hamiltonian.num_qubits]
+        else:
+            states = states[:subspace_dim][:, 1:hamiltonian.num_qubits + 1]
+        retval += (states,)
     if return_hproj:
         filt = jnp.logical_not(jnp.isclose(hproj.data, 0.))
         coo = coo_array(
