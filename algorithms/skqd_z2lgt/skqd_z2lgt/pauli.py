@@ -38,6 +38,7 @@ def op_to_arrays(
     return index_array, coeff_array
 
 
+@jax.jit
 def multi_pauli_map(
     pauli_strings: jax.Array,
     states: Optional[jax.Array] = None
@@ -55,14 +56,7 @@ def multi_pauli_map(
         strings (shape [prod(...)]).
     """
     if states is None:
-        match pauli_strings.ndim:
-            case 2:
-                rows, signs = _v_pauli_map(pauli_strings)
-            case 3:
-                rows, signs = _pv_pauli_map(pauli_strings)
-            case _:
-                raise ValueError('Too many dimensions in pauli_strings')
-
+        rows, signs = _v_pauli_map(pauli_strings)
         subspace_dim = 2 ** pauli_strings.shape[-1]
     else:
         match pauli_strings.ndim:
@@ -70,8 +64,6 @@ def multi_pauli_map(
                 rows, signs = _v_subspace_pauli_map(pauli_strings, states)
             case 3:
                 rows, signs = _sv_subspace_pauli_map(pauli_strings, states)
-            case 4:
-                rows, signs = _psv_subspace_pauli_map(pauli_strings, states)
             case _:
                 raise ValueError('Too many dimensions in pauli_strings')
 
@@ -80,7 +72,7 @@ def multi_pauli_map(
     imaginary = (jnp.sum(jnp.equal(pauli_strings, 2), axis=-1) % 2).astype(np.uint8)
 
     shape = (-1, subspace_dim)
-    # pylint: disable-next=used-before-assignment
+    # pylint: disable-next=possibly-used-before-assignment
     return rows.reshape(shape), signs.reshape(shape), imaginary.reshape(-1)
 
 
@@ -109,7 +101,6 @@ def _pauli_map(pauli_string: jax.Array) -> tuple[jax.Array, jax.Array]:
 
 
 _v_pauli_map = jax.jit(jax.vmap(_pauli_map))
-_pv_pauli_map = jax.pmap(_v_pauli_map, axis_name='device')
 
 
 @jax.jit
@@ -183,9 +174,6 @@ def _sv_subspace_pauli_map(
     return jax.lax.scan(
         body_fn, states, pauli_strings
     )[1]
-
-
-_psv_subspace_pauli_map = jax.pmap(_sv_subspace_pauli_map, axis_name='device', in_axes=(0, None))
 
 
 @jax.jit

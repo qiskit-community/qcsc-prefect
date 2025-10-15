@@ -9,6 +9,7 @@ from scipy.sparse import csr_array, coo_array
 from scipy.sparse.linalg import eigsh
 import jax
 import jax.numpy as jnp
+from jax.sharding import NamedSharding, PartitionSpec
 from jax.experimental.sparse import BCOO, bcoo_dot_general
 from qiskit.quantum_info import SparsePauliOp
 from qiskit_addon_sqd.qubit import sort_and_remove_duplicates, project_operator_to_subspace
@@ -136,7 +137,9 @@ def to_bcoo(
         terms_per_device = int(np.ceil(num_terms / num_dev).astype(int))
         pad_to_length = num_dev * terms_per_device
         pauli_strings, op_coeffs = op_to_arrays(op, pad_to_length=pad_to_length)
-        pauli_strings = pauli_strings.reshape((num_dev, 1, terms_per_device, op.num_qubits))
+        # pauli_strings = pauli_strings.reshape((num_dev, 1, terms_per_device, op.num_qubits))
+        mesh = jax.make_mesh((num_dev,), ('device',))
+        pauli_strings = jax.device_put(pauli_strings, NamedSharding(mesh, PartitionSpec('device')))
     else:
         pauli_strings, op_coeffs = op_to_arrays(op)
 
@@ -149,8 +152,7 @@ def to_bcoo(
         )
 
     # Possible extension: Adjust the pauli_strings shape when the next line fails with OOM
-    rows, signs, imaginary = multi_pauli_map(pauli_strings, states)
-    data, coords = _make_bcoo_data(rows, signs, imaginary, op_coeffs, num_terms)
+    data, coords, shape = _make_bcoo_data(pauli_strings, states, op_coeffs, num_terms)
 
     if states is not None:
         if subspace_dim is not None:
@@ -158,20 +160,19 @@ def to_bcoo(
             # (diagonal)
             data = data.reshape((num_terms, -1))[:, :subspace_dim].reshape(-1)
             coords = coords.reshape((num_terms, -1, 2))[:, :subspace_dim].reshape((-1, 2))
+            shape = (subspace_dim,) * 2
 
         filt = jnp.not_equal(coords[:, 0], -1)
         data = data[filt]
         coords = coords[filt]
 
-    if subspace_dim is None:
-        subspace_dim = rows.shape[-1]
-
-    return BCOO((data, coords), shape=(subspace_dim,) * 2)
+    return BCOO((data, coords), shape=shape)
 
 
-@partial(jax.jit, static_argnums=[4])
-def _make_bcoo_data(rows, signs, imaginary, op_coeffs, num_terms):
+@partial(jax.jit, static_argnums=[3])
+def _make_bcoo_data(pauli_strings, states, op_coeffs, num_terms):
     """Truncate at the original number of op terms and flatten."""
+    rows, signs, imaginary = multi_pauli_map(pauli_strings, states)
     subspace_dim = rows.shape[-1]
     phases = jnp.array([1., 1.j])[imaginary]
     data = (op_coeffs * phases)[:, None] * (1. - 2. * signs)
@@ -183,7 +184,7 @@ def _make_bcoo_data(rows, signs, imaginary, op_coeffs, num_terms):
     coords = coords.at[..., 1].set(jnp.arange(subspace_dim, dtype=rows.dtype)[None, :])
     coords = coords.reshape((-1, 2))
     data = data.reshape(-1)
-    return data, coords
+    return data, coords, (subspace_dim,) * 2
 
 
 @jax.jit
