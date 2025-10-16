@@ -8,15 +8,11 @@ import jax.numpy as jnp
 from qiskit.quantum_info import SparsePauliOp
 
 
-def op_to_arrays(
-    op: SparsePauliOp,
-    pad_to_length: int = 0
-) -> tuple[jax.Array, jax.Array]:
+def op_to_arrays(op: SparsePauliOp) -> tuple[jax.Array, jax.Array]:
     """Convert Pauli strings into an array of {0,1,2,3} indices.
 
     Args:
         op: Sum of Pauli strings.
-        pad_to_length: Zero-pad the returned arrays to specified length.
 
     Returns:
         Arrays of Pauli indices (shape [num_terms, num_qubits]) and coefficients ([num_terms]).
@@ -25,21 +21,6 @@ def op_to_arrays(
     index_array = jnp.array([[pauli_index[c] for c in p.to_label()] for p in op.paulis],
                             dtype=np.uint8)
     coeff_array = jnp.array(op.coeffs)
-
-    ordering = jnp.argsort(jnp.any(jnp.not_equal(index_array % 3, 0), axis=1))
-    index_array = index_array[ordering]
-    coeff_array = coeff_array[ordering]
-
-    if (padding := pad_to_length - len(op)) > 0:
-        index_array = jnp.concatenate(
-            [index_array, jnp.zeros((padding, op.num_qubits), dtype=np.uint8)],
-            axis=0
-        )
-        coeff_array = jnp.concatenate(
-            [coeff_array, jnp.zeros(padding, dtype=np.complex128)],
-            axis=0
-        )
-
     return index_array, coeff_array
 
 
