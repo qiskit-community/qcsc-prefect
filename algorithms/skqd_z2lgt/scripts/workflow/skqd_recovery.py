@@ -138,11 +138,6 @@ if __name__ == '__main__':
                 for istep in range(configuration['num_steps'])
             ]
         gen_states = [future.result() for future in futures]
-        # gen_states = [
-        #     generate_states(models[istep], exp_vtx_data[istep], exp_plaq_data[istep],
-        #                     options.num, options.gen_batch_size)
-        #     for istep in range(configuration['num_steps'])
-        # ]
         LOG.info('Generation took %.2f seconds.', time.time() - start)
 
         states = np.concatenate([relevant_states] + gen_states, axis=0)
@@ -168,7 +163,7 @@ if __name__ == '__main__':
 
         if not is_last and terminate:
             subspace_dim = sqd_states.shape[0]
-            hproj = to_bcoo(hamiltonian, sqd_states, pmap=device_id < 0)
+            hproj = to_bcoo(hamiltonian, sqd_states, sharded=device_id < 0)
             sqd_result += (bcoo_to_csr(hproj),)
             is_last = True
 
