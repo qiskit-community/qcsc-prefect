@@ -168,7 +168,7 @@ if __name__ == '__main__':
 
         if not is_last and terminate:
             subspace_dim = sqd_states.shape[0]
-            hproj = to_bcoo(hamiltonian, sqd_states, subspace_dim=subspace_dim, pmap=device_id < 0)
+            hproj = to_bcoo(hamiltonian, sqd_states, pmap=device_id < 0)
             sqd_result += (bcoo_to_csr(hproj),)
             is_last = True
 

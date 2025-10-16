@@ -59,49 +59,95 @@ def sqd(
         device = jax.devices()[jax_device_id]
 
     if states_size is not None:
-        subspace_dim = states.shape[0]
-        if states_size < subspace_dim:
+        if (pad_length := states_size - states.shape[0]) < 0:
             raise ValueError('states_size smaller than the states array length')
+
+        num_terms = len(hamiltonian)
         # Extend axis 1 by 1 bit for the padding flag
-        states = np.concatenate([np.zeros((subspace_dim, 1), dtype=np.uint8), states], axis=1)
+        states = np.concatenate([np.zeros((states.shape[0], 1), dtype=np.uint8), states], axis=1)
+        # Then extend axis 0 to states_size (fill with ones)
+        states = np.concatenate([states, np.ones((pad_length, states.shape[1]), dtype=np.uint8)],
+                                axis=0)
+
+        with jax.default_device(device):
+            start = time.time()
+            pauli_strings, op_coeffs = op_to_arrays(hamiltonian)
+            if pmap:
+                pauli_strings = shard_array_1d(pauli_strings, fill_value=0)
+            retval_jax = _sqd_fixed(pauli_strings, op_coeffs, num_terms, states,
+                                    return_states, return_hproj)
+            subspace_dim = int(retval_jax[0])
+            LOG.info('%f seconds for SQD. Subspace dimension %d', time.time() - start, subspace_dim)
+            retval = (float(retval_jax[1]), np.array(retval_jax[2][:subspace_dim]))
+            if return_states:
+                states = np.unpackbits(retval_jax[3][:subspace_dim], axis=1)
+                states = states[:, 1:hamiltonian.num_qubits + 1]
+                retval += (states,)
+            if return_hproj:
+                ham = retval_jax[-1]
+                retval += (bcoo_to_csr(BCOO((ham.data, ham.indices), shape=(subspace_dim,) * 2)),)
     else:
-        subspace_dim = None
+        with jax.default_device(device):
+            start = time.time()
+            states = jnp.packbits(states, axis=1)
+            states = uniquify_states(states)
+            LOG.info('%f seconds to sort %d bitstrings', time.time() - start, states.shape[0])
+            start = time.time()
+            hproj = to_bcoo(hamiltonian, states, pmap=pmap)
+            LOG.info('%f seconds to project the Hamiltonian onto subspace', time.time() - start)
+            start = time.time()
+            eigval, eigvec = ground_state_lobpcg(hproj)
+            LOG.info('%f seconds to diagonalize', time.time() - start)
 
-    with jax.default_device(device):
-        start = time.time()
-        states = jnp.packbits(states, axis=1)
-        states = uniquify_states(states, size=states_size, fill_value=255)
-        LOG.info('%f seconds to sort %d bitstrings', time.time() - start, states.shape[0])
-        start = time.time()
-        hproj = to_bcoo(hamiltonian, states, subspace_dim=subspace_dim, pmap=pmap)
-        LOG.info('%f seconds to project the Hamiltonian onto subspace', time.time() - start)
-        start = time.time()
-        eigval, eigvec = ground_state_lobpcg(hproj)
-        LOG.info('%f seconds to diagonalize', time.time() - start)
-
-    retval = (float(eigval), np.array(eigvec))
-
-    if return_states:
-        states = np.unpackbits(states, axis=1)
-        if states_size is None:
-            states = states[:, :hamiltonian.num_qubits]
-        else:
-            states = states[:subspace_dim][:, 1:hamiltonian.num_qubits + 1]
-        retval += (states,)
-    if return_hproj:
-        retval += (bcoo_to_csr(hproj),)
+        retval = (float(eigval), np.array(eigvec))
+        if return_states:
+            states = np.unpackbits(states, axis=1)[:, :hamiltonian.num_qubits]
+            retval += (states,)
+        if return_hproj:
+            retval += (bcoo_to_csr(hproj),)
 
     return retval
+
+
+@partial(jax.jit, static_argnums=[2, 4, 5])
+def _sqd_fixed(
+    pauli_strings,
+    op_coeffs,
+    num_terms,
+    states,
+    return_states,
+    return_hproj
+):
+    search_val = (2 ** min(states.shape[1], 8)) - 1
+    states = jnp.packbits(states, axis=1)
+    states = jnp.unique(states, axis=0, size=states.shape[0], fill_value=255)
+    subspace_dim = jnp.searchsorted(states[:, 0], search_val)
+    # states array is given an extra flag bit -> add an identity Pauli at the corresponding location
+    pauli_strings = jnp.concatenate(
+        [jnp.zeros(pauli_strings.shape[:-1] + (1,), dtype=pauli_strings.dtype), pauli_strings],
+        axis=-1
+    )
+    data, coords, _ = _make_bcoo_data(pauli_strings, states, op_coeffs, num_terms)
+    # rows[subspace_dim:] are either -1 or range(subspace_dim, rows.shape[0])
+    mask = jnp.logical_and(jnp.not_equal(coords[:, 0], -1), jnp.less(coords[:, 0], subspace_dim))
+    data *= mask
+    coords *= mask[:, None]
+    hproj = BCOO((data, coords), shape=(states.shape[0],) * 2)
+    retval = ground_state_lobpcg(hproj)
+    if return_states:
+        retval += (states,)
+    if return_hproj:
+        retval += (hproj,)
+    return (subspace_dim,) + retval
 
 
 def uniquify_states(
     states: np.ndarray,
     num_qubits: Optional[int] = None,
-    size: Optional[int] = None,
-    fill_value: Optional[int] = None
+    size: Optional[int] = None
 ) -> jax.Array:
     """Uniquify the states array. Note that np.unique performs the desired lexicographic sort."""
-    states = jnp.unique(states, axis=0, size=size, fill_value=fill_value)
+    states = jnp.unique(states, axis=0, size=size, fill_value=255)
     if states.ndim == 1:
         # Convert integer indices to binary
         states = (states[:, None] >> jnp.arange(num_qubits)[None, ::-1]) % 2
@@ -112,7 +158,6 @@ def uniquify_states(
 def to_bcoo(
     op: SparsePauliOp,
     states: Optional[jax.Array] = None,
-    subspace_dim: Optional[int] = None,
     pmap: bool = False,
 ) -> BCOO:
     """Convert a SparsePauliOp to a sparse (COO) array, with optional subspace projection.
@@ -121,8 +166,6 @@ def to_bcoo(
         op: Sum of Pauli strings.
         states: Sorted list of unique packed bitstrings with shape [subspace_dim,
             ceil(num_qubits / 8)].
-        subspace_dim: When the states array is padded to a fixed size, specifies the actual
-            dimension of the projection subspace.
         pmap: Whether to map the projection function across GPU devices.
 
     Returns:
@@ -133,25 +176,10 @@ def to_bcoo(
     if pmap:
         pauli_strings = shard_array_1d(pauli_strings, fill_value=0)
 
-    if states is not None and subspace_dim is not None:
-        # states array is given an extra padding flag bit -> add an identity Pauli at the
-        # corresponding location
-        pauli_strings = jnp.concatenate(
-            [jnp.zeros(pauli_strings.shape[:-1] + (1,), dtype=pauli_strings.dtype), pauli_strings],
-            axis=-1
-        )
-
     # Possible extension: Adjust the pauli_strings shape when the next line fails with OOM
     data, coords, shape = _make_bcoo_data(pauli_strings, states, op_coeffs, num_terms)
 
     if states is not None:
-        if subspace_dim is not None:
-            # rows[subspace_dim:] are either -1 (nondiagonal) or range(subspace_dim, rows.shape[0])
-            # (diagonal)
-            data = data.reshape((num_terms, -1))[:, :subspace_dim].reshape(-1)
-            coords = coords.reshape((num_terms, -1, 2))[:, :subspace_dim].reshape((-1, 2))
-            shape = (subspace_dim,) * 2
-
         filt = jnp.not_equal(coords[:, 0], -1)
         data = data[filt]
         coords = coords[filt]
