@@ -89,15 +89,7 @@ def sqd(
             states = states[:subspace_dim][:, 1:hamiltonian.num_qubits + 1]
         retval += (states,)
     if return_hproj:
-        filt = jnp.logical_not(jnp.isclose(hproj.data, 0.))
-        coo = coo_array(
-            (
-                hproj.data[filt],
-                (hproj.indices[filt, 0], hproj.indices[filt, 1])
-            ),
-            shape=hproj.shape
-        )
-        retval += (csr_array(coo),)
+        retval += (bcoo_to_csr(hproj),)
 
     return retval
 
@@ -172,6 +164,18 @@ def to_bcoo(
         coords = coords[filt]
 
     return BCOO((data, coords), shape=shape)
+
+
+def bcoo_to_csr(bcoo: BCOO):
+    filt = jnp.logical_not(jnp.isclose(bcoo.data, 0.))
+    coo = coo_array(
+        (
+            bcoo.data[filt],
+            (bcoo.indices[filt, 0], bcoo.indices[filt, 1])
+        ),
+        shape=bcoo.shape
+    )
+    return csr_array(coo)
 
 
 @partial(jax.jit, static_argnums=[3])
