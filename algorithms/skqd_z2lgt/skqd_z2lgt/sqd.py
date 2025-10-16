@@ -62,7 +62,6 @@ def sqd(
         if (pad_length := states_size - states.shape[0]) < 0:
             raise ValueError('states_size smaller than the states array length')
 
-        num_terms = len(hamiltonian)
         # Extend axis 1 by 1 bit for the padding flag
         states = np.concatenate([np.zeros((states.shape[0], 1), dtype=np.uint8), states], axis=1)
         # Then extend axis 0 to states_size (fill with ones)
@@ -71,10 +70,9 @@ def sqd(
 
         with jax.default_device(device):
             start = time.time()
-            pauli_strings, op_coeffs = op_to_arrays(hamiltonian)
-            if pmap:
-                pauli_strings = shard_array_1d(pauli_strings, fill_value=0)
-            retval_jax = _sqd_fixed(pauli_strings, op_coeffs, num_terms, states,
+            pauli_strings, op_coeffs, num_diag, num_terms = get_hamiltonian_array(hamiltonian,
+                                                                                  pmap=pmap)
+            retval_jax = _sqd_fixed(pauli_strings, op_coeffs, num_diag, num_terms, states,
                                     return_states, return_hproj)
             subspace_dim = int(retval_jax[0])
             LOG.info('%f seconds for SQD. Subspace dimension %d', time.time() - start, subspace_dim)
@@ -109,10 +107,11 @@ def sqd(
     return retval
 
 
-@partial(jax.jit, static_argnums=[2, 4, 5])
+@partial(jax.jit, static_argnums=[2, 3, 5, 6])
 def _sqd_fixed(
     pauli_strings,
     op_coeffs,
+    num_diag,
     num_terms,
     states,
     return_states,
@@ -127,7 +126,7 @@ def _sqd_fixed(
         [jnp.zeros(pauli_strings.shape[:-1] + (1,), dtype=pauli_strings.dtype), pauli_strings],
         axis=-1
     )
-    data, coords, _ = _make_bcoo_data(pauli_strings, states, op_coeffs, num_terms)
+    data, coords, _ = _make_bcoo_data(pauli_strings, states, op_coeffs, num_diag, num_terms)
     # rows[subspace_dim:] are either -1 or range(subspace_dim, rows.shape[0])
     mask = jnp.logical_and(jnp.not_equal(coords[:, 0], -1), jnp.less(coords[:, 0], subspace_dim))
     data *= mask
@@ -155,8 +154,19 @@ def uniquify_states(
     return states.astype(np.uint8)
 
 
+def get_hamiltonian_array(hamiltonian: SparsePauliOp, pmap: bool = False):
+    num_terms = len(hamiltonian)
+    pauli_strings, op_coeffs = op_to_arrays(hamiltonian)
+    # op_to_arrays sort the op terms so that diagonal Paulis come first
+    num_diag = int(np.searchsorted(np.any(np.not_equal(pauli_strings % 3, 0), axis=1), True))
+    if pmap:
+        pauli_strings = shard_array_1d(pauli_strings, fill_value=0)
+
+    return pauli_strings, op_coeffs, num_diag, num_terms
+
+
 def to_bcoo(
-    op: SparsePauliOp,
+    hamiltonian: SparsePauliOp,
     states: Optional[jax.Array] = None,
     pmap: bool = False,
 ) -> BCOO:
@@ -171,13 +181,9 @@ def to_bcoo(
     Returns:
         A COO array encoding the op projected onto the subspace.
     """
-    num_terms = len(op)
-    pauli_strings, op_coeffs = op_to_arrays(op)
-    if pmap:
-        pauli_strings = shard_array_1d(pauli_strings, fill_value=0)
-
+    pauli_strings, op_coeffs, num_diag, num_terms = get_hamiltonian_array(hamiltonian, pmap=pmap)
     # Possible extension: Adjust the pauli_strings shape when the next line fails with OOM
-    data, coords, shape = _make_bcoo_data(pauli_strings, states, op_coeffs, num_terms)
+    data, coords, shape = _make_bcoo_data(pauli_strings, states, op_coeffs, num_diag, num_terms)
 
     if states is not None:
         filt = jnp.not_equal(coords[:, 0], -1)
@@ -199,8 +205,8 @@ def bcoo_to_csr(bcoo: BCOO):
     return csr_array(coo)
 
 
-@partial(jax.jit, static_argnums=[3])
-def _make_bcoo_data(pauli_strings, states, op_coeffs, num_terms):
+@partial(jax.jit, static_argnums=[3, 4])
+def _make_bcoo_data(pauli_strings, states, op_coeffs, num_diag, num_terms):
     """Truncate at the original number of op terms and flatten."""
     rows, signs, imaginary = multi_pauli_map(pauli_strings, states)
     subspace_dim = rows.shape[-1]
@@ -209,6 +215,10 @@ def _make_bcoo_data(pauli_strings, states, op_coeffs, num_terms):
     if num_terms != rows.shape[0]:
         rows = rows[:num_terms]
         data = data[:num_terms]
+    if num_diag > 1:
+        rows = rows[num_diag - 1:]
+        data = jnp.concatenate([jnp.sum(data[:num_diag], axis=0, keepdims=True), data[num_diag:]],
+                               axis=0)
     coords = jnp.empty(rows.shape + (2,), dtype=rows.dtype)
     coords = coords.at[..., 0].set(rows)
     coords = coords.at[..., 1].set(jnp.arange(subspace_dim, dtype=rows.dtype)[None, :])

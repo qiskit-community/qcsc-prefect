@@ -25,6 +25,11 @@ def op_to_arrays(
     index_array = jnp.array([[pauli_index[c] for c in p.to_label()] for p in op.paulis],
                             dtype=np.uint8)
     coeff_array = jnp.array(op.coeffs)
+
+    ordering = jnp.argsort(jnp.any(jnp.not_equal(index_array % 3, 0), axis=1))
+    index_array = index_array[ordering]
+    coeff_array = coeff_array[ordering]
+
     if (padding := pad_to_length - len(op)) > 0:
         index_array = jnp.concatenate(
             [index_array, jnp.zeros((padding, op.num_qubits), dtype=np.uint8)],
