@@ -5,6 +5,8 @@ from functools import partial
 import numpy as np
 import jax
 import jax.numpy as jnp
+from jax._src.numpy import array_creation
+from jax._src.lax import lax
 from qiskit.quantum_info import SparsePauliOp
 
 
@@ -189,13 +191,17 @@ def _subspace_pauli_map_nondiagonal(
 @jax.jit
 def subspace_indices(mapped_states: jax.Array, states: jax.Array) -> jax.Array:
     """Return the positions of the states in the subspace, or -1 if not found."""
-    # Borrowing from jax._src.lax.lax_numpy._searchsorted_via_sort
+    # Borrowing from jax._src.numpy.lax_numpy._searchsorted_via_sort
+    # Attempted to replace the lax functions with corresponding jnp ones but that worsened the
+    # memory leak by 2x
     def _rank(x):
-        idx = jnp.arange(x.shape[0], dtype=np.int32)
-        return jnp.empty_like(idx).at[jnp.lexsort(x.T[::-1])].set(idx)
+        idx = lax.iota(np.int32, x.shape[0])
+        # lax.sort seems to leak GPU memory; can lose as much as 5 GB when sorting x of shape (5M,9)
+        sorted_idx = lax.sort(tuple(x.T) + (idx,), num_keys=x.shape[1])[-1]
+        return array_creation.zeros_like(idx).at[sorted_idx].set(idx)
 
-    index = _rank(jnp.concatenate([mapped_states, states], axis=0))[:mapped_states.shape[0]]
-    positions = (index - _rank(mapped_states)) % states.shape[0]
+    index = _rank(lax.concatenate([mapped_states, states], 0))[:mapped_states.shape[0]]
+    positions = lax.sub(index, _rank(mapped_states)).astype(np.int32)
     return jnp.where(jnp.all(jnp.equal(mapped_states, states[positions]), axis=1), positions, -1)
 
 
