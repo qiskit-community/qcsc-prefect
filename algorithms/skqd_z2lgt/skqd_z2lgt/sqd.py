@@ -62,11 +62,13 @@ def sqd(
         if (pad_length := states_size - states.shape[0]) < 0:
             raise ValueError('states_size smaller than the states array length')
 
+        LOG.debug('Padding the states array..')
         # Extend axis 1 by 1 bit for the padding flag
         states = np.concatenate([np.zeros((states.shape[0], 1), dtype=np.uint8), states], axis=1)
         # Then extend axis 0 to states_size (fill with ones)
         states = np.concatenate([states, np.ones((pad_length, states.shape[1]), dtype=np.uint8)],
                                 axis=0)
+        LOG.debug('Done. Array shape %s', states.shape)
 
         with jax.default_device(device):
             start = time.time()
@@ -124,10 +126,9 @@ def _sqd_fixed(
     return_states,
     return_hproj
 ):
-    search_val = (2 ** min(states.shape[1], 8)) - 1
     states = jnp.packbits(states, axis=1)
     states = jnp.unique(states, axis=0, size=states.shape[0], fill_value=255)
-    subspace_dim = jnp.searchsorted(states[:, 0], search_val)
+    subspace_dim = jnp.searchsorted(states[:, 0] >> 7, 1)
     data, coords = _make_bcoo_data(diag, nondiag, states, num_devices)
     # rows[subspace_dim:] are either -1 or range(subspace_dim, rows.shape[0])
     mask = jnp.logical_and(jnp.not_equal(coords[:, 0], -1), jnp.less(coords[:, 0], subspace_dim))
