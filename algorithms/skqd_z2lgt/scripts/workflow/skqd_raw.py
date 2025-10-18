@@ -2,6 +2,7 @@
 """SKQD with no configuration recovery."""
 import os
 import argparse
+import logging
 import numpy as np
 import h5py
 import jax
@@ -9,6 +10,9 @@ from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.sqd import sqd
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+    LOG = logging.getLogger()
+
     parser = argparse.ArgumentParser()
     parser.add_argument('filename')
     parser.add_argument('--gpu', nargs='+')

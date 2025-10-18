@@ -10,6 +10,7 @@ from flax import nnx
 from skqd_z2lgt.crbm import ConditionalRBM
 from skqd_z2lgt.train_crbm import DefaultCallback, make_l2_loss_fn, cd_meanloss, train_crbm
 
+logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger('train_crbm')
 
 if __name__ == '__main__':
