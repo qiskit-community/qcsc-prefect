@@ -11,7 +11,7 @@ def preprocess(
     as_counts: bool = False,
     shuffle: bool = True,
     batch_size: int = 0
-):
+) -> dict[tuple[tuple[int, ...], tuple[int, ...]], int] | tuple[np.ndarray, np.ndarray]:
     """Convert the counts dict to input data for correction learning."""
     if isinstance(counts, dict):
         shots = sum(counts.values())
