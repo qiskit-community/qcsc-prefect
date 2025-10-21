@@ -29,6 +29,7 @@ class LGTParameters(BaseModel):
     """Parameters to specify the Z2 LGT."""
 
     lattice: str = Field(
+        default='full_156q',
         description='Two-dimensional lattice configuration.',
         title='Lattice Configuration'
     )
@@ -38,6 +39,20 @@ class LGTParameters(BaseModel):
         title='Plaquette Energy',
         ge=0.
     )
+
+    def model_post_init(self, _):  # pylint: disable=arguments-differ
+        if self.lattice == 'full_156q':
+            self.lattice = '''
+            *-*-*-*-*╷
+             * * * * *
+            * * * * *╎
+             * * * * *
+            * * * * *╎
+             * * * * *
+            * * * * *╎
+             * * * * *
+            *-*-*-*-*╵
+            '''
 
 
 class CircuitParameters(BaseModel):
