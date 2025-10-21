@@ -217,7 +217,7 @@ if __name__ == '__main__':
     parser.add_argument('--terminate', nargs='+')
     options = parser.parse_args()
 
-    if options.gpu:
+    if options.gpu and options.gpu[0] != 'all':
         os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(options.gpu)
     os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
     jax.config.update('jax_enable_x64', True)
@@ -230,4 +230,4 @@ if __name__ == '__main__':
 
     main(options.filename, gen_batch_size=options.gen_batch_size, num_gen=options.num_gen,
          niter=options.niter, terminate_conditions=conditions,
-         multi_gpu=options.gpu and len(options.gpu) > 1)
+         multi_gpu=options.gpu and (options.gpu[0] == 'all' or len(options.gpu) > 1))
