@@ -444,7 +444,7 @@ async def preprocess_bitstrings(
 
     def callback(atask):
         idx = next(i for i, t in running if t == atask)
-        running.pop(idx)
+        running.remove((idx, atask))
         done[idx] = atask
 
     async with asyncio.TaskGroup() as taskgroup:
