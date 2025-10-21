@@ -5,6 +5,7 @@ from pathlib import Path
 import logging
 import asyncio
 import tempfile
+import shutil
 import numpy as np
 import h5py
 from qiskit.circuit import QuantumCircuit
@@ -551,6 +552,8 @@ async def train_crbm(
 
             with h5py.File(data_dir / 'out.h5', 'r') as source:
                 source.copy(f'crbm/step{istep}', group)
+
+            shutil.rmtree(data_dir)
 
 
 @task
