@@ -22,7 +22,7 @@ from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.circuits import make_step_circuits, compose_trotter_circuits
 from skqd_z2lgt.recovery_learning import preprocess
 
-TASK_SCRIPT_DIR = Path(__file__).parents[1] / 'tasks'
+TASK_SCRIPT_DIR = Path(__file__).parents[0] / 'tasks'
 
 
 class LGTParameters(BaseModel):
