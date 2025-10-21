@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-from enum import Enum
 import logging
 import asyncio
 import tempfile
@@ -22,13 +21,6 @@ from skqd_z2lgt.circuits import make_step_circuits, compose_trotter_circuits
 from skqd_z2lgt.recovery_learning import preprocess
 
 TASK_SCRIPT_DIR = Path(__file__).parents[1] / 'tasks'
-
-
-class Basis2Q(str, Enum):
-    """Choices for 2q gates."""
-    CX = 'cx'
-    CZ = 'cz'
-    RZZ = 'rzz'
 
 
 class Configuration(BaseModel):
@@ -56,8 +48,8 @@ class Configuration(BaseModel):
         description='Number of shots per circuit.',
         title='Number of shots'
     )
-    basis_2q: Basis2Q = Field(
-        default=Basis2Q.RZZ,
+    basis_2q: str = Field(
+        default='rzz',
         description='Two-qubit gate used in the Trotter circuit. Note that the selection "rzz" will'
                     ' utilize CZ gates together with Rzz.',
         title='Base two-qubit gate'
@@ -91,7 +83,7 @@ async def main(
     logger.setLevel(logging.INFO)
 
     output_filename, cleanup_output = open_output(configuration, output_filename)
-    logger.info('Running the quantum job to obtain bitstrings')
+    logger.info('Running a quantum job to obtain the bitstrings')
     bit_arrays = await sample_krylov_bitstrings(configuration, runner_name, option_name,
                                                 output_filename)
     logger.info('Correcting and converting link states to plaquette states')
