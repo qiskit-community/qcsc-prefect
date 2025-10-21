@@ -15,6 +15,7 @@ from prefect import flow, task, get_run_logger
 from prefect.variables import Variable
 from pydantic import BaseModel, Field
 from prefect_qiskit.runtime import QuantumRuntime
+from prefect_qiskit.primitives import PrimitiveJobRun
 from prefect_miyabi import MiyabiJobBlock, PyFunctionJob
 from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.circuits import make_step_circuits, compose_trotter_circuits
@@ -63,6 +64,7 @@ async def main(
     option_name: str = 'sampler_options',
     pyfuncjob_name: str = 'pyfunc-qii-miyabi-kawasaki',
     scriptjob_name: str = 'script-qii-miyabi-kawasaki',
+    runtime_job_id: Optional[str] = None,
     output_filename: Optional[str] = None
 ) -> float:
     """Calculation of ground-state energy of Z2 LGT using SKQD.
@@ -85,7 +87,7 @@ async def main(
     output_filename, cleanup_output = open_output(configuration, output_filename)
     logger.info('Running a quantum job to obtain the bitstrings')
     bit_arrays = await sample_krylov_bitstrings(configuration, runner_name, option_name,
-                                                output_filename)
+                                                runtime_job_id, output_filename)
     logger.info('Correcting and converting link states to plaquette states')
     await preprocess_bitstrings(configuration, pyfuncjob_name, bit_arrays, output_filename)
     logger.info('Training conditional restricted Boltzmann machines')
@@ -189,6 +191,7 @@ async def sample_krylov_bitstrings(
     configuration: Configuration,
     runner_name: str,
     option_name: str,
+    runtime_job_id: str | None,
     output_filename: str
 ) -> tuple[list[BitArray], list[BitArray]]:
     """Run the circuits on a backend and return the sampler results.
@@ -204,17 +207,23 @@ async def sample_krylov_bitstrings(
         Lists of BitArrays for forward-evolution and forward-backward circuits.
     """
     runtime = await QuantumRuntime.load(runner_name)
-    options = await Variable.get(option_name)
 
-    # Transpile and compose the circuits
-    target = await runtime.get_target()
-    layout, exp_circuits, ref_circuits = get_trotter_circuits(configuration, target)
+    if runtime_job_id:
+        job = PrimitiveJobRun(job_id=runtime_job_id, credentials=runtime.credentials)
+        pub_result = await job.fetch_result()
+        layout = None
+    else:
+        options = await Variable.get(option_name)
 
-    # Run primitive
-    pub_result = await runtime.sampler(
-        sampler_pubs=exp_circuits + ref_circuits,
-        options=options,
-    )
+        # Transpile and compose the circuits
+        target = await runtime.get_target()
+        layout, exp_circuits, ref_circuits = get_trotter_circuits(configuration, target)
+
+        # Run primitive
+        pub_result = await runtime.sampler(
+            sampler_pubs=exp_circuits + ref_circuits,
+            options=options,
+        )
 
     with h5py.File(output_filename, 'r+') as out:
         try:
