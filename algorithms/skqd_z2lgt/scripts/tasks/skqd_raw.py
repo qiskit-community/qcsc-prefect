@@ -17,7 +17,7 @@ def main(filename: str, multi_gpu: bool = False):
         configuration = dict(source.attrs)
         plaq_data = []
         for istep in range(configuration['num_steps']):
-            dataset = source[f'exp_step{istep}/plaq_data']
+            dataset = source[f'data/plaq/exp_step{istep}']
             plaq_data.append(np.unpackbits(dataset[()], axis=1)[..., :dataset.attrs['num_bits']])
 
     dual_lattice = TriangularZ2Lattice(configuration['lattice']).plaquette_dual()
@@ -55,7 +55,6 @@ if __name__ == '__main__':
 
     if options.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(options.gpu)
-    os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '.99'
     jax.config.update('jax_enable_x64', True)
 
     main(options.filename, multi_gpu=options.gpu and len(options.gpu) > 1)

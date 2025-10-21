@@ -36,17 +36,17 @@ def main(
         num_steps = configuration['num_steps']
         exp_plaq_data = []
         ref_plaq_data = []
-        for dataset, dlist in [('exp', exp_plaq_data), ('ref', ref_plaq_data)]:
+        group = source['data/plaq']
+        for etype, dlist in [('exp', exp_plaq_data), ('ref', ref_plaq_data)]:
             for istep in range(num_steps):
-                group = source[f'{dataset}_step{istep}']
-                dataset = group['plaq_data']
+                dataset = group[f'{etype}_step{istep}']
                 dlist.append(np.unpackbits(dataset[()], axis=1)[..., :dataset.attrs['num_bits']])
 
     lattice = TriangularZ2Lattice(configuration['lattice'])
     dual_lattice = lattice.plaquette_dual()
     ising_hamiltonian = dual_lattice.make_hamiltonian(configuration['plaquette_energy'])
 
-    shots, num_plaq = exp_plaq_data[0].shape[-2:]
+    shots, num_plaq = exp_plaq_data[0].shape
     num_plaq = dual_lattice.num_plaquettes
 
     mean_activation = [np.mean(data, axis=0) for data in ref_plaq_data]
@@ -63,7 +63,7 @@ def main(
         LOG.info('Starting experiment %d', iexp)
         rng = np.random.default_rng(12345 + iexp)
         uniform = rng.random((num_steps, shots, num_gen, num_plaq))
-        flips = [np.asarray(uniform[istep] < act[istep][None, None, :], dtype=np.uint8)
+        flips = [np.asarray(uniform[istep] < act[None, None, :], dtype=np.uint8)
                  for istep, act in enumerate(mean_activation)]
         flipped = [(data[:, None, :] ^ fl).reshape((-1, num_plaq))
                    for data, fl in zip(exp_plaq_data, flips)]
@@ -97,7 +97,6 @@ if __name__ == '__main__':
 
     if options.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(options.gpu)
-    os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '.99'
     jax.config.update('jax_enable_x64', True)
 
     main(options.filename, options.iexp,

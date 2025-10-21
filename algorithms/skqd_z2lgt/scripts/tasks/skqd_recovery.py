@@ -65,19 +65,22 @@ def main(
         configuration = dict(source.attrs)
 
         num_steps = configuration['num_steps']
+
+        plaq_group = source['data/plaq']
+        vtx_group = source['data/vtx']
         exp_plaq_data = []
         exp_vtx_data = []
         for istep in range(num_steps):
-            dataset = source[f'exp_step{istep}/plaq_data']
+            dataset = plaq_group[f'exp_step{istep}']
             exp_plaq_data.append(
                 np.unpackbits(dataset[()], axis=-1)[..., :dataset.attrs['num_bits']]
             )
-            dataset = source[f'exp_step{istep}/vtx_data']
+            dataset = vtx_group[f'exp_step{istep}']
             exp_vtx_data.append(
                 np.unpackbits(dataset[()], axis=-1)[..., :dataset.attrs['num_bits']]
             )
 
-        shots, num_vtx = exp_vtx_data[0].shape[-2:]
+        shots, num_vtx = exp_vtx_data[0].shape
 
         dataset = source['skqd_raw/sqd_states']
         raw_states = np.unpackbits(dataset[()], axis=-1)[:, :dataset.attrs['num_bits']]
@@ -91,7 +94,7 @@ def main(
                 device = None
 
             with jax.default_device(device):
-                models.append(ConditionalRBM.load(source[f'crbm_step{istep}']))
+                models.append(ConditionalRBM.load(source[f'crbm/step{istep}']))
                 # Compile the model
                 models[-1].sample(jnp.zeros((gen_batch_size, num_vtx), dtype=np.uint8),
                                   size=num_gen)

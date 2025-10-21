@@ -25,10 +25,9 @@ def main(
     out_filename: Optional[str] = None
 ):
     with h5py.File(filename, 'r', swmr=True) as source:
-        group = source[f'ref_step{istep}']
-        dataset = group['vtx_data']
+        dataset = source[f'data/vtx/ref_step{istep}']
         vtx_data = np.unpackbits(dataset[()], axis=-1)[..., :dataset.attrs['num_bits']]
-        dataset = group['plaq_data']
+        dataset = source[f'data/plaq/ref_step{istep}']
         plaq_data = np.unpackbits(dataset[()], axis=-1)[..., :dataset.attrs['num_bits']]
         train_u = vtx_data[:80_000]
         train_v = plaq_data[:80_000]
@@ -56,17 +55,17 @@ def main(
     best_model, records = train_crbm(model, train_u, train_v, test_u, test_v,
                                      train_params['batch_size'], train_params['num_epochs'],
                                      loss_fn, lr=train_params['learning_rate'],
-                                     rtol=train_params['rol'], callback=DefaultCallback())
+                                     rtol=train_params['rtol'], callback=DefaultCallback())
 
     file_mode = 'w' if out_filename else 'r+'
     out_filename = out_filename or filename
-    groupname = f'crbm_step{istep}'  # pylint: disable=invalid-name
+    groupname = f'crbm/step{istep}'
     with h5py.File(out_filename, file_mode, libver='latest') as out:
         try:
             del out[groupname]
         except KeyError:
             pass
-        group = out.create_group(f'crbm_step{istep}')
+        group = out.create_group(groupname)
         best_model.save(group)
         group = group.create_group('records')
         for key, array in records.items():
@@ -91,7 +90,6 @@ if __name__ == '__main__':
 
     if options.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = options.gpu
-    os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
     jax.config.update('jax_enable_x64', True)
 
     mparams = {'num_h': options.num_h, 'init_h_sparsity': options.init_h_sparsity}
