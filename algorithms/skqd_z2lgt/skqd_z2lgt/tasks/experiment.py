@@ -12,12 +12,18 @@ from skqd_z2lgt.circuits import make_step_circuits, compose_trotter_circuits
 LOG = logging.getLogger(__name__)
 
 
-def main(filename: str, sampler_options: Optional[dict] = None, job_id: Optional[str] = None):
+def main(
+    filename: str,
+    instance: str,
+    backend_name: str,
+    sampler_options: Optional[dict] = None,
+    job_id: Optional[str] = None
+):
     with h5py.File(filename, 'r', swmr=True) as source:
         configuration = dict(source.attrs)
 
-    service = QiskitRuntimeService(instance=configuration['instance'])
-    backend = service.backend(configuration['backend'])
+    service = QiskitRuntimeService(instance=instance)
+    backend = service.backend(backend_name)
 
     lattice = TriangularZ2Lattice(configuration['lattice'])
 
@@ -44,7 +50,7 @@ def main(filename: str, sampler_options: Optional[dict] = None, job_id: Optional
 
         sampler = Sampler(backend, options=sampler_options)
         job = sampler.run(exp_circuits + ref_circuits)
-        LOG.info('Submitted job %s to %s.', job.job_id(), configuration['backend'])
+        LOG.info('Submitted job %s to %s.', job.job_id(), backend_name)
 
     result = job.result()
 
@@ -70,6 +76,8 @@ def main(filename: str, sampler_options: Optional[dict] = None, job_id: Optional
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('filename')
+    parser.add_argument('instance')
+    parser.add_argument('backend')
     parser.add_argument('--shots')
     parser.add_argument('--job-id')
     parser.add_argument('--log-level', default='INFO')
@@ -80,4 +88,5 @@ if __name__ == '__main__':
     primitive_options = {}
     if options.shots:
         primitive_options['default_shots'] = options.shots
-    main(options.filename, sampler_options=primitive_options, job_id=options.job_id)
+    main(options.filename, options.instance, options.backend, sampler_options=primitive_options,
+         job_id=options.job_id)
