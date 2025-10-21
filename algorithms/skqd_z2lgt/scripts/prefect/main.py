@@ -215,6 +215,21 @@ async def sample_krylov_bitstrings(
     Returns:
         Lists of BitArrays for forward-evolution and forward-backward circuits.
     """
+    with h5py.File(output_filename, 'r') as source:
+        try:
+            group = source['data/raw']
+        except KeyError:
+            pass
+        else:
+            num_steps = source.attrs['num_steps']
+            dlists = ([], [])
+            for etype, dlist in zip(['exp', 'ref'], dlists):
+                for istep in range(num_steps):
+                    dataset = group[f'{etype}_step{istep}']
+                    dlist.append(BitArray(dataset[()], int(dataset.attrs['num_bits'])))
+
+            return dlists
+
     runtime = await QuantumRuntime.load(runner_name)
 
     if runtime_job_id:
@@ -263,6 +278,11 @@ async def preprocess_bitstrings(
     bit_arrays: tuple[list[BitArray], list[BitArray]],
     output_filename: str
 ):
+    with h5py.File(output_filename, 'r') as source:
+        data_group = source.get('data', {})
+        if 'vtx' in data_group and 'plaq' in data_group:
+            return
+
     job_block = await PyFunctionJob.load(pyfuncjob_name)
     lattice = TriangularZ2Lattice(configuration.lattice)
     dual_lattice = lattice.plaquette_dual()
@@ -306,6 +326,8 @@ async def train_crbm(
     scriptjob_name: str,
     output_filename: str
 ):
+    logger = get_run_logger()
+
     job_block = await MiyabiJobBlock.load(scriptjob_name)
     with job_block.get_executor() as executor:
         tasks = []
@@ -330,11 +352,12 @@ async def train_crbm(
                 )
                 tasks.append((atask, tfile.name))
 
-        for istep, (atask, tempname) in enumerate(tasks):
-            if atask.result() != 0:
-                raise RuntimeError(f'CRBM training return code is not 0 for Trotter step {istep}')
+                logger.info('Step %d will write trained model to %s', istep, tfile.name)
 
-            with h5py.File(output_filename, 'r+') as out:
+        with h5py.File(output_filename, 'r+') as out:
+            for istep, (atask, tempname) in enumerate(tasks):
+                if (code := atask.result()) != 0:
+                    raise RuntimeError(f'CRBM training return code {code} for Trotter step {istep}')
                 try:
                     del out[f'crbm/step{istep}']
                 except KeyError:
