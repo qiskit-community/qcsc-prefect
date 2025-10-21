@@ -173,10 +173,10 @@ def get_trotter_circuits(
         target=target,
         initial_layout=layout,
     )
-    full_step, fwd_step, bkd_step, measure = pm.run(
-        make_step_circuits(lattice, configuration.plaquette_energy,
-                           configuration.delta_t, configuration.basis_2q)
-    )
+    circuits = make_step_circuits(lattice, configuration.plaquette_energy,
+                                  configuration.delta_t, configuration.basis_2q)
+    # Somehow the combination of multiprocessing pm.run + prefect task causes the former to hang
+    full_step, fwd_step, bkd_step, measure = [pm.run(circuit) for circuit in circuits]
 
     id_step = fwd_step.compose(bkd_step)
     exp_circuits = compose_trotter_circuits(full_step, measure, configuration.num_steps)
