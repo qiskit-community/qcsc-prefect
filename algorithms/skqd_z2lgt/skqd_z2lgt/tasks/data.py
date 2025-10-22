@@ -7,7 +7,7 @@ import numpy as np
 import h5py
 from qiskit.primitives import BitArray
 from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
-from skqd_z2lgt.recovery_learning import preprocess
+from skqd_z2lgt.mwpm import convert_link_to_plaq
 
 LOG = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def main(
     preprocessed = {}
     for idx, bit_array in bit_arrays.items():
         LOG.info('Processing BitArray from experiment %d', idx)
-        preprocessed[idx] = preprocess(bit_array, dual_lattice, batch_size=4000)
+        preprocessed[idx] = convert_link_to_plaq(bit_array, dual_lattice, batch_size=4000)
 
     LOG.info('State conversion took %.2f seconds.', time.time() - start)
 

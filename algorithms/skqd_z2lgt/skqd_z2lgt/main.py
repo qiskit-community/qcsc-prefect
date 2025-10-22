@@ -21,7 +21,7 @@ from prefect_qiskit.primitives import PrimitiveJobRun
 from prefect_miyabi import MiyabiJobBlock, PyFunctionJob
 from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.circuits import make_step_circuits, compose_trotter_circuits
-from skqd_z2lgt.recovery_learning import preprocess
+from skqd_z2lgt.mwpm import convert_link_to_plaq
 
 TASK_SCRIPT_DIR = Path(__file__).parents[0] / 'tasks'
 
@@ -464,7 +464,7 @@ async def preprocess_bitstrings(
     async with asyncio.TaskGroup() as taskgroup:
         for idx, bit_array in enumerate(bit_arrays[0] + bit_arrays[1]):
             atask = taskgroup.create_task(
-                job_block.run(preprocess, bit_array, dual_lattice, batch_size=batch_size)
+                job_block.run(convert_link_to_plaq, bit_array, dual_lattice, batch_size=batch_size)
             )
             running.append((idx, atask))
             atask.add_done_callback(callback)
