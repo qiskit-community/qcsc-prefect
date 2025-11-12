@@ -23,6 +23,7 @@ from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.tasks.open_output import open_output as _open_output
 from skqd_z2lgt.tasks.sample_quantum import sample_quantum_flow
 from skqd_z2lgt.tasks.preprocess import preprocess_flow
+from skqd_z2lgt.tasks.train_generator import train_generator_flow, load_model
 
 
 TASK_SCRIPT_DIR = Path(__file__).parents[0] / 'tasks'
@@ -55,9 +56,9 @@ async def skqd_z2lgt(
     await sample_quantum(parameters, runner_name, option_name, output_filename)
 
     logger.info('Correcting and converting link states to plaquette states')
-    await preprocess_bitstrings(parameters, cpu_pyfuncjob_name, output_filename)
+    await preprocess(parameters, cpu_pyfuncjob_name, output_filename)
     logger.info('Training conditional restricted Boltzmann machines')
-    await train_crbm(parameters, cuda_scriptjob_name, output_filename)
+    await train_generator(parameters, cuda_scriptjob_name, output_filename)
     logger.info('Performing SQD with configuration recovery')
     await project_and_diagonalize(parameters, cuda_scriptjob_name, output_filename)
 
@@ -136,7 +137,7 @@ def convert_bit_arrays(bit_arrays, dual_lattice, batch_size):
 
 
 @task
-async def preprocess_bitstrings(
+async def preprocess(
     parameters: Parameters,
     cpu_pyfuncjob_name: str,
     output_filename: str
@@ -172,7 +173,7 @@ async def preprocess_bitstrings(
 
 
 @task
-async def train_crbm(
+async def train_generator(
     parameters: Parameters,
     cuda_scriptjob_name: str,
     output_filename: str
@@ -188,27 +189,13 @@ async def train_crbm(
     """
     logger = get_run_logger()
 
-    steps = []
-    with h5py.File(output_filename, 'r+') as out:
-        group = out.get('crbm') or out.create_group('crbm')
-        for istep in range(parameters.skqd.n_trotter_steps):
-            if f'step{istep}' not in group:
-                steps.append(istep)
-
-    if not steps:
-        logger.info('All models already trained')
-        return
-
-    logger.info('Training CRBMs for Trotter steps %s', steps)
-
     conf = parameters.crbm
-
     job_block = await MiyabiJobBlock.load(cuda_scriptjob_name)
 
     async def run_train_job(istep, data_dir):
         with job_block.get_executor() as executor:
             arguments = [
-                TASK_SCRIPT_DIR / 'train_crbm.py',
+                TASK_SCRIPT_DIR / 'train_generator.py',
                 output_filename,
                 f'{istep}',
                 '--out-filename', data_dir / 'out.h5',
@@ -226,24 +213,29 @@ async def train_crbm(
                 **job_block.get_job_variables()
             )
 
-    tasks = []
-    async with asyncio.TaskGroup() as taskgroup:
-        for istep in steps:
-            data_dir = Path(tempfile.mkdtemp(prefix='data_', dir=job_block.work_root))
-            logger.info('Trained model for step %d will be written to %s', istep, data_dir)
-            atask = taskgroup.create_task(run_train_job(istep, data_dir))
-            tasks.append((istep, atask, data_dir))
+    async def run_train_jobs(steps_to_train):
+        tasks = []
+        async with asyncio.TaskGroup() as taskgroup:
+            for istep in steps_to_train:
+                data_dir = Path(tempfile.mkdtemp(prefix='data_', dir=job_block.work_root))
+                logger.info('Trained model for step %d will be written to %s', istep, data_dir)
+                atask = taskgroup.create_task(run_train_job(istep, data_dir))
+                tasks.append((istep, atask, data_dir))
 
-    with h5py.File(output_filename, 'r+') as out:
-        group = out['crbm']
+        models, records = {}, {}
         for istep, atask, data_dir in tasks:
             if (code := atask.result()) != 0:
                 raise RuntimeError(f'CRBM training return code {code} for Trotter step {istep}')
-
-            with h5py.File(data_dir / 'out.h5', 'r') as source:
-                source.copy(f'crbm/step{istep}', group)
-
+            models[istep], records[istep] = load_model(istep, data_dir / 'out.h5')
             shutil.rmtree(data_dir)
+
+        return models, records
+
+    def train_fn(steps_to_train):
+        with ThreadPoolExecutor(1) as executor:
+            return executor.submit(lambda: asyncio.run(run_train_jobs(steps_to_train))).result()
+
+    train_generator_flow(parameters, output_filename, train_fn, logger)
 
 
 @task
