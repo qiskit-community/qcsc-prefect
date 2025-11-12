@@ -19,7 +19,7 @@ def check_saved_raw(
     parameters: Parameters,
     output_filename: str,
     logger: Optional[logging.Logger] = None
-):
+) -> tuple[list[BitArray], list[BitArray]] | None:
     logger = logger or logging.getLogger(__name__)
 
     num_steps = parameters.skqd.n_trotter_steps
@@ -132,7 +132,7 @@ def sample_quantum_flow(
     logger = logger or logging.getLogger(__name__)
 
     raw_data = check_saved_raw(parameters, output_filename, logger)
-    if raw_data is not None:
+    if raw_data:
         return raw_data
 
     if parameters.runtime_job_id:
