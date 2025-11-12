@@ -1,15 +1,40 @@
 """Circuits."""
 from collections.abc import Sequence
 from numbers import Number
+from typing import Optional
+import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.converters import circuit_to_dag, dag_to_circuit
+from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
+from skqd_z2lgt.mwpm import minimum_weight_link_state
 
 
-def make_step_circuits(lattice, plaquette_energy, delta_t, basis_2q):
-    """Make circuits."""
+def make_step_circuits(
+    lattice: TriangularZ2Lattice,
+    plaquette_energy: float,
+    delta_t: float,
+    basis_2q: str,
+    charged_vertices: Optional[list[int]] = None
+) -> tuple[QuantumCircuit, QuantumCircuit, QuantumCircuit, QuantumCircuit, QuantumCircuit]:
+    """Make circuits.
+
+    Returns:
+        Initial, Trotter unit (two second-order steps), forward unit, backward unit, measurement
+    """
     circuits = []
 
     circuit = QuantumCircuit(lattice.qubit_graph.num_nodes(), lattice.num_links)
+    if charged_vertices:
+        # Set the initial state to a link configuration corresponding to the charge distribution.
+        # Here we assume that the ground state has a significant overlap with the minimum-weight
+        # state, which should be a reasonble assumption in the weak-coupling regime.
+        link_state = minimum_weight_link_state(charged_vertices, lattice)
+        link_qubits = lattice.link_qubits()
+        for link_id in np.nonzero(link_state[::-1])[0]:
+            circuit.x(link_qubits[link_id])
+    circuits.append(circuit)
+
+    circuit = circuit.copy_empty_like()
     circuit.compose(lattice.electric_evolution(0.5 * delta_t), inplace=True)
     circuit.compose(lattice.magnetic_evolution(plaquette_energy, delta_t, basis_2q=basis_2q),
                     inplace=True)
@@ -19,19 +44,19 @@ def make_step_circuits(lattice, plaquette_energy, delta_t, basis_2q):
     circuit.compose(lattice.electric_evolution(0.5 * delta_t), inplace=True)
     circuits.append(circuit)
 
-    circuit = QuantumCircuit(lattice.qubit_graph.num_nodes(), lattice.num_links)
+    circuit = circuit.copy_empty_like()
     circuit.compose(lattice.electric_evolution(0.5 * delta_t), inplace=True)
     circuit.compose(lattice.magnetic_evolution(plaquette_energy, delta_t, basis_2q=basis_2q),
                     inplace=True)
     circuits.append(circuit)
 
-    circuit = QuantumCircuit(lattice.qubit_graph.num_nodes(), lattice.num_links)
+    circuit = circuit.copy_empty_like()
     circuit.compose(lattice.magnetic_evolution(plaquette_energy, -delta_t, basis_2q=basis_2q),
                     inplace=True)
     circuit.compose(lattice.electric_evolution(-0.5 * delta_t), inplace=True)
     circuits.append(circuit)
 
-    circuit = QuantumCircuit(lattice.qubit_graph.num_nodes(), lattice.num_links)
+    circuit = circuit.copy_empty_like()
     circuit.measure(range(lattice.num_links), range(lattice.num_links))
     circuits.append(circuit)
 
@@ -68,6 +93,7 @@ def make_plaquette_circuits(dual_lattice, plaquette_energy, delta_t):
 
 
 def compose_trotter_circuits(
+    init: QuantumCircuit,
     step_circuit: QuantumCircuit,
     measure_circuit: QuantumCircuit,
     steps: int | Sequence[int]
@@ -77,7 +103,7 @@ def compose_trotter_circuits(
         steps = list(range(1, int(steps) + 1))
 
     circuits = []
-    trotter = step_circuit.copy_empty_like()
+    trotter = init.copy()
     nsteps = 0
     for _ in range(max(steps)):
         trotter.compose(step_circuit, inplace=True)
