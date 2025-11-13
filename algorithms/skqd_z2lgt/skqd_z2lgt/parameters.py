@@ -1,4 +1,5 @@
 """Workflow parameters."""
+from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -63,6 +64,46 @@ class CircuitParameters(BaseModel):
     )
 
 
+class RuntimeParameters(BaseModel):
+    """Configuration for runtime sampler."""
+
+    job_id: str | None = Field(
+        default=None,
+        description='ID of an existing IBM Quantum workload.',
+        title='Runtime Job ID'
+    )
+    instance: str | None = Field(
+        default=None,
+        description='IBM Quantum instance.',
+        title='IBM Quantum Instance'
+    )
+    backend: str | None = Field(
+        default=None,
+        description='Backend name.',
+        title='Backend Name'
+    )
+    shots: int = Field(
+        default=100_000,
+        description='Shots per circuit.',
+        title='Shots'
+    )
+    options: dict[str, Any] = Field(
+        default_factory=dict,
+        description='Runtime options (except for shots).',
+        title='Runtime Options'
+    )
+    runtime_block_name: str | None = Field(
+        default=None,
+        description='Quantum Runtime Prefect block name.',
+        title='Quantum Runtime Block Name'
+    )
+    options_name: str | None = Field(
+        default=None,
+        description='Prefect Variable name for runtime options.',
+        title='Options Variable Name'
+    )
+
+
 class CRBMParameters(BaseModel):
     """Configuration for conditional restricted Boltzmann machine used in configuration recovery."""
 
@@ -84,10 +125,16 @@ class CRBMParameters(BaseModel):
         title='L2 Weight (B)',
         ge=0.
     )
-    batch_size: int = Field(
+    train_batch_size: int = Field(
         default=32,
         description='Batch size for stochastic gradient descent.',
         title='Training Batch Size',
+        ge=1
+    )
+    gen_batch_size: int = Field(
+        defualt=10_000,
+        description='Batch size for generation.',
+        title='Generation Batch Size',
         ge=1
     )
     learning_rate: float = Field(
@@ -173,6 +220,12 @@ class Parameters(BaseModel):
         title='Circuit'
     )
 
+    runtime: RuntimeParameters = Field(
+        default_factory=RuntimeParameters,
+        description='Runtime configuration parameters.',
+        title='Runtime'
+    )
+
     crbm: CRBMParameters = Field(
         default_factory=CRBMParameters,
         description='Settings for conditional restricted Boltzmann machine.',
@@ -183,12 +236,6 @@ class Parameters(BaseModel):
         default_factory=SKQDParameters,
         description='Control of SKQD algorithm execution and solver parameters.',
         title='SKQD',
-    )
-
-    runtime_job_id: str | None = Field(
-        default=None,
-        description='ID of an existing IBM Quantum workload.',
-        title='Runtime Job ID'
     )
 
     output_filename: str | None = Field(

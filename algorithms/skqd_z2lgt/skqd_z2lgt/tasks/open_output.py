@@ -1,6 +1,5 @@
 """Open the output HDF5 file."""
 import os
-import tempfile
 import logging
 from typing import Optional
 import numpy as np
@@ -28,23 +27,16 @@ def open_output(parameters: Parameters, logger: Optional[logging.Logger] = None)
         ('delta_t', parameters.skqd.dt)
     ]
 
-    output_filename = parameters.output_filename
-    if not output_filename:
-        with tempfile.NamedTemporaryFile() as tfile:
-            output_filename = tfile.name
-
-    if os.path.exists(output_filename):
-        logger.info('Validating configurations in existing file %s', output_filename)
-        with h5py.File(output_filename, 'r') as source:
+    if os.path.exists(parameters.output_filename):
+        logger.info('Validating configurations in existing file %s', parameters.output_filename)
+        with h5py.File(parameters.output_filename, 'r') as source:
             for key, value in attrs:
                 if ((isinstance(value, float) and not np.isclose(source.attrs[key], value))
                         or (isinstance(value, (int, str)) and source.attrs[key] != value)):
                     raise RuntimeError(f'Recorded {key} does not match the flow parameter')
 
     else:
-        logger.info('Creating a new file %s', output_filename)
-        with h5py.File(output_filename, 'w', libver='latest') as out:
+        logger.info('Creating a new file %s', parameters.output_filename)
+        with h5py.File(parameters.output_filename, 'w', libver='latest') as out:
             for key, value in attrs:
                 out.attrs[key] = value
-
-    return output_filename

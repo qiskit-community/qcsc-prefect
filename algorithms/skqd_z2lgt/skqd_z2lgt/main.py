@@ -21,9 +21,10 @@ from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.mwpm import convert_link_to_plaq
 from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.tasks.open_output import open_output as _open_output
-from skqd_z2lgt.tasks.sample_quantum import sample_quantum_flow
+from skqd_z2lgt.tasks.sample_quantum import sample_quantum_flow, load_raw
 from skqd_z2lgt.tasks.preprocess import preprocess_flow
-from skqd_z2lgt.tasks.train_generator import train_generator_flow, load_model
+from skqd_z2lgt.tasks.train_generator import train_generator_flow, load_model, save_model
+from skqd_z2lgt.tasks.diagonalize import diagonalize_flow
 
 
 TASK_SCRIPT_DIR = Path(__file__).parents[0] / 'tasks'
@@ -32,8 +33,6 @@ TASK_SCRIPT_DIR = Path(__file__).parents[0] / 'tasks'
 @flow
 async def skqd_z2lgt(
     parameters: Parameters,
-    runner_name: str = 'ibm-runner',
-    option_name: str = 'sampler_options',
     cpu_pyfuncjob_name: str = 'cpu-pyfunc',
     cuda_scriptjob_name: str = 'cuda-script'
 ) -> float:
@@ -51,64 +50,55 @@ async def skqd_z2lgt(
     logger = get_run_logger()
     logger.setLevel(logging.INFO)
 
-    output_filename = open_output(parameters)
+    if (is_temp := not parameters.output_filename):
+        with tempfile.NamedTemporaryFile() as tfile:
+            parameters.output_filename = tfile.name
+
+    open_output(parameters)
     logger.info('Running a quantum job to obtain the bitstrings')
-    await sample_quantum(parameters, runner_name, option_name, output_filename)
-
+    raw_data = await sample_quantum(parameters)
     logger.info('Correcting and converting link states to plaquette states')
-    await preprocess(parameters, cpu_pyfuncjob_name, output_filename)
+    reco_data = await preprocess(parameters, raw_data, cpu_pyfuncjob_name)
     logger.info('Training conditional restricted Boltzmann machines')
-    await train_generator(parameters, cuda_scriptjob_name, output_filename)
+    crbm_models = await train_generator(parameters, reco_data[1], cuda_scriptjob_name)
     logger.info('Performing SQD with configuration recovery')
-    await project_and_diagonalize(parameters, cuda_scriptjob_name, output_filename)
-
-    with h5py.File(output_filename) as source:
-        energy = source['skqd_rcv/energy'][()]
-        eigvec = source['skqd_rcv/eigvec'][()]
+    energy, eigvec = await diagonalize(parameters, reco_data, crbm_models, cuda_scriptjob_name)
 
     logger.info('Estimated ground-state energy is %f', energy)
 
-    if not parameters.output_filename:
-        os.unlink(output_filename)
+    if is_temp:
+        os.unlink(parameters.output_filename)
 
     return energy, eigvec
 
 
 @task
-def open_output(parameters: Parameters) -> str:
+def open_output(parameters: Parameters):
     return _open_output(parameters, get_run_logger())
 
 
 @task
 async def sample_quantum(
-    parameters: Parameters,
-    runner_name: str,
-    option_name: str,
-    output_filename: str
-) -> tuple[list[BitArray], list[BitArray]]:
+    parameters: Parameters
+) -> tuple[None, None]:
     """Run the circuits on a backend and return the sampler results.
 
     Args:
         parameters: Workflow parameters.
         runner_name: Name of QuantumRunner block.
         option_name: Name of the Variable storing sampler primitive options.
-        output_filename: Name of the HDF5 file where intermediate and final output of the workflow
-            are written.
-
-    Returns:
-        Lists of BitArrays for forward-evolution and forward-backward circuits.
     """
     logger = get_run_logger()
     async with asyncio.TaskGroup() as tg:
-        runtime_task = tg.create_task(QuantumRuntime.load(runner_name))
-        options_task = tg.create_task(Variable.get(option_name))
+        runtime_task = tg.create_task(QuantumRuntime.load(parameters.runtime.runtime_block_name))
+        options_task = tg.create_task(Variable.get(parameters.runtime.options_name))
 
     runtime = runtime_task.result()
     options = options_task.result()
 
     def fetch_result_fn():
         def fn():
-            job = PrimitiveJobRun(job_id=parameters.runtime_job_id, credentials=runtime.credentials)
+            job = PrimitiveJobRun(job_id=parameters.runtime.job_id, credentials=runtime.credentials)
             return asyncio.run(job.fetch_result())
 
         with ThreadPoolExecutor(1) as executor:
@@ -128,55 +118,59 @@ async def sample_quantum(
         with ThreadPoolExecutor(1) as executor:
             return executor.submit(fn, pubs).result()
 
-    return sample_quantum_flow(parameters, output_filename, fetch_result_fn, get_target_fn,
-                               sample_fn, logger)
+    sample_quantum_flow(parameters, fetch_result_fn, get_target_fn, sample_fn, logger)
+    # As a flow, this function should return a tuple of raw data. We however do not need these
+    # large arrays to be resident on memory of the scheduler job, so will instead just return a
+    # dummy object.
+    return None, None
 
 
-def convert_bit_arrays(bit_arrays, dual_lattice, batch_size):
+def convert_bit_arrays(parameters, etype, dual_lattice):
+    bit_arrays = load_raw(parameters, etype)
+    batch_size = parameters.runtime.shots // 20
     return [convert_link_to_plaq(bit_array, dual_lattice, batch_size) for bit_array in bit_arrays]
 
 
 @task
 async def preprocess(
     parameters: Parameters,
-    cpu_pyfuncjob_name: str,
-    output_filename: str
-):
+    _: tuple[None, None],
+    cpu_pyfuncjob_name: str
+) -> tuple[None, None]:
     """Correct the link-state bitstrings with MWPM and convert to plaquette-state bitstrings.
 
     Args:
         parameters: Configuration parameters.
         cpu_pyfuncjob_name: Name of the PyFunctionJob block that runs a python function in an
             interpreter in the current environment.
-        bit_arrays: Lists of BitArrays returned by sample_krylov_bitstrings.
-        output_filename: Name of the HDF5 file where intermediate and final output of the workflow
-            are written.
     """
     logger = get_run_logger()
 
-    def convert_fn(bit_arrays, dual_lattice):
+    def convert_fn(_, dual_lattice):
         async def fn():
+            # Better to have a dedicated self-contained block that loads and saves data
             job_block = await PyFunctionJob.load(cpu_pyfuncjob_name)
-            batch_size = bit_arrays[0][0].array.shape[0] // 20
             tasks = []
             async with asyncio.TaskGroup() as taskgroup:
-                for arrays in bit_arrays:
+                for etype in ['exp', 'ref']:
                     tasks.append(taskgroup.create_task(
-                        job_block.run(convert_bit_arrays, arrays, dual_lattice, batch_size)
+                        job_block.run(convert_bit_arrays, parameters, etype, dual_lattice)
                     ))
             return tuple(atask.result() for atask in tasks)
 
         with ThreadPoolExecutor(1) as executor:
             return executor.submit(lambda: asyncio.run(fn())).result()
 
-    return preprocess_flow(parameters, output_filename, convert_fn, logger)
+    preprocess_flow(parameters, None, convert_fn, logger)
+    # See comment in sample_quantum
+    return None, None
 
 
 @task
 async def train_generator(
     parameters: Parameters,
-    cuda_scriptjob_name: str,
-    output_filename: str
+    _: None,
+    cuda_scriptjob_name: str
 ):
     """Train a CRBM per Trotter step.
 
@@ -196,7 +190,7 @@ async def train_generator(
         with job_block.get_executor() as executor:
             arguments = [
                 TASK_SCRIPT_DIR / 'train_generator.py',
-                output_filename,
+                parameters.output_filename,
                 f'{istep}',
                 '--out-filename', data_dir / 'out.h5',
                 '--num-h', f'{conf.num_h}',
@@ -222,24 +216,27 @@ async def train_generator(
                 atask = taskgroup.create_task(run_train_job(istep, data_dir))
                 tasks.append((istep, atask, data_dir))
 
-        models, records = {}, {}
+        models = []
         for istep, atask, data_dir in tasks:
             if (code := atask.result()) != 0:
                 raise RuntimeError(f'CRBM training return code {code} for Trotter step {istep}')
-            models[istep], records[istep] = load_model(istep, data_dir / 'out.h5')
+            model, records = load_model(istep, data_dir / 'out.h5')
+            save_model(istep, model, records, parameters.output_filename)
             shutil.rmtree(data_dir)
+            models.append(model)
 
-        return models, records
+        return models
 
-    def train_fn(steps_to_train):
+    def train_fn(steps_to_train, _):
         with ThreadPoolExecutor(1) as executor:
             return executor.submit(lambda: asyncio.run(run_train_jobs(steps_to_train))).result()
 
-    train_generator_flow(parameters, output_filename, train_fn, logger)
+    train_generator_flow(parameters, None, train_fn, logger)
+    return [None] * parameters.skqd.n_trotter_steps
 
 
 @task
-async def project_and_diagonalize(
+async def diagonalize(
     parameters: Parameters,
     cuda_scriptjob_name: str,
     output_filename: str

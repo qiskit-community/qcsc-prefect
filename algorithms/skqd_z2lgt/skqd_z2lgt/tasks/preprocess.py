@@ -4,7 +4,6 @@ import logging
 from typing import Optional
 import numpy as np
 import h5py
-from qiskit.primitives import BitArray
 from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.mwpm import convert_link_to_plaq, minimum_weight_link_state
@@ -14,14 +13,13 @@ RecoData = list[tuple[np.ndarray, np.ndarray]]  # [(vertex data, plaquette data)
 
 def check_saved_reco(
     parameters: Parameters,
-    output_filename: str,
     logger: Optional[logging.Logger] = None
 ) -> tuple[RecoData, RecoData] | None:
     logger = logger or logging.getLogger(__name__)
 
     num_steps = parameters.skqd.n_trotter_steps
 
-    with h5py.File(output_filename, 'r') as source:
+    with h5py.File(parameters.output_filename, 'r') as source:
         data_group = source.get('data', {})
         if 'vtx' in data_group and 'plaq' in data_group:
             logger.info('Loading existing reco data from output file')
@@ -37,21 +35,11 @@ def check_saved_reco(
     return None
 
 
-def load_raw(parameters: Parameters, output_filename: str):
-    def read_bit_array(dataset):
-        return BitArray(dataset[()], int(dataset.attrs['num_bits']))
-
-    num_steps = parameters.skqd.n_trotter_steps
-
-    with h5py.File(output_filename, 'r') as source:
-        return tuple(
-            [read_bit_array(source[f'data/raw/{etype}_step{istep}']) for istep in range(num_steps)]
-            for etype in ['exp', 'ref']
-        )
-
-
-def save_reco(reco_data: tuple[RecoData, RecoData], output_filename: str):
-    with h5py.File(output_filename, 'r+') as out:
+def save_reco(
+    parameters: Parameters,
+    reco_data: tuple[RecoData, RecoData]
+):
+    with h5py.File(parameters.output_filename, 'r+') as out:
         data_group = out['data']
         groups = [data_group.get(gname) or data_group.create_group(gname)
                   for gname in ['vtx', 'plaq']]
@@ -68,12 +56,43 @@ def save_reco(reco_data: tuple[RecoData, RecoData], output_filename: str):
                     dataset.attrs['num_bits'] = array.shape[1]
 
 
+def load_reco(
+    parameters: Parameters,
+    etype: Optional[str] = None,
+    istep: Optional[int] = None
+) -> tuple[RecoData, RecoData] | RecoData | tuple[np.ndarray, np.ndarray]:
+    def read_bits(dataset):
+        return np.unpackbits(dataset[()], axis=-1)[..., :dataset.attrs['num_bits']]
+
+    if etype:
+        etypes = [etype]
+    else:
+        etypes = ['exp', 'ref']
+    if istep is not None:
+        isteps = [istep]
+    else:
+        isteps = list(range(parameters.skqd.n_trotter_steps))
+
+    with h5py.File(parameters.output_filename, 'r', swmr=True) as source:
+        group = source['data']
+        result = tuple(
+            [(read_bits(group[f'vtx/{etype}_step{istep}']),
+              read_bits(group[f'plaq/{etype}_step{istep}'])) for istep in isteps]
+            for etype in etypes
+        )
+    if etype:
+        result = result[0]
+        if istep is not None:
+            result = result[0]
+    return result
+
+
 def preprocess_flow(
     parameters: Parameters,
-    output_filename: str,
+    raw_data: tuple[RecoData, RecoData],
     convert_fn: Callable,
     logger: Optional[logging.Logger] = None
-):
+) -> tuple[RecoData, RecoData]:
     """Correct the link-state bitstrings with MWPM and convert to plaquette-state bitstrings.
 
     Args:
@@ -81,16 +100,12 @@ def preprocess_flow(
         cpu_pyfuncjob_name: Name of the PyFunctionJob block that runs a python function in an
             interpreter in the current environment.
         bit_arrays: Lists of BitArrays returned by sample_krylov_bitstrings.
-        output_filename: Name of the HDF5 file where intermediate and final output of the workflow
-            are written.
     """
     logger = logger or logging.getLogger(__name__)
 
-    reco_data = check_saved_reco(parameters, output_filename, logger)
+    reco_data = check_saved_reco(parameters, logger)
     if reco_data:
         return reco_data
-
-    raw_data = load_raw(parameters, output_filename)
 
     lattice = TriangularZ2Lattice(parameters.lgt.lattice)
     base_link_state = minimum_weight_link_state(parameters.lgt.charged_vertices, lattice)
@@ -98,16 +113,16 @@ def preprocess_flow(
 
     reco_data = convert_fn(raw_data, dual_lattice)
 
-    save_reco(reco_data, output_filename)
+    save_reco(parameters, reco_data)
 
     return reco_data
 
 
 def preprocess(
     parameters: Parameters,
-    output_filename: str,
+    raw_data: tuple[RecoData, RecoData],
     logger: Optional[logging.Logger] = None
-):
+) -> tuple[RecoData, RecoData]:
     def convert_fn(bit_arrays, dual_lattice):
         reco_data = []
         for arrays in bit_arrays:
@@ -116,4 +131,4 @@ def preprocess(
                 reco_data[-1].append(convert_link_to_plaq(array, dual_lattice))
         return tuple(reco_data)
 
-    return preprocess_flow(parameters, output_filename, convert_fn, logger)
+    return preprocess_flow(parameters, raw_data, convert_fn, logger)

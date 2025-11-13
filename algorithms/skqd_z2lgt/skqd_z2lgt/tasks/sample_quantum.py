@@ -1,7 +1,7 @@
 """Compose the Krylov circuits and run the quantum runtime sampler."""
 from collections.abc import Callable
 import logging
-from typing import Any, Optional
+from typing import Optional
 import numpy as np
 import h5py
 from qiskit.circuit import QuantumCircuit
@@ -17,14 +17,13 @@ from skqd_z2lgt.circuits import make_step_circuits, compose_trotter_circuits
 
 def check_saved_raw(
     parameters: Parameters,
-    output_filename: str,
     logger: Optional[logging.Logger] = None
 ) -> tuple[list[BitArray], list[BitArray]] | None:
     logger = logger or logging.getLogger(__name__)
 
     num_steps = parameters.skqd.n_trotter_steps
 
-    with h5py.File(output_filename, 'r') as source:
+    with h5py.File(parameters.output_filename, 'r') as source:
         try:
             group = source['data/raw']
         except KeyError:
@@ -94,7 +93,6 @@ def get_trotter_circuits(
 def save_raw(
     parameters: Parameters,
     pub_result: PrimitiveResult,
-    output_filename: str,
     layout: Optional[list[int]] = None,
     logger: Optional[logging.Logger] = None
 ):
@@ -102,7 +100,7 @@ def save_raw(
 
     num_steps = parameters.skqd.n_trotter_steps
 
-    with h5py.File(output_filename, 'r+') as out:
+    with h5py.File(parameters.output_filename, 'r+') as out:
         try:
             del out['data/raw']
         except KeyError:
@@ -121,9 +119,28 @@ def save_raw(
             dataset.attrs['num_bits'] = bit_array.num_bits
 
 
+def load_raw(
+    parameters: Parameters,
+    etype: Optional[str] = None
+) -> tuple[list[BitArray], list[BitArray]] | list[BitArray]:
+    def read_bit_array(dataset):
+        return BitArray(dataset[()], int(dataset.attrs['num_bits']))
+
+    num_steps = parameters.skqd.n_trotter_steps
+
+    with h5py.File(parameters.output_filename, 'r') as source:
+        group = source['data/raw']
+        if etype is None:
+            return tuple(
+                [read_bit_array(group[f'{et}_step{istep}']) for istep in range(num_steps)]
+                for et in ['exp', 'ref']
+            )
+        else:
+            return [read_bit_array(group[f'{etype}_step{istep}']) for istep in range(num_steps)]
+
+
 def sample_quantum_flow(
     parameters: Parameters,
-    output_filename: str,
     fetch_result_fn: Callable,
     get_target_fn: Callable,
     sample_fn: Callable,
@@ -131,12 +148,12 @@ def sample_quantum_flow(
 ) -> tuple[list[BitArray], list[BitArray]]:
     logger = logger or logging.getLogger(__name__)
 
-    raw_data = check_saved_raw(parameters, output_filename, logger)
+    raw_data = check_saved_raw(parameters, logger)
     if raw_data:
         return raw_data
 
-    if parameters.runtime_job_id:
-        logger.info('Fetching result of workload %s', parameters.runtime_job_id)
+    if parameters.runtime.job_id:
+        logger.info('Fetching result of workload %s', parameters.runtime.job_id)
         pub_result = fetch_result_fn()
         layout = None
     else:
@@ -148,7 +165,7 @@ def sample_quantum_flow(
         logger.info('Submitting a runtime job')
         pub_result = sample_fn(exp_circuits + ref_circuits)
 
-    save_raw(parameters, pub_result, output_filename, layout, logger)
+    save_raw(parameters, pub_result, layout, logger)
 
     num_steps = parameters.skqd.n_trotter_steps
     return ([res.data.c for res in pub_result[:num_steps]],
@@ -157,28 +174,34 @@ def sample_quantum_flow(
 
 def sample_quantum(
     parameters: Parameters,
-    instance: str,
-    backend_name: str,
-    output_filename: str,
-    sampler_options: Optional[dict[str, Any]] = None,
     logger: Optional[logging.Logger] = None
 ) -> tuple[list[BitArray], list[BitArray]]:
+    """Run the circuits on a backend and return the sampler results.
+
+    Args:
+        parameters: Workflow parameters.
+
+
+    Returns:
+        Lists of BitArrays for forward-evolution and forward-backward circuits.
+    """
     logger = logger or logging.getLogger(__name__)
-    service = QiskitRuntimeService(instance=instance)
+    service = QiskitRuntimeService(instance=parameters.runtime.instance)
 
     def fetch_result_fn():
-        return service.job(parameters.runtime_job_id).result()
+        return service.job(parameters.runtime.job_id).result()
 
     def get_target_fn():
-        backend = service.backend(backend_name, use_fractional_gates=True)
+        backend = service.backend(parameters.runtime.backend, use_fractional_gates=True)
         return backend.target
 
     def sample_fn(pubs):
-        backend = service.backend(backend_name, use_fractional_gates=True)
-        sampler = Sampler(backend, options=sampler_options)
+        backend = service.backend(parameters.runtime.backend, use_fractional_gates=True)
+        options = dict(parameters.runtime.options)
+        options['shots'] = parameters.runtime.shots
+        sampler = Sampler(backend, options=options)
         job = sampler.run(pubs)
         logger.info('Sampler job: %s', job.job_id())
         return job.result()
 
-    return sample_quantum_flow(parameters, output_filename, fetch_result_fn, get_target_fn,
-                               sample_fn, logger)
+    return sample_quantum_flow(parameters, fetch_result_fn, get_target_fn, sample_fn, logger)

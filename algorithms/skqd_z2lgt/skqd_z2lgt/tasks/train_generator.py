@@ -1,8 +1,8 @@
 """Train the CRBM for configuration recovery."""
 import os
+from collections import namedtuple
 from collections.abc import Callable
 import argparse
-import tempfile
 import logging
 from typing import Any, Optional
 import numpy as np
@@ -13,30 +13,17 @@ from flax import nnx
 from skqd_z2lgt.crbm import ConditionalRBM
 from skqd_z2lgt.train_crbm import DefaultCallback, make_l2_loss_fn, cd_meanloss, train_crbm
 from skqd_z2lgt.parameters import Parameters
+from skqd_z2lgt.tasks.preprocess import load_reco
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger('train_crbm')
 
 
-def check_untrained_models(
-    parameters: Parameters,
-    output_filename: str
-) -> list[int]:
-    steps = []
-    with h5py.File(output_filename, 'r+') as out:
-        group = out.get('crbm') or out.create_group('crbm')
-        for istep in range(parameters.skqd.n_trotter_steps):
-            if f'step{istep}' not in group:
-                steps.append(istep)
-
-    return steps
-
-
 def load_model(
     istep: int,
-    output_filename: str
+    source_filename: str
 ) -> tuple[ConditionalRBM, dict[str, np.ndarray]]:
-    with h5py.File(output_filename, 'r') as out:
+    with h5py.File(source_filename, 'r') as out:
         group = out[f'crbm/step{istep}']
         model = ConditionalRBM.load(group)
         records = {key: dataset[()] for key, dataset in group['records'].items()}
@@ -64,67 +51,71 @@ def save_model(
 
 def train_generator_flow(
     parameters: Parameters,
-    output_filename: str,
+    ref_data: list[tuple[np.ndarray, np.ndarray]],
     train_fn: Callable,
     logger: Optional[logging.Logger] = None
-):
+) -> list[ConditionalRBM]:
     logger = logger or logging.getLogger(__name__)
 
-    steps_to_train = check_untrained_models(parameters, output_filename)
+    models = []
+    steps_to_train = []
+    for istep in range(parameters.skqd.n_trotter_steps):
+        try:
+            model = load_model(istep, parameters.output_filename)[0]
+        except KeyError:
+            models.append(None)
+            steps_to_train.append(istep)
+        else:
+            models.append(model)
+
     if not steps_to_train:
         logger.info('All models already trained')
-        return
+        return models
 
     logger.info('Training CRBMs for Trotter steps %s', steps_to_train)
 
-    models, records = train_fn(steps_to_train)
+    trained_models = train_fn(steps_to_train, ref_data)
+    for istep, model in trained_models.items():
+        models[istep] = model
 
-    for istep, model in models.items():
-        save_model(istep, model, records[istep], output_filename)
+    return models
 
 
 def train_generator(
     parameters: Parameters,
-    output_filename: str,
+    ref_data: list[tuple[np.ndarray, np.ndarray]],
     logger: Optional[logging.Logger] = None
-):
+) -> list[ConditionalRBM]:
     conf = parameters.crbm
     model_params = {'num_h': conf.num_h, 'init_h_sparsity': conf.init_h_sparsity}
     train_params = {'l2w_weights': conf.l2w_weights, 'l2w_biases': conf.l2w_biases,
-                    'batch_size': conf.batch_size, 'learning_rate': conf.learning_rate,
+                    'batch_size': conf.train_batch_size, 'learning_rate': conf.learning_rate,
                     'num_epochs': conf.num_epochs, 'rtol': conf.rtol}
 
-    def train_fn(steps_to_train):
+    def train_fn(steps_to_train, ref_data):
         models = {}
-        records = {}
         for istep in steps_to_train:
-            with tempfile.NamedTemporaryFile() as tfile:
-                tmp_out = tfile.name
-            train_step_model(output_filename, istep, model_params, train_params, tmp_out)
-            models[istep], records[istep] = load_model(istep, tmp_out)
-            os.unlink(tmp_out)
-        return models, records
+            vtx_data, plaq_data = ref_data[istep]
+            model = train_step_model(istep, vtx_data, plaq_data, model_params, train_params,
+                                     out_filename=parameters.output_filename)[0]
+            models[istep] = model
+        return models
 
-    train_generator_flow(parameters, output_filename, train_fn, logger)
+    train_generator_flow(parameters, ref_data, train_fn, logger)
 
 
 def train_step_model(
-    filename: str,
     istep: int,
+    vtx_data: np.ndarray,
+    plaq_data: np.ndarray,
     model_params: dict[str, Any],
     train_params: dict[str, Any],
     out_filename: Optional[str] = None
 ):
-    with h5py.File(filename, 'r', swmr=True) as source:
-        dataset = source[f'data/vtx/ref_step{istep}']
-        vtx_data = np.unpackbits(dataset[()], axis=-1)[..., :dataset.attrs['num_bits']]
-        dataset = source[f'data/plaq/ref_step{istep}']
-        plaq_data = np.unpackbits(dataset[()], axis=-1)[..., :dataset.attrs['num_bits']]
-        train_u = vtx_data[:80_000]
-        train_v = plaq_data[:80_000]
-        test_u = vtx_data[80_000:]
-        test_v = plaq_data[80_000:]
-
+    train_u = vtx_data[:80_000]
+    train_v = plaq_data[:80_000]
+    test_u = vtx_data[80_000:]
+    test_v = plaq_data[80_000:]
     mean_activation = np.mean(train_v, axis=0)
     mean_activation = np.where(np.isclose(mean_activation, 0.), 1.e-6, mean_activation)
     bias_init = np.log(mean_activation / (1. - mean_activation))
@@ -147,9 +138,9 @@ def train_step_model(
                                      train_params['batch_size'], train_params['num_epochs'],
                                      loss_fn, lr=train_params['learning_rate'],
                                      rtol=train_params['rtol'], callback=DefaultCallback())
-
-    out_filename = out_filename or filename
-    save_model(istep, best_model, records, out_filename)
+    if out_filename:
+        save_model(istep, best_model, records, out_filename)
+    return best_model, records
 
 
 if __name__ == '__main__':
@@ -176,5 +167,7 @@ if __name__ == '__main__':
     tparams = {'l2w_weights': options.l2w_weights, 'l2w_biases': options.l2w_biases,
                'batch_size': options.batch_size, 'learning_rate': options.learning_rate,
                'num_epochs': options.num_epochs, 'rtol': options.rtol}
-    train_step_model(options.filename, options.istep, mparams, tparams,
+    params = namedtuple('OutputFileName', ['output_filename'])(options.filename)
+    vdata, pdata = load_reco(params, etype='ref', istep=options.itep)
+    train_step_model(options.istep, vdata, pdata, mparams, tparams,
                      out_filename=options.out_filename)
