@@ -42,14 +42,12 @@ def diagonalize_init(
     parameters: Parameters,
     exp_data: list[tuple[np.ndarray, np.ndarray]],
     hamiltonian: SparsePauliOp,
-    multi_gpu: bool = False,
     logger: Optional[logging.Logger] = None
 ):
     logger = logger or logging.getLogger(__name__)
     logger.info('Performing SQD with observed (charge-corrected) plaquette states')
     states = np.concatenate([pdata for _, pdata in exp_data], axis=0)[:, ::-1]
-    dev_id = -1 if multi_gpu else None
-    energy, eigvec, states, ham_proj = sqd(hamiltonian, states, jax_device_id=dev_id)
+    energy, eigvec, states, ham_proj = sqd(hamiltonian, states)
     with h5py.File(parameters.output_filename, 'r+') as out:
         save_skqd_result(out, 'skqd_init', states, energy, eigvec, ham_proj)
 
@@ -130,7 +128,6 @@ def diagonalize(
     parameters: Parameters,
     exp_data: list[tuple[np.ndarray, np.ndarray]],
     crbm_models: list[ConditionalRBM],
-    multi_gpu: bool = False,
     logger: Optional[logging.Logger] = None
 ) -> tuple[float, np.ndarray]:
     logger = logger or logging.getLogger(__name__)
@@ -147,7 +144,7 @@ def diagonalize(
     init = load_init(parameters)
     if init is None:
         init_states, init_energy, init_eigvec = diagonalize_init(parameters, exp_data, hamiltonian,
-                                                                 multi_gpu, logger)
+                                                                 logger)
     else:
         init_states, init_energy, init_eigvec = init
 
@@ -194,8 +191,7 @@ def diagonalize(
             logger.info('Updated maximum array size to %d', max_size)
         logger.info('Diagonalizing the Hamiltonian projected onto %d states..', states.shape[0])
         start = time.time()
-        sqd_result = sqd(hamiltonian, states, jax_device_id=-1 if multi_gpu else None,
-                         states_size=max_size, return_hproj=is_last)
+        sqd_result = sqd(hamiltonian, states, states_size=max_size, return_hproj=is_last)
         energy, eigvec, sqd_states = sqd_result[:3]
         energies.append(energy)
         subspace_dims.append(sqd_states.shape[0])
@@ -209,7 +205,7 @@ def diagonalize(
         )
 
         if not is_last and terminate:
-            hproj = to_bcoo(hamiltonian, np.packbits(sqd_states, axis=1), sharded=multi_gpu)
+            hproj = to_bcoo(hamiltonian, np.packbits(sqd_states, axis=1))
             sqd_result += (bcoo_to_csr(hproj),)
             is_last = True
 
@@ -266,7 +262,6 @@ if __name__ == '__main__':
     params.runtime.shots = edata[0][0].shape[0]
     models = [load_model(istep, params.output_filename, istep % jax.device_count())
               for istep in range(params.skqd.n_trotter_steps)]
-    mgpu = options.gpu and (options.gpu[0] == 'all' or len(options.gpu) > 1)
 
     for istep, crbm in enumerate(models):
         LOG.info('Compiling CRBM for Trotter step %d', istep)
@@ -277,4 +272,4 @@ if __name__ == '__main__':
                 size=params.skqd.num_gen
             )
 
-    diagonalize(params, edata, models, multi_gpu=mgpu)
+    diagonalize(params, edata, models)

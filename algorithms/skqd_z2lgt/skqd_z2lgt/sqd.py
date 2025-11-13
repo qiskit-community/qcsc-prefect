@@ -27,7 +27,6 @@ def keys_to_intset(keys: Iterable[str]) -> set:
 def sqd(
     hamiltonian: SparsePauliOp,
     states: np.ndarray,
-    jax_device_id: Optional[int] = None,
     states_size: Optional[int] = None,
     return_states: bool = True,
     return_hproj: bool = True
@@ -38,8 +37,6 @@ def sqd(
         hamiltonian: Hamiltonian to be projected and diagonalized.
         states: Binary array of computational basis states to project the Hamiltonian onto. Shape
             [subspace_dim, num_qubits].
-        jax_device_id: Index of the GPU device to use. If -1, the projection function is mapped
-            across all available GPUs.
         states_size: Fix the size of the states array used in computation to the specified value so
             that compilation is not triggered at each call with slightly different array sizes.
         return_states: Whether to return the sorted uniquified states.
@@ -49,15 +46,6 @@ def sqd(
         Calculated ground state energy, ground state vector, sorted uniquified states (if
         return_states=True), and the projected Hamiltonian as a CSR array (if return_hproj=True).
     """
-    sharded = False
-    if jax_device_id is None:
-        device = None
-    elif jax_device_id < 0:
-        device = None
-        sharded = True
-    else:
-        device = jax.devices()[jax_device_id]
-
     if states_size is not None:
         if (pad_length := states_size - states.shape[0]) < 0:
             raise ValueError('states_size smaller than the states array length')
@@ -70,42 +58,40 @@ def sqd(
                                 axis=0)
         LOG.debug('Done. Array shape %s', states.shape)
 
-        with jax.default_device(device):
-            start = time.time()
-            diag, nondiag = get_hamiltonian_arrays(hamiltonian, sharded=sharded)
-            # Add an identity Pauli at the padding big
-            diag_paulis = jnp.concatenate(
-                [jnp.zeros((diag[0].shape[0], 1), dtype=diag[0].dtype), diag[0]],
-                axis=-1
-            )
-            nondiag_paulis = jnp.concatenate(
-                [jnp.zeros((nondiag[0].shape[0], 1), dtype=nondiag[0].dtype), nondiag[0]],
-                axis=-1
-            )
-            retval_jax = _sqd_fixed((diag_paulis, diag[1]), (nondiag_paulis, nondiag[1]), states,
-                                    diag_paulis.sharding.num_devices, return_states, return_hproj)
-            subspace_dim = int(retval_jax[0])
-            LOG.info('%f seconds for SQD. Subspace dimension %d', time.time() - start, subspace_dim)
-            retval = (float(retval_jax[1]), np.array(retval_jax[2][:subspace_dim]))
-            if return_states:
-                states = np.unpackbits(retval_jax[3][:subspace_dim], axis=1)
-                states = states[:, 1:hamiltonian.num_qubits + 1]
-                retval += (states,)
-            if return_hproj:
-                ham = retval_jax[-1]
-                retval += (bcoo_to_csr(BCOO((ham.data, ham.indices), shape=(subspace_dim,) * 2)),)
+        start = time.time()
+        diag, nondiag = get_hamiltonian_arrays(hamiltonian)
+        # Add an identity Pauli at the padding big
+        diag_paulis = jnp.concatenate(
+            [jnp.zeros((diag[0].shape[0], 1), dtype=diag[0].dtype), diag[0]],
+            axis=-1
+        )
+        nondiag_paulis = jnp.concatenate(
+            [jnp.zeros((nondiag[0].shape[0], 1), dtype=nondiag[0].dtype), nondiag[0]],
+            axis=-1
+        )
+        retval_jax = _sqd_fixed((diag_paulis, diag[1]), (nondiag_paulis, nondiag[1]), states,
+                                diag_paulis.sharding.num_devices, return_states, return_hproj)
+        subspace_dim = int(retval_jax[0])
+        LOG.info('%f seconds for SQD. Subspace dimension %d', time.time() - start, subspace_dim)
+        retval = (float(retval_jax[1]), np.array(retval_jax[2][:subspace_dim]))
+        if return_states:
+            states = np.unpackbits(retval_jax[3][:subspace_dim], axis=1)
+            states = states[:, 1:hamiltonian.num_qubits + 1]
+            retval += (states,)
+        if return_hproj:
+            ham = retval_jax[-1]
+            retval += (bcoo_to_csr(BCOO((ham.data, ham.indices), shape=(subspace_dim,) * 2)),)
     else:
-        with jax.default_device(device):
-            start = time.time()
-            states = jnp.packbits(states, axis=1)
-            states = uniquify_states(states)
-            LOG.info('%f seconds to sort %d bitstrings', time.time() - start, states.shape[0])
-            start = time.time()
-            hproj = to_bcoo(hamiltonian, states, sharded=sharded)
-            LOG.info('%f seconds to project the Hamiltonian onto subspace', time.time() - start)
-            start = time.time()
-            eigval, eigvec = ground_state_lobpcg(hproj)
-            LOG.info('%f seconds to diagonalize', time.time() - start)
+        start = time.time()
+        states = jnp.packbits(states, axis=1)
+        states = uniquify_states(states)
+        LOG.info('%f seconds to sort %d bitstrings', time.time() - start, states.shape[0])
+        start = time.time()
+        hproj = to_bcoo(hamiltonian, states)
+        LOG.info('%f seconds to project the Hamiltonian onto subspace', time.time() - start)
+        start = time.time()
+        eigval, eigvec = ground_state_lobpcg(hproj)
+        LOG.info('%f seconds to diagonalize', time.time() - start)
 
         retval = (float(eigval), np.array(eigvec))
         if return_states:
@@ -157,14 +143,14 @@ def uniquify_states(
     return states.astype(np.uint8)
 
 
-def get_hamiltonian_arrays(hamiltonian: SparsePauliOp, sharded: bool = False):
+def get_hamiltonian_arrays(hamiltonian: SparsePauliOp):
     pauli_strings, op_coeffs = op_to_arrays(hamiltonian)
     is_diag = jnp.all(jnp.equal(pauli_strings % 3, 0), axis=1)
     diag_paulis = pauli_strings[is_diag]
     diag_coeffs = op_coeffs[is_diag]
     nondiag_paulis = pauli_strings[jnp.logical_not(is_diag)]
     nondiag_coeffs = op_coeffs[jnp.logical_not(is_diag)]
-    if sharded:
+    if jax.device_count() > 1:
         diag_paulis = shard_array_1d(diag_paulis)
         diag_coeffs = shard_array_1d(diag_coeffs)
         nondiag_paulis = shard_array_1d(nondiag_paulis)
@@ -175,8 +161,7 @@ def get_hamiltonian_arrays(hamiltonian: SparsePauliOp, sharded: bool = False):
 
 def to_bcoo(
     hamiltonian: SparsePauliOp,
-    states: jax.Array,
-    sharded: bool = False
+    states: jax.Array
 ) -> BCOO:
     """Convert a SparsePauliOp to a sparse (COO) array, with optional subspace projection.
 
@@ -184,17 +169,16 @@ def to_bcoo(
         op: Sum of Pauli strings.
         states: Sorted list of unique packed bitstrings with shape [subspace_dim,
             ceil(num_qubits / 8)].
-        sharded: Whether to map the projection function across GPU devices.
 
     Returns:
         A COO array encoding the op projected onto the subspace.
     """
-    diag, nondiag = get_hamiltonian_arrays(hamiltonian, sharded=sharded)
+    diag, nondiag = get_hamiltonian_arrays(hamiltonian)
     # Possible extension: Adjust the pauli_strings shape when the next line fails with OOM
     data, coords = _make_bcoo_data(diag, nondiag, states, diag[0].sharding.num_devices)
 
     mask = jnp.not_equal(coords[:, 0], -1)
-    if sharded:
+    if jax.device_count() > 1:
         # Keep the sharding
         data *= mask
         coords *= mask[:, None]
@@ -275,21 +259,14 @@ def ground_state_lobpcg(mat: BCOO) -> tuple[jax.Array, jax.Array]:
 
 def qiskit_sqd(
     hamiltonian: SparsePauliOp,
-    states: np.ndarray,
-    jax_device_id=None
+    states: np.ndarray
 ) -> tuple[np.ndarray, csr_array, float, np.ndarray]:
-    if jax_device_id is None:
-        device = None
-    else:
-        device = jax.devices()[jax_device_id]
-
     bitstring_matrix = states[:, ::-1].astype(bool)
-    with jax.default_device(device):
-        start = time.time()
-        bitstring_matrix = sort_and_remove_duplicates(bitstring_matrix)
-        ham_proj = project_operator_to_subspace(bitstring_matrix, hamiltonian)
-        LOG.info('%f seconds to project onto %d-dim subspace',
-                 time.time() - start, bitstring_matrix.shape[0])
+    start = time.time()
+    bitstring_matrix = sort_and_remove_duplicates(bitstring_matrix)
+    ham_proj = project_operator_to_subspace(bitstring_matrix, hamiltonian)
+    LOG.info('%f seconds to project onto %d-dim subspace',
+             time.time() - start, bitstring_matrix.shape[0])
 
     start = time.time()
     evals, evecs = eigsh(ham_proj, k=1, which='SA')
