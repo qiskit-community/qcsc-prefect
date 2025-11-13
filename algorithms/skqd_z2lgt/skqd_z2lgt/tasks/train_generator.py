@@ -21,11 +21,18 @@ LOG = logging.getLogger('train_crbm')
 
 def load_model(
     istep: int,
-    source_filename: str
+    source_filename: str,
+    jax_device_id: Optional[int] = None
 ) -> tuple[ConditionalRBM, dict[str, np.ndarray]]:
+    if jax_device_id is None:
+        device = None
+    else:
+        device = jax.devices()[jax_device_id]
+
     with h5py.File(source_filename, 'r') as out:
         group = out[f'crbm/step{istep}']
-        model = ConditionalRBM.load(group)
+        with jax.default_device(device):
+            model = ConditionalRBM.load(group)
         records = {key: dataset[()] for key, dataset in group['records'].items()}
     return model, records
 

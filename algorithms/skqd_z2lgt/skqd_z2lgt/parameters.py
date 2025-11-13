@@ -132,7 +132,7 @@ class CRBMParameters(BaseModel):
         ge=1
     )
     gen_batch_size: int = Field(
-        defualt=10_000,
+        default=10_000,
         description='Batch size for generation.',
         title='Generation Batch Size',
         ge=1

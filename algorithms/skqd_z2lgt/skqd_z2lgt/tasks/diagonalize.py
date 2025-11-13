@@ -1,21 +1,59 @@
+# pylint: disable=no-member
 """SKQD with random bit flips."""
 import os
 import argparse
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Optional
+from typing import Optional
 import numpy as np
+from scipy.sparse import csr_array
 import h5py
 import jax
 import jax.numpy as jnp
 from flax import nnx
+from qiskit.quantum_info import SparsePauliOp
 from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.sqd import sqd, to_bcoo, bcoo_to_csr
 from skqd_z2lgt.crbm import ConditionalRBM
+from skqd_z2lgt.parameters import Parameters
 
-logging.basicConfig(level=logging.INFO)
-LOG = logging.getLogger(__name__)
+
+def check_saved_result(
+    parameters: Parameters
+) -> tuple[float, np.ndarray] | None:
+    with h5py.File(parameters.output_filename, 'r') as source:
+        if (group := source.get('skqd_rcv')) is None:
+            return None
+        return group['energy'][()], group['eigvec'][()]
+
+
+def load_init(
+    parameters: Parameters
+):
+    with h5py.File(parameters.output_filename, 'r') as source:
+        if (group := source.get('skqd_init')) is None:
+            return None
+        sqd_result = load_skqd_result(group)
+        return sqd_result[:3]
+
+
+def diagonalize_init(
+    parameters: Parameters,
+    exp_data: list[tuple[np.ndarray, np.ndarray]],
+    hamiltonian: SparsePauliOp,
+    multi_gpu: bool = False,
+    logger: Optional[logging.Logger] = None
+):
+    logger = logger or logging.getLogger(__name__)
+    logger.info('Performing SQD with observed (charge-corrected) plaquette states')
+    states = np.concatenate([pdata for _, pdata in exp_data], axis=0)[:, ::-1]
+    dev_id = -1 if multi_gpu else None
+    energy, eigvec, states, ham_proj = sqd(hamiltonian, states, jax_device_id=dev_id)
+    with h5py.File(parameters.output_filename, 'r+') as out:
+        save_skqd_result(out, 'skqd_init', states, energy, eigvec, ham_proj)
+
+    return states, energy, eigvec
 
 
 def generate_states(model, vtx_data, plaq_data, generate_fn, batch_size):
@@ -53,7 +91,23 @@ def make_batch_generator(num_gen):
     return generate_fn
 
 
-def write_skqd_result(out, group_name, sqd_states, energy, eigvec, ham_proj=None):
+def load_skqd_result(group):
+    dataset = group['sqd_states']
+    sqd_states = np.unpackbits(dataset[()], axis=1)[:, :dataset.attrs['num_bits']]
+    energy = group['energy'][()]
+    eigvec = group['eigvec'][()]
+    if (subgroup := group.get('ham_proj')) is None:
+        ham_proj = None
+    else:
+        data = subgroup['data'][()]
+        indices = subgroup['indices'][()]
+        indptr = subgroup['indptr'][()]
+        shape = (indptr.shape[0] - 1,) * 2
+        ham_proj = csr_array((data, indices, indptr), shape=shape)
+    return sqd_states, energy, eigvec, ham_proj
+
+
+def save_skqd_result(out, group_name, sqd_states, energy, eigvec, ham_proj=None):
     try:
         del out[group_name]
     except KeyError:
@@ -72,119 +126,87 @@ def write_skqd_result(out, group_name, sqd_states, energy, eigvec, ham_proj=None
     return group
 
 
-def main(
-    filename: str,
-    gen_batch_size: int = 10_000,
-    num_gen: int = 5,
-    niter: int = 10,
-    terminate_conditions: Optional[dict[str, Any]] = None,
-    multi_gpu: bool = False
-):
-    with h5py.File(filename, 'r') as source:
-        configuration = dict(source.attrs)
+def diagonalize(
+    parameters: Parameters,
+    exp_data: list[tuple[np.ndarray, np.ndarray]],
+    crbm_models: list[ConditionalRBM],
+    multi_gpu: bool = False,
+    logger: Optional[logging.Logger] = None
+) -> tuple[float, np.ndarray]:
+    logger = logger or logging.getLogger(__name__)
 
-        num_steps = configuration['num_steps']
+    saved_result = check_saved_result(parameters)
+    if saved_result:
+        logger.info('There is already an SKQD result saved in the file.')
+        return saved_result
 
-        plaq_group = source['data/plaq']
-        vtx_group = source['data/vtx']
-        plaq_data = []
-        vtx_data = []
-        for istep in range(num_steps):
-            dataset = plaq_group[f'exp_step{istep}']
-            plaq_data.append(
-                np.unpackbits(dataset[()], axis=-1)[..., :dataset.attrs['num_bits']]
-            )
-            dataset = vtx_group[f'exp_step{istep}']
-            vtx_data.append(
-                np.unpackbits(dataset[()], axis=-1)[..., :dataset.attrs['num_bits']]
-            )
-
-        shots, num_vtx = vtx_data[0].shape
-
-        try:
-            dataset = source['skqd_raw/sqd_states']
-            raw_states = np.unpackbits(dataset[()], axis=-1)[:, :dataset.attrs['num_bits']]
-            raw_eigvec = source['skqd_raw/eigvec'][()]
-            compute_raw = False
-        except KeyError:
-            compute_raw = True
-
-        models = []
-        for istep in range(num_steps):
-            if multi_gpu:
-                device = jax.devices()[istep % jax.device_count()]
-            else:
-                device = None
-
-            with jax.default_device(device):
-                models.append(ConditionalRBM.load(source[f'crbm/step{istep}']))
-                # Compile the model
-                models[-1].sample(jnp.zeros((gen_batch_size, num_vtx), dtype=np.uint8),
-                                  size=num_gen)
-
-    lattice = TriangularZ2Lattice(configuration['lattice'])
+    lattice = TriangularZ2Lattice(parameters.lgt.lattice)
     dual_lattice = lattice.plaquette_dual()
-    hamiltonian = dual_lattice.make_hamiltonian(configuration['plaquette_energy'])
+    hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaqette_energy)
 
-    jax_device_id = -1 if multi_gpu else None
+    init = load_init(parameters)
+    if init is None:
+        init_states, init_energy, init_eigvec = diagonalize_init(parameters, exp_data, hamiltonian,
+                                                                 multi_gpu, logger)
+    else:
+        init_states, init_energy, init_eigvec = init
 
-    if compute_raw:
-        LOG.info('Performing SQD with observed (charge-corrected) plaquette states')
-        states = np.concatenate(plaq_data, axis=0)[:, ::-1]
-        raw_energy, raw_eigvec, raw_states, raw_ham_proj = sqd(hamiltonian, states,
-                                                               jax_device_id=jax_device_id)
+    if parameters.skqd.max_iterations == 0:
+        return init_energy, init_eigvec
 
-    relevant_states = raw_states[np.square(np.abs(raw_eigvec)) > 1.e-20]
+    num_steps = parameters.skqd.n_trotter_steps
+    shots = parameters.runtime.shots
+    num_gen = parameters.skqd.num_gen
+
+    relevant_states = init_states[np.square(np.abs(init_eigvec)) > 1.e-20]
     exp_data_size = num_steps * shots
     gen_data_size = exp_data_size * num_gen
     max_size = gen_data_size + min(exp_data_size, 10 * relevant_states.shape[0])
-    LOG.info('Set maximum array size to %d', max_size)
+    logger.info('Set maximum array size to %d', max_size)
 
     generate_fn = make_batch_generator(num_gen)
 
     energies = []
     subspace_dims = []
-    terminate_conditions = terminate_conditions or {}
     prev_energy = None
 
     is_last = False
-    for it in range(niter):
-        LOG.info('Iteration %d: %d relevant states', it, relevant_states.shape[0])
-        is_last = it == niter - 1
+    for it in range(parameters.skqd.max_iterations):
+        logger.info('Iteration %d: %d relevant states', it, relevant_states.shape[0])
+        is_last = it == parameters.skqd.max_iterations - 1
 
-        LOG.info('Generating for %d steps, %d shots, %d samples per shot',
-                 num_steps, shots, num_gen)
+        logger.info('Generating for %d steps, %d shots, %d samples per shot',
+                    num_steps, shots, num_gen)
         start = time.time()
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(generate_states,
-                                models[istep], vtx_data[istep], plaq_data[istep],
-                                generate_fn, gen_batch_size)
+                                crbm_models[istep], exp_data[istep][0], exp_data[istep][1],
+                                generate_fn, parameters.crbm.gen_batch_size)
                 for istep in range(num_steps)
             ]
         gen_states = [future.result() for future in futures]
-        LOG.info('Generation took %.2f seconds.', time.time() - start)
+        logger.info('Generation took %.2f seconds.', time.time() - start)
 
         states = np.concatenate([relevant_states] + gen_states, axis=0)
         if (excess := states.shape[0] - max_size) > 0:
             max_size += 10 * excess
-            LOG.info('Updated maximum array size to %d', max_size)
-        LOG.info('Diagonalizing the Hamiltonian projected onto %d states..', states.shape[0])
+            logger.info('Updated maximum array size to %d', max_size)
+        logger.info('Diagonalizing the Hamiltonian projected onto %d states..', states.shape[0])
         start = time.time()
-        sqd_result = sqd(hamiltonian, states, jax_device_id=jax_device_id, states_size=max_size,
-                         return_hproj=is_last)
+        sqd_result = sqd(hamiltonian, states, jax_device_id=-1 if multi_gpu else None,
+                         states_size=max_size, return_hproj=is_last)
         energy, eigvec, sqd_states = sqd_result[:3]
         energies.append(energy)
         subspace_dims.append(sqd_states.shape[0])
-        LOG.info('Projection and diagonalization took %.2f seconds. Current energy %.4f',
-                 time.time() - start, energy)
+        logger.info('Projection and diagonalization took %.2f seconds. Current energy %.4f',
+                    time.time() - start, energy)
 
-        terminate = False
-        for key, value in terminate_conditions.items():
-            if key == 'diff':
-                terminate = prev_energy is not None and prev_energy - energy < value
-            elif key == 'dim':
-                terminate = relevant_states.shape[0] >= value
+        terminate = (
+            (prev_energy is not None and prev_energy - energy < parameters.skqd.delta_e)
+            or
+            relevant_states.shape[0] >= parameters.skqd.max_subspace_dim
+        )
 
         if not is_last and terminate:
             hproj = to_bcoo(hamiltonian, np.packbits(sqd_states, axis=1), sharded=multi_gpu)
@@ -198,36 +220,61 @@ def main(
 
     ham_proj = sqd_result[-1]
 
-    with h5py.File(filename, 'r+') as out:
-        if compute_raw:
-            write_skqd_result(out, 'skqd_raw', raw_states, raw_energy, raw_eigvec, raw_ham_proj)
-
-        group = write_skqd_result(out, 'skqd_rcv', sqd_states, energy, eigvec, ham_proj)
+    with h5py.File(parameters.output_filename, 'r+') as out:
+        group = save_skqd_result(out, 'skqd_rcv', sqd_states, energy, eigvec, ham_proj)
         group.create_dataset('energies', data=energies)
         group.create_dataset('subspace_dims', data=subspace_dims)
 
+    return energy, eigvec
+
 
 if __name__ == '__main__':
+    from skqd_z2lgt.tasks.preprocess import load_reco
+    from skqd_z2lgt.tasks.train_generator import load_model
+
     parser = argparse.ArgumentParser()
     parser.add_argument('filename')
     parser.add_argument('--gpu', nargs='+')
     parser.add_argument('--num-gen', type=int, default=5)
     parser.add_argument('--gen-batch-size', type=int, default=10_000)
     parser.add_argument('--niter', type=int, default=1)
-    parser.add_argument('--terminate', nargs='+')
+    parser.add_argument('--terminate-deltae', type=float, default=0.005)
+    parser.add_argument('--terminate-ndim', type=int, default=1_000_000)
     options = parser.parse_args()
+
+    LOG = logging.getLogger(__name__)
 
     if options.gpu and options.gpu[0] != 'all':
         os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(options.gpu)
     os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
     jax.config.update('jax_enable_x64', True)
 
-    conditions = {}
-    if options.terminate:
-        for term in options.terminate:
-            cond = term.partition('=')
-            conditions[cond[0]] = float(cond[2])
+    params = Parameters()
+    params.output_filename = options.filename
+    with h5py.File(options.filename, 'r') as src:
+        params.lgt.lattice = src.attrs['lattice']
+        params.lgt.plaquette_energy = src.attrs['plaquette_energy']
+        params.lgt.charged_vertices = src.attrs['charged_vertices']
+        params.skqd.n_trotter_steps = src.attrs['num_steps']
+    params.skqd.num_gen = options.num_gen
+    params.skqd.max_iterations = options.niter
+    params.crbm.gen_batch_size = options.gen_batch_size
+    params.skqd.delta_e = options.terminate_deltae
+    params.skqd.max_subspace_dim = options.terminate_ndim
 
-    main(options.filename, gen_batch_size=options.gen_batch_size, num_gen=options.num_gen,
-         niter=options.niter, terminate_conditions=conditions,
-         multi_gpu=options.gpu and (options.gpu[0] == 'all' or len(options.gpu) > 1))
+    edata = load_reco(params, etype='exp')
+    params.runtime.shots = edata[0][0].shape[0]
+    models = [load_model(istep, params.output_filename, istep % jax.device_count())
+              for istep in range(params.skqd.n_trotter_steps)]
+    mgpu = options.gpu and (options.gpu[0] == 'all' or len(options.gpu) > 1)
+
+    for istep, crbm in enumerate(models):
+        LOG.info('Compiling CRBM for Trotter step %d', istep)
+        with jax.default_device(crbm.weights_vu.value.device):
+            crbm.sample(
+                jnp.zeros((params.crbm.gen_batch_size, crbm.weights_vu.shape[1]),
+                          dtype=np.uint8),
+                size=params.skqd.num_gen
+            )
+
+    diagonalize(params, edata, models, multi_gpu=mgpu)
