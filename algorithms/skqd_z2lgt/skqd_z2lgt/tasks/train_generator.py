@@ -1,8 +1,7 @@
 """Train the CRBM for configuration recovery."""
-import os
 from collections import namedtuple
 from collections.abc import Callable
-import argparse
+from concurrent.futures import ThreadPoolExecutor
 import logging
 from typing import Any, Optional
 import numpy as np
@@ -52,7 +51,7 @@ def save_model(
         group = out.create_group(groupname)
         model.save(group)
         group = group.create_group('records')
-        for key, array in records[istep].items():
+        for key, array in records.items():
             group.create_dataset(key, data=array)
 
 
@@ -100,12 +99,23 @@ def train_generator(
                     'num_epochs': conf.num_epochs, 'rtol': conf.rtol}
 
     def train_fn(steps_to_train, ref_data):
+        def train_on_device(istep, step_data, device_id):
+            with jax.default_device(jax.devices()[device_id]):
+                return train_step_model(istep, step_data[0], step_data[1], model_params,
+                                        train_params)
+
         models = {}
-        for istep in steps_to_train:
-            vtx_data, plaq_data = ref_data[istep]
-            model = train_step_model(istep, vtx_data, plaq_data, model_params, train_params,
-                                     out_filename=parameters.output_filename)[0]
+        with ThreadPoolExecutor(jax.device_count()) as executor:
+            futures = []
+            for istep in steps_to_train:
+                device_id = istep % jax.device_count()
+                futures.append(executor.submit(train_on_device, istep, ref_data[istep], device_id))
+
+        for istep, future in zip(steps_to_train, futures):
+            model, records = future.result()
+            save_model(istep, model, records, parameters.output_filename)
             models[istep] = model
+
         return models
 
     train_generator_flow(parameters, ref_data, train_fn, logger)
@@ -151,6 +161,8 @@ def train_step_model(
 
 
 if __name__ == '__main__':
+    import os
+    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('filename')
     parser.add_argument('istep', type=int)
