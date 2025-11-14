@@ -7,12 +7,22 @@ import jax.numpy as jnp
 from jax.sharding import NamedSharding, PartitionSpec
 
 
-def read_bits(dataset: np.ndarray | h5py.Dataset, num_bits: Optional[int] = None, align='left'):
+def read_bits(
+    dataset: np.ndarray | h5py.Dataset,
+    num_bits: Optional[int] = None,
+    align: str = 'left'
+) -> np.ndarray:
     bits = np.unpackbits(dataset, axis=-1)
     num_bits = num_bits or dataset.attrs['num_bits']
     if align == 'left':
         return bits[..., :num_bits]
     return bits[..., -num_bits:]
+
+
+def save_bits(group: h5py.Group, name: str, bits: np.ndarray) -> h5py.Dataset:
+    dataset = group.create_dataset(name, data=np.packbits(bits, axis=-1))
+    dataset.attrs['num_bits'] = bits.shape[-1]
+    return dataset
 
 
 def shard_array_1d(array: jax.Array, fill_value: Optional[Any] = None) -> jax.Array:

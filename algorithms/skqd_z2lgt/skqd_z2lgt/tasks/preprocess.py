@@ -7,33 +7,9 @@ import h5py
 from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.mwpm import convert_link_to_plaq, minimum_weight_link_state
-from skqd_z2lgt.utils import read_bits
+from skqd_z2lgt.utils import read_bits, save_bits
 
 RecoData = list[tuple[np.ndarray, np.ndarray]]  # [(vertex data, plaquette data)] * steps
-
-
-def check_saved_reco(
-    parameters: Parameters,
-    logger: Optional[logging.Logger] = None
-) -> tuple[RecoData, RecoData] | None:
-    logger = logger or logging.getLogger(__name__)
-
-    num_steps = parameters.skqd.n_trotter_steps
-
-    with h5py.File(parameters.output_filename, 'r', libver='latest') as source:
-        data_group = source.get('data', {})
-        if 'vtx' in data_group and 'plaq' in data_group:
-            logger.info('Loading existing reco data from output file')
-            return tuple(
-                [
-                    (data_group[f'vtx/{etype}_step{istep}'][()],
-                     data_group[f'plaq/{etype}_step{istep}'][()])
-                    for istep in range(num_steps)
-                ]
-                for etype in ['exp', 'ref']
-            )
-
-    return None
 
 
 def save_reco(
@@ -56,8 +32,7 @@ def save_reco(
                         del group[dname]
                     except KeyError:
                         pass
-                    dataset = group.create_dataset(dname, data=np.packbits(array, axis=1))
-                    dataset.attrs['num_bits'] = array.shape[1]
+                    save_bits(group, dname, array)
 
 
 def load_reco(
@@ -104,8 +79,12 @@ def preprocess_flow(
     """
     logger = logger or logging.getLogger(__name__)
 
-    reco_data = check_saved_reco(parameters, logger)
-    if reco_data:
+    try:
+        reco_data = load_reco(parameters)
+    except KeyError:
+        pass
+    else:
+        logger.info('Loading existing reco data from output file')
         return reco_data
 
     logger.info('Correcting the charge sector of link-state bitstrings and converting them to '
