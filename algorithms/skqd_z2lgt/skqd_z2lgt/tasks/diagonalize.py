@@ -177,8 +177,9 @@ def save_skqd_result(out, group_name, sqd_states, energy, eigvec, ham_proj=None)
 
 def diagonalize(
     parameters: Parameters,
-    reco_data: list[tuple[np.ndarray, np.ndarray]],
+    exp_data: list[tuple[np.ndarray, np.ndarray]],
     crbm_models: list[ConditionalRBM] | None,
+    ref_data: Optional[list[tuple[np.ndarray, np.ndarray]]] = None,
     logger: Optional[logging.Logger] = None
 ) -> tuple[float, np.ndarray]:
     logger = logger or logging.getLogger(__name__)
@@ -196,8 +197,6 @@ def diagonalize(
     lattice = TriangularZ2Lattice(parameters.lgt.lattice)
     dual_lattice = lattice.plaquette_dual()
     hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
-
-    exp_data = reco_data[0]
 
     init = load_init(parameters)
     if init is None:
@@ -221,8 +220,12 @@ def diagonalize(
     if crbm_models:
         generate_fn = make_batch_generator(parameters.skqd.num_gen)
     else:
-        ref_data = reco_data[1]
-        mean_activation = [np.mean(plaq_data, axis=0) for _, plaq_data in ref_data]
+        if ref_data is None:
+            logger.warning('Assuming single-plaquette flip probability of 0.5')
+            mean_activation = [np.full(exp_data[0][1].shape[1], 0.5)] * num_steps
+        else:
+            logger.info('Using the mean of reference circuit data as single-plaquette probability')
+            mean_activation = [np.mean(plaq_data, axis=0) for _, plaq_data in ref_data]
 
     energies = []
     subspace_dims = []
@@ -317,7 +320,7 @@ if __name__ == '__main__':
 
     rdata = load_reco(params)
     if options.random:
-        models = None
+        models = None  # pylint: disable=invalid-name
     else:
         models = [load_model(istep, params.output_filename, istep % jax.device_count())
                   for istep in range(params.skqd.n_trotter_steps)]
