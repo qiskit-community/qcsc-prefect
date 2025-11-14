@@ -49,7 +49,7 @@ def load_reco(
     else:
         isteps = list(range(parameters.skqd.n_trotter_steps))
 
-    with h5py.File(parameters.output_filename, 'r', libver='latest') as source:
+    with h5py.File(parameters.output_filename, 'r', libver='latest', swmr=True) as source:
         group = source['data']
         result = tuple(
             [(read_bits(group[f'vtx/{etype}_step{istep}']),
