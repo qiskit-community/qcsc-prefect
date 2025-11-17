@@ -28,6 +28,7 @@ TASK_SCRIPT_DIR = Path(__file__).parents[0] / 'tasks'
 @flow
 async def skqd_z2lgt(
     parameters: Parameters,
+    runtime_name: str = 'ibm-runner',
     cpu_pyfuncjob_name: str = 'cpu-pyfunc',
     cuda_scriptjob_name: str = 'cuda-script'
 ) -> float:
@@ -35,8 +36,7 @@ async def skqd_z2lgt(
 
     Args:
         parameters: Configuration parameters.
-        runner_name: Name of QuantumRunner block.
-        option_name: Name of the Variable for QuantumRunner sampler options.
+        runtime_name: Name of QuantumRunner block.
         cpu_pyfuncjob_name: Name of the PyFunctionJob block that runs a python function in an
             interpreter in the current environment.
         cuda_scriptjob_name: Name of the MiyabiJobBlock that executes the python interpreter in a
@@ -55,7 +55,7 @@ async def skqd_z2lgt(
         logger.info('Estimating ground-state energy via DMRG')
         dmrg_energy = await dmrg(parameters, cpu_pyfuncjob_name)
     logger.info('Running a quantum job to obtain the bitstrings')
-    raw_data = await sample_quantum(parameters)
+    raw_data = await sample_quantum(parameters, runtime_name)
     logger.info('Correcting and converting link states to plaquette states')
     reco_data = await preprocess(parameters, raw_data, cpu_pyfuncjob_name)
     logger.info('Training conditional restricted Boltzmann machines')
@@ -100,30 +100,30 @@ async def dmrg(
     if dmrg_params.julia_sysimage:
         julia_bin = ['julia', '--sysimage', dmrg_params.julia_sysimage]
 
-    def dmrg_fn(hamiltonian, filename):
+    def dmrg_fn(hamiltonian):
         async def fn():
-            return await job_block.run(ising_dmrg, hamiltonian, filename=filename,
-                                       nsweeps=dmrg_params.nsweeps,
-                                       maxdim=dmrg_params.maxdim, cutoff=dmrg_params.cutoff,
-                                       julia_bin=julia_bin)
+            with tempfile.NamedTemporaryFile(dir=parameters.pkgpath) as tfile:
+                filename = tfile.name
+            energy = await job_block.run(ising_dmrg, hamiltonian, filename=filename,
+                                         nsweeps=dmrg_params.nsweeps,
+                                         maxdim=dmrg_params.maxdim, cutoff=dmrg_params.cutoff,
+                                         julia_bin=julia_bin)
+            states, probs = await job_block.run(get_mps_probs, filename,
+                                                num_samples=dmrg_params.num_samples,
+                                                julia_bin=julia_bin)
+            os.unlink(filename)
+            return energy, states, probs
 
         with ThreadPoolExecutor(1) as executor:
             return executor.submit(lambda: asyncio.run(fn())).result()
 
-    def mps_probs_fn(filename):
-        async def fn():
-            return await job_block.run(get_mps_probs, filename, num_samples=dmrg_params.num_samples,
-                                       julia_bin=julia_bin)
-
-        with ThreadPoolExecutor(1) as executor:
-            return executor.submit(lambda: asyncio.run(fn())).result()
-
-    return dmrg_flow(parameters, dmrg_fn, mps_probs_fn, logger)
+    return dmrg_flow(parameters, dmrg_fn, logger)
 
 
 @task
 async def sample_quantum(
-    parameters: Parameters
+    parameters: Parameters,
+    runtime_name: str = 'ibm-runner'
 ) -> tuple[None, None]:
     """Run the circuits on a backend and return the sampler results.
 
@@ -134,7 +134,7 @@ async def sample_quantum(
     """
     logger = get_run_logger()
     async with asyncio.TaskGroup() as tg:
-        runtime_task = tg.create_task(QuantumRuntime.load(parameters.runtime.runtime_block_name))
+        runtime_task = tg.create_task(QuantumRuntime.load(runtime_name))
         options_task = tg.create_task(Variable.get(parameters.runtime.options_name))
 
     runtime = runtime_task.result()

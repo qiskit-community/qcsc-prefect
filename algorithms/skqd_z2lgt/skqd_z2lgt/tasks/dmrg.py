@@ -15,7 +15,6 @@ from skqd_z2lgt.parameters import Parameters
 def dmrg_flow(
     parameters: Parameters,
     dmrg_fn: Callable,
-    mps_probs_fn: Callable,
     logger: Optional[logging.Logger] = None
 ) -> float:
     """Run DMRG on the dual Ising hamiltonian."""
@@ -32,21 +31,15 @@ def dmrg_flow(
     dual_lattice = lattice.plaquette_dual(base_link_state)
     ising_hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
 
-    logger.info('Invoking ITensorMPS DMRG function')
-    with tempfile.NamedTemporaryFile() as tfile:
-        filename = tfile.name
-
-    dmrg_energy = dmrg_fn(ising_hamiltonian, filename)
-    logger.info('Sampling the MPS for probability distribution over the computational basis')
-    states, probs = mps_probs_fn(filename)
-    os.unlink(filename)
+    logger.info('Invoking ITensorMPS DMRG function and sampling the MPS')
+    energy, states, probs = dmrg_fn(ising_hamiltonian)
 
     with h5py.File(path, 'w', libver='latest') as out:
-        out.create_dataset('energy', data=dmrg_energy)
+        out.create_dataset('energy', data=energy)
         out.create_dataset('mps_states', data=states)
         out.create_dataset('mps_probs', data=probs)
 
-    return dmrg_energy
+    return energy
 
 
 def dmrg(parameters: Parameters, logger: Optional[logging.Logger] = None) -> float:
@@ -55,16 +48,19 @@ def dmrg(parameters: Parameters, logger: Optional[logging.Logger] = None) -> flo
     if dmrg_params.julia_sysimage:
         julia_bin = ['julia', '--sysimage', dmrg_params.julia_sysimage]
 
-    def dmrg_fn(hamiltonian, filename):
-        return ising_dmrg(hamiltonian, filename=filename,
-                          nsweeps=dmrg_params.nsweeps, maxdim=dmrg_params.maxdim,
-                          cutoff=dmrg_params.cutoff, julia_bin=julia_bin)
+    def dmrg_fn(hamiltonian):
+        with tempfile.NamedTemporaryFile() as tfile:
+            filename = tfile.name
 
-    def mps_probs_fn(filename):
-        return get_mps_probs(filename, num_samples=dmrg_params.num_samples,
-                             julia_bin=julia_bin)
+        energy = ising_dmrg(hamiltonian, filename=filename,
+                            nsweeps=dmrg_params.nsweeps, maxdim=dmrg_params.maxdim,
+                            cutoff=dmrg_params.cutoff, julia_bin=julia_bin)
+        states, probs = get_mps_probs(filename, num_samples=dmrg_params.num_samples,
+                                      julia_bin=julia_bin)
+        os.unlink(filename)
+        return energy, states, probs
 
-    return dmrg_flow(parameters, dmrg_fn, mps_probs_fn, logger)
+    return dmrg_flow(parameters, dmrg_fn, logger)
 
 
 if __name__ == '__main__':
