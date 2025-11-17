@@ -289,7 +289,7 @@ if __name__ == '__main__':
     from skqd_z2lgt.tasks.train_generator import load_model
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('pkgname')
+    parser.add_argument('pkgpath')
     parser.add_argument('--gpu', nargs='+')
     parser.add_argument('--random', action='store_true')
     options = parser.parse_args()
@@ -301,7 +301,7 @@ if __name__ == '__main__':
     os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
     jax.config.update('jax_enable_x64', True)
 
-    with os.open(Path(options.pkgname) / 'parameters.json', 'r', encoding='utf-8') as src:
+    with os.open(Path(options.pkgpath) / 'parameters.json', 'r', encoding='utf-8') as src:
         params = Parameters.model_validate_json(src.read())
 
     rdata = load_reco(params)

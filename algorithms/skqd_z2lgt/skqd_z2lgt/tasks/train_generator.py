@@ -193,7 +193,7 @@ def train_step_model(
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('pkgname')
+    parser.add_argument('pkgpath')
     parser.add_argument('istep', type=int)
     parser.add_argument('--gpu')
     options = parser.parse_args()
@@ -203,7 +203,7 @@ if __name__ == '__main__':
     os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
     jax.config.update('jax_enable_x64', True)
 
-    with open(Path(options.pkgname) / 'parameters.json', 'r', encoding='utf-8') as src:
+    with open(Path(options.pkgpath) / 'parameters.json', 'r', encoding='utf-8') as src:
         params = Parameters.model_validate_json(src.read())
 
     vdata, pdata = load_reco(params, etype='ref', istep=options.istep)
