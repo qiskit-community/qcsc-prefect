@@ -6,6 +6,7 @@ import asyncio
 import tempfile
 import shutil
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 import h5py
 from prefect import flow, task, get_run_logger
 from prefect.variables import Variable
@@ -20,6 +21,7 @@ from skqd_z2lgt.tasks.dmrg import dmrg_flow
 from skqd_z2lgt.tasks.sample_quantum import sample_quantum_flow, load_raw
 from skqd_z2lgt.tasks.preprocess import preprocess_flow
 from skqd_z2lgt.tasks.train_generator import train_generator_flow, load_model, save_model
+from skqd_z2lgt.tasks.diagonalize import check_saved_result
 
 
 TASK_SCRIPT_DIR = Path(__file__).parents[0] / 'tasks'
@@ -53,19 +55,35 @@ async def skqd_z2lgt(
     open_output(parameters)
     if parameters.dmrg:
         logger.info('Estimating ground-state energy via DMRG')
-        dmrg_energy = await dmrg(parameters, cpu_pyfuncjob_name)
+        dmrg_future = dmrg.submit(parameters, cpu_pyfuncjob_name=cpu_pyfuncjob_name)
     logger.info('Running a quantum job to obtain the bitstrings')
-    raw_data = await sample_quantum(parameters, runtime_name)
+    sample_quantum_future = sample_quantum.submit(parameters,
+                                                  runtime_name=runtime_name)
     logger.info('Correcting and converting link states to plaquette states')
-    reco_data = await preprocess(parameters, raw_data, cpu_pyfuncjob_name)
+    preprocess_future = preprocess.submit(parameters,
+                                          cpu_pyfuncjob_name=cpu_pyfuncjob_name,
+                                          wait_for=[sample_quantum_future])
     logger.info('Training conditional restricted Boltzmann machines')
-    crbm_models = await train_generator(parameters, reco_data[1], cuda_scriptjob_name)
+    train_generator_future = train_generator.submit(parameters,
+                                                    cuda_scriptjob_name=cuda_scriptjob_name,
+                                                    wait_for=[preprocess_future])
+    logger.info('Performing SQD with no configuration recovery')
+    diagonalize_init_future = diagonalize_init.submit(parameters,
+                                                      cuda_scriptjob_name=cuda_scriptjob_name,
+                                                      wait_for=[preprocess_future])
     logger.info('Performing SQD with random bit flips')
-    energy_random, _ = await diagonalize(parameters, reco_data[0], None,
-                                         cuda_scriptjob_name=cuda_scriptjob_name)
+    diagonalize_recov_future = diagonalize.submit(parameters, 'full',
+                                                  cuda_scriptjob_name=cuda_scriptjob_name,
+                                                  wait_for=[train_generator_future,
+                                                            diagonalize_init_future])
     logger.info('Performing SQD with configuration recovery')
-    energy_norecov, energy = await diagonalize(parameters, reco_data[0], crbm_models,
-                                               cuda_scriptjob_name=cuda_scriptjob_name)
+    diagonalize_random_future = diagonalize.submit(parameters, 'random',
+                                                   cuda_scriptjob_name=cuda_scriptjob_name,
+                                                   wait_for=[diagonalize_init_future])
+    dmrg_energy = dmrg_future.result()
+    energy_norecov = diagonalize_init_future.result()
+    energy_random = diagonalize_random_future.result()
+    energy = diagonalize_recov_future.result()
 
     if tmpdir:
         tmpdir.cleanup()
@@ -73,9 +91,8 @@ async def skqd_z2lgt(
     if parameters.dmrg:
         logger.info('DMRG energy: %f', dmrg_energy)
     logger.info('SKQD energy (no conf. recovery): %f', energy_norecov)
-    logger.info('DMRG energy (random bit flips): %f', energy_random)
-    logger.info('DMRG energy: %f', energy)
-    logger.info('Estimated ground-state energy is %f', energy)
+    logger.info('SKQD energy (random bit flips): %f', energy_random)
+    logger.info('SKQD energy (full conf. recovery): %f', energy)
 
     return energy
 
@@ -124,7 +141,7 @@ async def dmrg(
 async def sample_quantum(
     parameters: Parameters,
     runtime_name: str = 'ibm-runner'
-) -> tuple[None, None]:
+):
     """Run the circuits on a backend and return the sampler results.
 
     Args:
@@ -163,10 +180,6 @@ async def sample_quantum(
             return executor.submit(fn, pubs).result()
 
     sample_quantum_flow(parameters, fetch_result_fn, get_target_fn, sample_fn, logger)
-    # As a flow, this function should return a tuple of raw data. We however do not need these
-    # large arrays to be resident on memory of the scheduler job, so will instead just return a
-    # dummy object.
-    return None, None
 
 
 def convert_bit_arrays(parameters, etype, dual_lattice):
@@ -178,9 +191,8 @@ def convert_bit_arrays(parameters, etype, dual_lattice):
 @task
 async def preprocess(
     parameters: Parameters,
-    _: tuple[None, None],
     cpu_pyfuncjob_name: str
-) -> tuple[None, None]:
+):
     """Correct the link-state bitstrings with MWPM and convert to plaquette-state bitstrings.
 
     Args:
@@ -206,14 +218,11 @@ async def preprocess(
             return executor.submit(lambda: asyncio.run(fn())).result()
 
     preprocess_flow(parameters, None, convert_fn, logger)
-    # See comment in sample_quantum
-    return None, None
 
 
 @task
 async def train_generator(
     parameters: Parameters,
-    _: None,
     cuda_scriptjob_name: str
 ):
     """Train a CRBM per Trotter step.
@@ -230,62 +239,31 @@ async def train_generator(
     conf = parameters.crbm
     job_block = await MiyabiJobBlock.load(cuda_scriptjob_name)
 
-    async def run_train_job(istep, data_dir):
+    async def run_train_job(istep):
         with job_block.get_executor() as executor:
-            arguments = [
-                TASK_SCRIPT_DIR / 'train_generator.py',
-                parameters.pkgpath,
-                f'{istep}',
-                '--out-filename', data_dir / 'out.h5',
-                '--num-h', f'{conf.num_h}',
-                '--l2w-weights', f'{conf.l2w_weights}',
-                '--l2w-biases', f'{conf.l2w_biases}',
-                '--init-h-sparsity', f'{conf.init_h_sparsity}',
-                '--batch-size', f'{conf.train_batch_size}',
-                '--learning-rate', f'{conf.learning_rate}',
-                '--num-epochs', f'{conf.num_epochs}',
-                '--rtol', f'{conf.rtol}'
-            ]
+            arguments = [TASK_SCRIPT_DIR / 'train_generator.py', parameters.pkgpath, f'{istep}']
             return await executor.execute_job(
                 arguments=arguments,
                 **job_block.get_job_variables()
             )
 
     async def run_train_jobs(steps_to_train):
-        tasks = []
         async with asyncio.TaskGroup() as taskgroup:
             for istep in steps_to_train:
-                data_dir = Path(tempfile.mkdtemp(prefix='data_', dir=job_block.work_root))
-                logger.info('Trained model for step %d will be written to %s', istep, data_dir)
-                atask = taskgroup.create_task(run_train_job(istep, data_dir))
-                tasks.append((istep, atask, data_dir))
-
-        models = []
-        for istep, atask, data_dir in tasks:
-            if (code := atask.result()) != 0:
-                raise RuntimeError(f'CRBM training return code {code} for Trotter step {istep}')
-            model, records = load_model(istep, data_dir / 'out.h5')
-            save_model(istep, model, records, parameters.pkgpath)
-            shutil.rmtree(data_dir)
-            models.append(model)
-
-        return models
+                taskgroup.create_task(run_train_job(istep))
 
     def train_fn(steps_to_train, _):
         with ThreadPoolExecutor(1) as executor:
             return executor.submit(lambda: asyncio.run(run_train_jobs(steps_to_train))).result()
 
-    train_generator_flow(parameters, None, train_fn, logger)
-    return [None] * parameters.skqd.n_trotter_steps
+    train_generator_flow(parameters, None, train_fn, False, logger)
 
 
 @task
-async def diagonalize(
+async def diagonalize_init(
     parameters: Parameters,
-    _data: None,
-    crbm_models: list[None] | None,
     cuda_scriptjob_name: str
-) -> tuple[float, float]:
+) -> float:
     """Perform SQD with iterative configuration recovery.
 
     Args:
@@ -295,31 +273,51 @@ async def diagonalize(
     """
     job_block = await MiyabiJobBlock.load(cuda_scriptjob_name)
     with job_block.get_executor() as executor:
-        arguments = [
-            TASK_SCRIPT_DIR / 'diagonalize.py',
-            parameters.pkgpath,
-            '--gpu', 'all'
-        ]
-        if isinstance(crbm_models, list):
-            arguments += ['--mode', 'full']
-        else:
-            arguments += ['--mode', 'random']
+        arguments = [TASK_SCRIPT_DIR / 'diagonalize.py', parameters.pkgpath, '--mode', 'init']
         await executor.execute_job(
             arguments=arguments,
             **job_block.get_job_variables()
         )
 
     with h5py.File(Path(parameters.pkgpath) / 'skqd_init.h5', 'r', libver='latest') as source:
-        energy_init = source['energy'][()]
+        return source['energy'][()]
 
-    if isinstance(crbm_models, list):
-        filename = 'skqd_rcv.h5'
+
+@task
+async def diagonalize(
+    parameters: Parameters,
+    mode: str,
+    cuda_scriptjob_name: str
+) -> float:
+    """Perform SQD with iterative configuration recovery.
+
+    Args:
+        parameters: Configuration parameters.
+        cuda_scriptjob_name: Name of the MiyabiJobBlock that executes the python interpreter in a
+            CUDA environment.
+    """
+    logger = get_run_logger()
+
+    if mode == 'full':
+        group_name = 'skqd_rcv'
     else:
-        filename = 'skqd_rnd.h5'
-    with h5py.File(Path(parameters.pkgpath) / filename, 'r', libver='latest') as source:
-        energy = source['energy'][()]
+        group_name = 'skqd_rnd'
 
-    return energy, energy_init
+    saved_result = check_saved_result(parameters, group_name)
+    if saved_result:
+        logger.info('There is already an SKQD result saved in the file.')
+        return saved_result[1]
+
+    job_block = await MiyabiJobBlock.load(cuda_scriptjob_name)
+    with job_block.get_executor() as executor:
+        arguments = [TASK_SCRIPT_DIR / 'diagonalize.py', parameters.pkgpath, '--mode', mode]
+        await executor.execute_job(
+            arguments=arguments,
+            **job_block.get_job_variables()
+        )
+
+    with h5py.File(Path(parameters.pkgpath) / f'{group_name}.h5', 'r', libver='latest') as source:
+        return source['energy'][()]
 
 
 def deploy():
@@ -345,7 +343,7 @@ if __name__ == '__main__':
     parser.add_argument('--log-level', metavar='LEVEL', default='INFO', help='Logging level.')
     options = parser.parse_args()
 
-    logging.basicConfig(level=getattr(logging, options.log_level.upper())),
+    logging.basicConfig(level=getattr(logging, options.log_level.upper()),
                         format='%(asctime)s:%(name)s:%(levelname)s %(message)s')
 
     with open(options.parameters, 'r', encoding='utf-8') as source:
