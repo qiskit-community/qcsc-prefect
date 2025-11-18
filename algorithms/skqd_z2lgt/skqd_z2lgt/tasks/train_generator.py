@@ -163,7 +163,7 @@ def train_generator(
 
         return models
 
-    return train_generator_flow(parameters, ref_data, train_fn_subprocess, logger)
+    return train_generator_flow(parameters, ref_data, train_fn_subprocess, True, logger=logger)
 
 
 def train_step_model(
