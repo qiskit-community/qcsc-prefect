@@ -11,7 +11,6 @@ def compare_models(model1: BaseModel, model2: BaseModel, _current: str = ''):
     for field in type(model1).model_fields:
         value1 = getattr(model1, field)
         value2 = getattr(model2, field)
-        print(f'Comparing {_current}{field}: {isinstance(value1, BaseModel)} {value1} {value2}')
         if isinstance(value1, BaseModel):
             if (mismatch := compare_models(value1, value2, f'{_current}{field}.')):
                 return mismatch
