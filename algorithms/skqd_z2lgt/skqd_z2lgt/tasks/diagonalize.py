@@ -13,6 +13,7 @@ import h5py
 import jax
 import jax.numpy as jnp
 from flax import nnx
+from qiskit.quantum_info import SparsePauliOp
 from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.sqd import sqd, to_bcoo, bcoo_to_csr
 from skqd_z2lgt.mwpm import minimum_weight_link_state
@@ -150,9 +151,18 @@ def save_skqd_result(out, sqd_states, energy, eigvec, ham_proj=None):
         group.create_dataset('indptr', data=ham_proj.indptr)
 
 
+def make_hamiltonian(parameters: Parameters) -> SparsePauliOp:
+    """Return the Ising hamiltonian for the given charge sector."""
+    lattice = TriangularZ2Lattice(parameters.lgt.lattice)
+    base_link_state = minimum_weight_link_state(parameters.lgt.charged_vertices, lattice)
+    dual_lattice = lattice.plaquette_dual(base_link_state)
+    return dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
+
+
 def diagonalize_init(
     parameters: Parameters,
     exp_data: list[tuple[np.ndarray, np.ndarray]],
+    jax_device_id: int = 0,
     logger: Optional[logging.Logger] = None
 ) -> tuple[float, np.ndarray]:
     logger = logger or logging.getLogger(__name__)
@@ -166,13 +176,9 @@ def diagonalize_init(
 
     logger.info('Performing SQD with observed (charge-corrected) plaquette states')
 
-    lattice = TriangularZ2Lattice(parameters.lgt.lattice)
-    base_link_state = minimum_weight_link_state(parameters.lgt.charged_vertices, lattice)
-    dual_lattice = lattice.plaquette_dual(base_link_state)
-    hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
-
+    hamiltonian = make_hamiltonian(parameters)
     states = np.concatenate([pdata for _, pdata in exp_data], axis=0)[:, ::-1]
-    energy, eigvec, states, ham_proj = sqd(hamiltonian, states)
+    energy, eigvec, states, ham_proj = sqd(hamiltonian, states, jax_device_id=jax_device_id)
     path = Path(parameters.pkgpath) / 'skqd_init.h5'
     with h5py.File(path, 'w', libver='latest') as out:
         save_skqd_result(out, states, energy, eigvec, ham_proj)
@@ -188,6 +194,7 @@ def diagonalize(
     states_init: np.ndarray,
     crbm_models: Optional[list[ConditionalRBM]] = None,
     ref_data: Optional[list[tuple[np.ndarray, np.ndarray]]] = None,
+    jax_device_id: int = 0,
     logger: Optional[logging.Logger] = None
 ) -> float:
     logger = logger or logging.getLogger(__name__)
@@ -202,11 +209,7 @@ def diagonalize(
         logger.info('There is already an SKQD result saved in the file.')
         return saved_result[1]
 
-    lattice = TriangularZ2Lattice(parameters.lgt.lattice)
-    base_link_state = minimum_weight_link_state(parameters.lgt.charged_vertices, lattice)
-    dual_lattice = lattice.plaquette_dual(base_link_state)
-    hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
-
+    hamiltonian = make_hamiltonian(parameters)
     num_steps = parameters.skqd.n_trotter_steps
     shots = parameters.runtime.shots
 
@@ -246,7 +249,8 @@ def diagonalize(
             logger.info('Updated maximum array size to %d', max_size)
         logger.info('Diagonalizing the Hamiltonian projected onto %d states..', states.shape[0])
         start = time.time()
-        sqd_result = sqd(hamiltonian, states, states_size=max_size, return_hproj=is_last)
+        sqd_result = sqd(hamiltonian, states, states_size=max_size, return_hproj=is_last,
+                         jax_device_id=jax_device_id)
         energy, eigvec, sqd_states = sqd_result[:3]
         energies.append(energy)
         subspace_dims.append(sqd_states.shape[0])
