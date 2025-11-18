@@ -19,6 +19,14 @@ from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.tasks.preprocess import load_reco
 
 
+def check_model(
+    parameters: Parameters,
+    istep: int
+) -> bool:
+    path = Path(parameters.pkgpath) / 'crbm' / f'step{istep}.h5'
+    return os.path.exists(path)
+
+
 def load_model(
     parameters: Parameters,
     istep: int,
@@ -60,21 +68,29 @@ def train_generator_flow(
     parameters: Parameters,
     ref_data: list[tuple[np.ndarray, np.ndarray]],
     train_fn: Callable,
+    return_models: bool = True,
     logger: Optional[logging.Logger] = None
 ) -> list[ConditionalRBM]:
     logger = logger or logging.getLogger(__name__)
 
-    models = []
     steps_to_train = []
-    for istep in range(parameters.skqd.n_trotter_steps):
-        try:
-            device_id = istep % jax.device_count()
-            model = load_model(parameters, istep, device_id)[0]
-        except FileNotFoundError:
-            models.append(None)
-            steps_to_train.append(istep)
-        else:
-            models.append(model)
+
+    if return_models:
+        models = []
+        for istep in range(parameters.skqd.n_trotter_steps):
+            try:
+                device_id = istep % jax.device_count()
+                model = load_model(parameters, istep, device_id)[0]
+            except FileNotFoundError:
+                models.append(None)
+                steps_to_train.append(istep)
+            else:
+                models.append(model)
+    else:
+        models = None
+        for istep in range(parameters.skqd.n_trotter_steps):
+            if not check_model(parameters, istep):
+                steps_to_train.append(istep)
 
     if not steps_to_train:
         logger.info('All models already trained')
@@ -83,8 +99,9 @@ def train_generator_flow(
     logger.info('Training CRBMs for Trotter steps %s', steps_to_train)
 
     trained_models = train_fn(steps_to_train, ref_data)
-    for istep, model in trained_models.items():
-        models[istep] = model
+    if return_models:
+        for istep, model in trained_models.items():
+            models[istep] = model
 
     return models
 
