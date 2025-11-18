@@ -68,9 +68,9 @@ async def skqd_z2lgt(
                                                     cuda_scriptjob_name=cuda_scriptjob_name,
                                                     wait_for=[preprocess_future])
     logger.info('Performing SQD with no configuration recovery')
-    diagonalize_init_future = diagonalize_init.submit(parameters,
-                                                      cuda_scriptjob_name=cuda_scriptjob_name,
-                                                      wait_for=[preprocess_future])
+    diagonalize_init_future = diagonalize.submit(parameters, 'init',
+                                                 cuda_scriptjob_name=cuda_scriptjob_name,
+                                                 wait_for=[preprocess_future])
     logger.info('Performing SQD with random bit flips')
     diagonalize_recov_future = diagonalize.submit(parameters, 'full',
                                                   cuda_scriptjob_name=cuda_scriptjob_name,
@@ -260,30 +260,6 @@ async def train_generator(
 
 
 @task
-async def diagonalize_init(
-    parameters: Parameters,
-    cuda_scriptjob_name: str
-) -> float:
-    """Perform SQD with iterative configuration recovery.
-
-    Args:
-        parameters: Configuration parameters.
-        cuda_scriptjob_name: Name of the MiyabiJobBlock that executes the python interpreter in a
-            CUDA environment.
-    """
-    job_block = await MiyabiJobBlock.load(cuda_scriptjob_name)
-    with job_block.get_executor() as executor:
-        arguments = [TASK_SCRIPT_DIR / 'diagonalize.py', parameters.pkgpath, '--mode', 'init']
-        await executor.execute_job(
-            arguments=arguments,
-            **job_block.get_job_variables()
-        )
-
-    with h5py.File(Path(parameters.pkgpath) / 'skqd_init.h5', 'r', libver='latest') as source:
-        return source['energy'][()]
-
-
-@task
 async def diagonalize(
     parameters: Parameters,
     mode: str,
@@ -298,7 +274,9 @@ async def diagonalize(
     """
     logger = get_run_logger()
 
-    if mode == 'full':
+    if mode == 'init':
+        group_name = 'skqd_init'
+    elif mode == 'full':
         group_name = 'skqd_rcv'
     else:
         group_name = 'skqd_rnd'
