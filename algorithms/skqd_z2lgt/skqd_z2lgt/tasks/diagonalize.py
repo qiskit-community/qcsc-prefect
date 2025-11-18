@@ -291,8 +291,10 @@ if __name__ == '__main__':
     parser.add_argument('pkgpath')
     parser.add_argument('--gpu', nargs='+')
     parser.add_argument('--mode', default='full')
+    parser.add_argument('--log-level', default='INFO')
     options = parser.parse_args()
 
+    logging.basicConfig(level=getattr(logging, options.log_level.upper()))
     LOG = logging.getLogger(__name__)
 
     if options.gpu and options.gpu[0] != 'all':
@@ -300,7 +302,7 @@ if __name__ == '__main__':
     os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
     jax.config.update('jax_enable_x64', True)
 
-    with os.open(Path(options.pkgpath) / 'parameters.json', 'r', encoding='utf-8') as src:
+    with open(Path(options.pkgpath) / 'parameters.json', 'r', encoding='utf-8') as src:
         params = Parameters.model_validate_json(src.read())
 
     edata = load_reco(params, 'exp')
@@ -314,7 +316,7 @@ if __name__ == '__main__':
         rdata = load_reco(params, 'ref')
     else:
         rdata = None  # pylint: disable=invalid-name
-        models = [load_model(istep, params.pkgpath, istep % jax.device_count())
+        models = [load_model(params, istep, istep % jax.device_count())[0]
                   for istep in range(params.skqd.n_trotter_steps)]
 
         for istep, crbm in enumerate(models):
