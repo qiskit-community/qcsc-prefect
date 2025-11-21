@@ -94,18 +94,22 @@ def sqd(
             states = uniquify_states(states)
             LOG.info('%f seconds to sort %d bitstrings', time.time() - start, states.shape[0])
             start = time.time()
-            hproj = to_bcoo(hamiltonian, states, jax_device_id)
-            LOG.info('%f seconds to project the Hamiltonian onto subspace', time.time() - start)
-            start = time.time()
-            eigval, eigvec = ground_state_lobpcg(hproj)
+            # hproj = to_bcoo(hamiltonian, states, jax_device_id)
+            # LOG.info('%f seconds to project the Hamiltonian onto subspace', time.time() - start)
+            # start = time.time()
+            # eigval, eigvec = ground_state_lobpcg(hproj)
+            diag, nondiag = get_hamiltonian_arrays(hamiltonian, jax_device_id=jax_device_id)
+            diagonals = get_diagonals(diag[0], diag[1], states)
+            nondiagonals = get_nondiagonals(nondiag[0], nondiag[1], states)
+            eigval, eigvec = compute_ground_state(diagonals, nondiagonals)
             LOG.info('%f seconds to diagonalize', time.time() - start)
 
         retval = (float(eigval), np.array(eigvec))
         if return_states:
             states = read_bits(states, num_bits=hamiltonian.num_qubits)
             retval += (states,)
-        if return_hproj:
-            retval += (bcoo_to_csr(hproj),)
+        # if return_hproj:
+        #     retval += (bcoo_to_csr(hproj),)
 
     return retval
 
@@ -171,6 +175,42 @@ def get_hamiltonian_arrays(
         nondiag_coeffs = shard_array_1d(nondiag_coeffs, device_ids=jax_device_id)
 
     return (diag_paulis, diag_coeffs), (nondiag_paulis, nondiag_coeffs)
+
+
+@jax.jit
+def get_diagonals(paulis, coeffs, states):
+    # Diagonal part
+    is_signed = jnp.packbits(jnp.greater(paulis, 1).astype(np.uint8), axis=1)
+    signs = jnp.sum(jnp.bitwise_count(states[None, ...] & is_signed[:, None]), axis=-1) % 2
+    return jnp.sum(coeffs[:, None] * (1. - 2. * signs), axis=0).real
+
+
+# @jax.jit
+def get_nondiagonals(paulis, coeffs, states):
+    # Nondiagonal part
+    rows, signs = _v_subspace_pauli_map_nondiagonal(paulis, states)
+    imaginary = (jnp.sum(jnp.equal(paulis, 2), axis=-1) % 2).astype(np.uint8)
+    phases = jnp.array([1., 1.j])[imaginary]
+    data = (coeffs * phases)[:, None] * (1. - 2. * signs)
+    indices = jnp.nonzero(jnp.not_equal(rows, -1))
+    return indices[1], rows[indices], data[indices]
+
+
+@jax.jit
+def apply_h(xmat, diagonals, idx_in, idx_out, data):
+    result = xmat * diagonals[:, None]
+    result = result.at[idx_out].add(xmat.at[idx_in].get() * data[:, None])
+    return result
+
+
+@jax.jit
+def compute_ground_state(diagonals, nondiagonals) -> tuple[jax.Array, jax.Array]:
+    """Find the 0th eigenvalue and eigenvector of a BCOO matrix."""
+    idx_in, idx_out, data = nondiagonals
+    xmat = jax.nn.one_hot(jnp.argmin(diagonals), diagonals.shape[0])[:, None].astype(np.complex128)
+    # pylint: disable-next=unbalanced-tuple-unpacking
+    eigvals, eigvecs, _ = lobpcg_standard(apply_h, xmat, args=(-diagonals, idx_in, idx_out, -data))
+    return -eigvals[0], eigvecs[:, 0]
 
 
 def to_bcoo(
