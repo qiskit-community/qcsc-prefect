@@ -61,10 +61,9 @@ def sqd(
         states = np.concatenate([states, np.ones((pad_length, states.shape[1]), dtype=np.uint8)],
                                 axis=0)
         LOG.debug('Done. Array shape %s', states.shape)
-
         start = time.time()
-        diag, nondiag = get_hamiltonian_arrays(hamiltonian, jax_device_id)
         with jax.default_device(jax.devices()[jax_device_id[0]]):
+            diag, nondiag = get_hamiltonian_arrays(hamiltonian, jax_device_id)
             # Add an identity Pauli at the padding bit
             # concatenate respects sharding
             diag_paulis = jnp.concatenate(
@@ -75,32 +74,35 @@ def sqd(
                 [jnp.zeros((nondiag[0].shape[0], 1), dtype=nondiag[0].dtype), nondiag[0]],
                 axis=-1
             )
-            retval_jax = _sqd_fixed((diag_paulis, diag[1]), (nondiag_paulis, nondiag[1]), states,
-                                    diag_paulis.sharding.num_devices, return_states, return_hproj)
+            retval_jax = _sqd_fixed((diag_paulis, diag[1]), (nondiag_paulis, nondiag[1]), states)
         subspace_dim = int(retval_jax[0])
         LOG.info('%f seconds for SQD. Subspace dimension %d', time.time() - start, subspace_dim)
-        retval = (float(retval_jax[1]), np.array(retval_jax[2][:subspace_dim]))
+        retval = (float(retval_jax[-2]), np.array(retval_jax[-1][:subspace_dim]))
         if return_states:
-            states = np.unpackbits(retval_jax[3][:subspace_dim], axis=1)
+            states = np.unpackbits(retval_jax[1][:subspace_dim], axis=1)
             states = states[:, 1:hamiltonian.num_qubits + 1]
             retval += (states,)
         if return_hproj:
-            ham = retval_jax[-1]
-            retval += (bcoo_to_csr(BCOO((ham.data, ham.indices), shape=(subspace_dim,) * 2)),)
+            diagonals, rows, nondiag_data = map(np.asarray, retval_jax[2:5])
+            diagonals = diagonals[:subspace_dim]
+            rows = rows.reshape(nondiag[0].shape[0], states_size)[:, :subspace_dim]
+            cols = np.tile(np.arange(subspace_dim)[None, :], (nondiag[0].shape[0], 1))
+            data = nondiag_data.reshape(nondiag[0].shape[0], states_size)[:, :subspace_dim]
+            filt = np.logical_not(np.isclose(data, 0.))
+            data = data[filt]
+            rows = rows[filt]
+            cols = cols[filt]
+            retval += (to_csr(diagonals, (cols, rows, data)),)
     else:
         with jax.default_device(jax.devices()[jax_device_id[0]]):
             start = time.time()
-            states = jnp.packbits(states, axis=1)
             states = uniquify_states(states)
             LOG.info('%f seconds to sort %d bitstrings', time.time() - start, states.shape[0])
             start = time.time()
-            # hproj = to_bcoo(hamiltonian, states, jax_device_id)
-            # LOG.info('%f seconds to project the Hamiltonian onto subspace', time.time() - start)
-            # start = time.time()
-            # eigval, eigvec = ground_state_lobpcg(hproj)
-            diag, nondiag = get_hamiltonian_arrays(hamiltonian, jax_device_id=jax_device_id)
+            diag, nondiag = get_hamiltonian_arrays(hamiltonian, jax_device_id)
             diagonals = get_diagonals(diag[0], diag[1], states)
-            nondiagonals = get_nondiagonals(nondiag[0], nondiag[1], states)
+            rows, data = get_nondiagonals(nondiag[0], nondiag[1], states)
+            nondiagonals = reduce_nondiagonals(rows, data)
             eigval, eigvec = compute_ground_state(diagonals, nondiagonals)
             LOG.info('%f seconds to diagonalize', time.time() - start)
 
@@ -108,90 +110,112 @@ def sqd(
         if return_states:
             states = read_bits(states, num_bits=hamiltonian.num_qubits)
             retval += (states,)
-        # if return_hproj:
-        #     retval += (bcoo_to_csr(hproj),)
+        if return_hproj:
+            retval += (to_csr(diagonals, nondiagonals),)
 
     return retval
 
 
-@partial(jax.jit, static_argnums=[3, 4, 5])
+@jax.jit
 def _sqd_fixed(
     diag,
     nondiag,
-    states,
-    num_devices,
-    return_states,
-    return_hproj
+    states
 ):
-    states = jnp.packbits(states, axis=1)
-    states = jnp.unique(states, axis=0, size=states.shape[0], fill_value=255)
+    states = uniquify_states(states)
     subspace_dim = jnp.searchsorted(states[:, 0] >> 7, 1)
-    data, coords = _make_bcoo_data(diag, nondiag, states, num_devices)
-    # rows[subspace_dim:] are either -1 or range(subspace_dim, rows.shape[0])
-    mask = jnp.logical_and(jnp.not_equal(coords[:, 0], -1), jnp.less(coords[:, 0], subspace_dim))
-    data *= mask
-    coords *= mask[:, None]
-    hproj = BCOO((data, coords), shape=(states.shape[0],) * 2)
-    retval = ground_state_lobpcg(hproj)
-    if return_states:
-        retval += (states,)
-    if return_hproj:
-        retval += (hproj,)
-    return (subspace_dim,) + retval
+    diagonals = get_diagonals(diag[0], diag[1], states)
+    rows, nondiag_data = get_nondiagonals(nondiag[0], nondiag[1], states)
+    mask = jnp.logical_and(jnp.not_equal(rows, -1), jnp.less(rows, subspace_dim))
+    rows *= mask
+    nondiag_data *= mask
+    cols = jnp.tile(jnp.arange(states.shape[0]), rows.shape[0])
+    rows = rows.reshape(-1)
+    nondiag_data = nondiag_data.reshape(-1)
+    eigval, eigvec = compute_ground_state(diagonals, (cols, rows, nondiag_data))
+    return (subspace_dim, states, diagonals, rows, nondiag_data, eigval, eigvec)
 
 
+@partial(jax.jit, static_argnames=['size'])
 def uniquify_states(
     states: np.ndarray,
-    num_qubits: Optional[int] = None,
     size: Optional[int] = None
 ) -> jax.Array:
     """Uniquify the states array. Note that np.unique performs the desired lexicographic sort."""
+    states = jnp.packbits(states, axis=1)
     states = jnp.unique(states, axis=0, size=size, fill_value=255)
-    if states.ndim == 1:
-        # Convert integer indices to binary, then to packed uint8
-        bits = ((states[:, None] >> jnp.arange(num_qubits)[None, ::-1]) % 2).astype(np.uint8)
-        states = jnp.packbits(bits, axis=1)
     return states.astype(np.uint8)
 
 
 def get_hamiltonian_arrays(
     hamiltonian: SparsePauliOp,
-    jax_device_id: int | list[int] = 0
+    device_ids: Optional[list[int]] = None
 ) -> tuple[tuple[jax.Array, jax.Array], tuple[jax.Array, jax.Array]]:
-    if isinstance(jax_device_id, int):
-        jax_device_id = [jax_device_id]
-
-    with jax.default_device(jax.devices()[jax_device_id[0]]):
-        pauli_strings, op_coeffs = op_to_arrays(hamiltonian)
-        is_diag = jnp.all(jnp.equal(pauli_strings % 3, 0), axis=1)
-        diag_paulis = pauli_strings[is_diag]
-        diag_coeffs = op_coeffs[is_diag]
-        nondiag_paulis = pauli_strings[jnp.logical_not(is_diag)]
-        nondiag_coeffs = op_coeffs[jnp.logical_not(is_diag)]
-    if len(jax_device_id) > 1:
-        diag_paulis = shard_array_1d(diag_paulis, device_ids=jax_device_id)
-        diag_coeffs = shard_array_1d(diag_coeffs, device_ids=jax_device_id)
-        nondiag_paulis = shard_array_1d(nondiag_paulis, device_ids=jax_device_id)
-        nondiag_coeffs = shard_array_1d(nondiag_coeffs, device_ids=jax_device_id)
+    pauli_strings, op_coeffs = op_to_arrays(hamiltonian)
+    is_diag = jnp.all(jnp.equal(pauli_strings % 3, 0), axis=1)
+    diag_paulis = pauli_strings[is_diag]
+    diag_coeffs = op_coeffs[is_diag]
+    nondiag_paulis = pauli_strings[jnp.logical_not(is_diag)]
+    nondiag_coeffs = op_coeffs[jnp.logical_not(is_diag)]
+    if device_ids and len(device_ids) > 1:
+        diag_paulis = shard_array_1d(diag_paulis, device_ids=device_ids)
+        diag_coeffs = shard_array_1d(diag_coeffs, device_ids=device_ids)
+        nondiag_paulis = shard_array_1d(nondiag_paulis, device_ids=device_ids)
+        nondiag_coeffs = shard_array_1d(nondiag_coeffs, device_ids=device_ids)
 
     return (diag_paulis, diag_coeffs), (nondiag_paulis, nondiag_coeffs)
 
 
 @jax.jit
-def get_diagonals(paulis, coeffs, states):
-    # Diagonal part
+def get_diagonals(
+    paulis: jax.Array,
+    coeffs: jax.Array,
+    states: jax.Array
+) -> jax.Array:
+    """Compute the diagonals of the Hamiltonian.
+
+    Args:
+        paulis: List of diagonal Pauli strings.
+        coeffs: Coefficients of the Pauli strings.
+        states: Bit-packed SQD subspace.
+
+    Returns:
+        An array of floats with size len(states).
+    """
     is_signed = jnp.packbits(jnp.greater(paulis, 1).astype(np.uint8), axis=1)
     signs = jnp.sum(jnp.bitwise_count(states[None, ...] & is_signed[:, None]), axis=-1) % 2
     return jnp.sum(coeffs[:, None] * (1. - 2. * signs), axis=0).real
 
 
-# @jax.jit
-def get_nondiagonals(paulis, coeffs, states):
-    # Nondiagonal part
+@jax.jit
+def get_nondiagonals(
+    paulis: jax.Array,
+    coeffs: jax.Array,
+    states: jax.Array
+) -> tuple[jax.Array, jax.Array]:
+    """Compute the nondiagonal parts of the Hamiltonian.
+
+    Args:
+        paulis: List of nondiagonal Pauli strings.
+        coeffs: Coefficients of the Pauli strings.
+        states: Bit-packed SQD subspace.
+
+    Returns:
+        Arrays of row indices and matrix elements of the Hamiltonian matrix projected onto the
+        subspace (each shape [num_paulis, len(states)]). Nonexistent rows are indicated by index -1.
+    """
     rows, signs = _v_subspace_pauli_map_nondiagonal(paulis, states)
     imaginary = (jnp.sum(jnp.equal(paulis, 2), axis=-1) % 2).astype(np.uint8)
     phases = jnp.array([1., 1.j])[imaginary]
     data = (coeffs * phases)[:, None] * (1. - 2. * signs)
+    return rows, data
+
+
+def reduce_nondiagonals(
+    rows: jax.Array,
+    data: jax.Array
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """Return flat arrays of columns, rows, and matrix elements of the nondiagonal Hamiltonian."""
     indices = jnp.nonzero(jnp.not_equal(rows, -1))
     return indices[1], rows[indices], data[indices]
 
@@ -204,13 +228,28 @@ def apply_h(xmat, diagonals, idx_in, idx_out, data):
 
 
 @jax.jit
-def compute_ground_state(diagonals, nondiagonals) -> tuple[jax.Array, jax.Array]:
+def compute_ground_state(
+    diagonals: jax.Array,
+    nondiagonals: tuple[jax.Array, jax.Array, jax.Array]
+) -> tuple[jax.Array, jax.Array]:
     """Find the 0th eigenvalue and eigenvector of a BCOO matrix."""
     idx_in, idx_out, data = nondiagonals
     xmat = jax.nn.one_hot(jnp.argmin(diagonals), diagonals.shape[0])[:, None].astype(np.complex128)
     # pylint: disable-next=unbalanced-tuple-unpacking
     eigvals, eigvecs, _ = lobpcg_standard(apply_h, xmat, args=(-diagonals, idx_in, idx_out, -data))
     return -eigvals[0], eigvecs[:, 0]
+
+
+def to_csr(
+    diagonals: jax.Array,
+    nondiagonals: tuple[jax.Array, jax.Array, jax.Array]
+) -> csr_array:
+    cols, rows, data = nondiagonals
+    cols = np.concatenate([cols, np.arange(diagonals.shape[0])])
+    rows = np.concatenate([rows, np.arange(diagonals.shape[0])])
+    data = np.concatenate([data, diagonals.astype(data.dtype)])
+    coo = coo_array((data, (rows, cols)), shape=diagonals.shape * 2)
+    return csr_array(coo)
 
 
 def to_bcoo(
