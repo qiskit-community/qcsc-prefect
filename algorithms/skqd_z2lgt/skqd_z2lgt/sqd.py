@@ -122,7 +122,7 @@ def _sqd_fixed(
     nondiag,
     states
 ):
-    states = uniquify_states(states)
+    states = uniquify_states(states, size=states.shape[0])
     subspace_dim = jnp.searchsorted(states[:, 0] >> 7, 1)
     diagonals = get_diagonals(diag[0], diag[1], states)
     rows, nondiag_data = get_nondiagonals(nondiag[0], nondiag[1], states)
@@ -136,7 +136,6 @@ def _sqd_fixed(
     return (subspace_dim, states, diagonals, rows, nondiag_data, eigval, eigvec)
 
 
-@partial(jax.jit, static_argnames=['size'])
 def uniquify_states(
     states: np.ndarray,
     size: Optional[int] = None
