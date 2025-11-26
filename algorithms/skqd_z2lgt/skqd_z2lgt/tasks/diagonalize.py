@@ -84,6 +84,16 @@ def generate_with_crbm(
     return gen_states
 
 
+def compile_models(parameters: Parameters, models: list[ConditionalRBM]):
+    for crbm in models:
+        with jax.default_device(crbm.weights_vu.value.device):
+            crbm.sample(
+                jnp.zeros((parameters.crbm.gen_batch_size, crbm.weights_vu.shape[1]),
+                          dtype=np.uint8),
+                size=parameters.skqd.num_gen
+            )
+
+
 def generate_random(
     parameters: Parameters,
     exp_data: list[tuple[np.ndarray, np.ndarray]],
@@ -322,20 +332,13 @@ if __name__ == '__main__':
         sys.exit(0)
 
     if options.mode == 'random':
-        models = None  # pylint: disable=invalid-name
+        crbms = None  # pylint: disable=invalid-name
         rdata = load_reco(params, 'ref')
     else:
         rdata = None  # pylint: disable=invalid-name
-        models = [load_model(params, istep, istep % jax.device_count())[0]
-                  for istep in range(params.skqd.n_trotter_steps)]
+        crbms = [load_model(params, istep, istep % jax.device_count())[0]
+                 for istep in range(params.skqd.n_trotter_steps)]
+        LOG.info('Compiling CRBM models')
+        compile_models(params, crbms)
 
-        for istep, crbm in enumerate(models):
-            LOG.info('Compiling CRBM for Trotter step %d', istep)
-            with jax.default_device(crbm.weights_vu.value.device):
-                crbm.sample(
-                    jnp.zeros((params.crbm.gen_batch_size, crbm.weights_vu.shape[1]),
-                              dtype=np.uint8),
-                    size=params.skqd.num_gen
-                )
-
-    diagonalize(params, edata, en_init, st_init, crbm_models=models, ref_data=rdata)
+    diagonalize(params, edata, en_init, st_init, crbm_models=crbms, ref_data=rdata)
