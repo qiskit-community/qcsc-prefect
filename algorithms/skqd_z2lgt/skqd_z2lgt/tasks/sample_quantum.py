@@ -93,32 +93,25 @@ def get_trotter_circuits(
 def save_raw(
     parameters: Parameters,
     pub_result: PrimitiveResult,
-    layout: Optional[list[int]] = None,
     logger: Optional[logging.Logger] = None
 ):
     logger = logger or logging.getLogger(__name__)
 
     num_steps = parameters.skqd.n_trotter_steps
 
-    path = Path(parameters.pkgpath) / 'data' / 'raw.h5'
+    dirpath = Path(parameters.pkgpath) / 'data'
     try:
-        os.makedirs(path.parent)
+        os.makedirs(dirpath)
     except FileExistsError:
         pass
-    with h5py.File(path, 'w', libver='latest') as out:
-        if layout:
-            out.attrs['layout'] = np.array(layout)
-        for etype in ['exp', 'ref']:
-            out.create_group(etype)
-        for ires, res in enumerate(pub_result):
-            if ires < num_steps:
-                etype = 'exp'
-            else:
-                etype = 'ref'
-            istep = ires % num_steps
-            bit_array = res.data.c
-            dataset = out[etype].create_dataset(f'step{istep}', data=bit_array.array)
-            dataset.attrs['num_bits'] = bit_array.num_bits
+    ires = 0
+    for etype in ['exp', 'ref']:
+        for istep in range(num_steps):
+            path = dirpath / f'{etype}_step{istep}.h5'
+            with h5py.File(path, 'w', libver='latest') as out:
+                bit_array = pub_result[ires].data.c
+                dataset = out.create_dataset('raw', data=bit_array.array)
+                dataset.attrs['num_bits'] = bit_array.num_bits
 
 
 def load_raw(
@@ -138,12 +131,16 @@ def load_raw(
     else:
         isteps = [istep]
 
-    path = Path(parameters.pkgpath) / 'data' / 'raw.h5'
-    with h5py.File(path, 'r', libver='latest') as source:
-        data = tuple([read_bit_array(source[f'{et}/step{istep}']) for istep in isteps]
-                     for et in etypes)
+    dirpath = Path(parameters.pkgpath) / 'data'
+    data = []
+    for etype in etypes:
+        data.append([])
+        for istep in isteps:
+            with h5py.File(dirpath / f'{etype}_step{istep}.h5', 'r', libver='latest') as source:
+                data[-1].append(read_bit_array(source['raw']))
+
     if etype is None:
-        return data
+        return tuple(data)
     elif istep is None:
         return data[0]
     return data[0][0]
@@ -173,9 +170,14 @@ def sample_quantum_flow(
         layout, exp_circuits, ref_circuits = get_trotter_circuits(parameters, target, logger)
         # Run primitive
         logger.info('Submitting a runtime job')
-        pub_result = sample_fn(exp_circuits + ref_circuits)
+        pub_result, job_id = sample_fn(exp_circuits + ref_circuits)
 
-    save_raw(parameters, pub_result, layout, logger)
+        parameters.circuit.layout = layout
+        parameters.runtime.job_id = job_id
+        with open(Path(parameters.pkgpath) / 'parameters.json', 'w', encoding='utf-8') as out:
+            out.write(parameters.model_dump_json())
+
+    save_raw(parameters, pub_result, logger)
 
     num_steps = parameters.skqd.n_trotter_steps
     return ([res.data.c for res in pub_result[:num_steps]],
@@ -212,6 +214,6 @@ def sample_quantum(
         sampler = Sampler(backend, options=options)
         job = sampler.run(pubs)
         logger.info('Sampler job: %s', job.job_id())
-        return job.result()
+        return job.result(), job.job_id()
 
     return sample_quantum_flow(parameters, fetch_result_fn, get_target_fn, sample_fn, logger)

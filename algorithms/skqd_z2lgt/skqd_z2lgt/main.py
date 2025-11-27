@@ -164,7 +164,8 @@ async def sample_quantum(
             return executor.submit(fn).result()
 
     # Cannot pass runtime.get_target directly as get_target_fn to sample_quantum_flow because of
-    # async_dispatch
+    # async_dispatch (get_target would be called in a thread running an event loop and will
+    # therefore return a coroutine)
     def get_target_fn():
         def fn():
             return runtime.get_target()
@@ -177,7 +178,8 @@ async def sample_quantum(
             return runtime.sampler(sampler_pubs=pubs, options=options)
 
         with ThreadPoolExecutor(1) as executor:
-            return executor.submit(fn, pubs).result()
+            # TODO Figure out how to fetch the job id from the table artifact
+            return executor.submit(fn, pubs).result(), ''
 
     sample_quantum_flow(parameters, fetch_result_fn, get_target_fn, sample_fn, logger)
 
