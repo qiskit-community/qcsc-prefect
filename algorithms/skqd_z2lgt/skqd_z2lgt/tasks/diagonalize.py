@@ -84,6 +84,16 @@ def generate_with_crbm(
     return gen_states
 
 
+def compile_models(parameters: Parameters, models: list[ConditionalRBM]):
+    for crbm in models:
+        with jax.default_device(crbm.weights_vu.value.device):
+            crbm.sample(
+                jnp.zeros((parameters.crbm.gen_batch_size, crbm.weights_vu.shape[1]),
+                          dtype=np.uint8),
+                size=parameters.skqd.num_gen
+            )
+
+
 def generate_random(
     parameters: Parameters,
     exp_data: list[tuple[np.ndarray, np.ndarray]],
@@ -179,8 +189,10 @@ def diagonalize_init(
 
     dual_lattice, hamiltonian = make_hamiltonian(parameters)
     states = np.concatenate([pdata for _, pdata in exp_data], axis=0)
+    logger.info('Number of bitstrings from circuit sampling: %d', states.shape[0])
     for fname in parameters.skqd.extensions:
         states = extensions[fname](states, dual_lattice)
+        logger.info('Number of bitstrings after applying %s: %d', fname, states.shape[0])
     energy, eigvec, states, ham_proj = sqd(hamiltonian, states, jax_device_id=jax_device_id)
     path = Path(parameters.pkgpath) / 'skqd_init.h5'
     with h5py.File(path, 'w', libver='latest') as out:
@@ -194,6 +206,7 @@ def diagonalize_init(
 def diagonalize(
     parameters: Parameters,
     exp_data: list[tuple[np.ndarray, np.ndarray]],
+    energy_init: float,
     states_init: np.ndarray,
     crbm_models: Optional[list[ConditionalRBM]] = None,
     ref_data: Optional[list[tuple[np.ndarray, np.ndarray]]] = None,
@@ -228,7 +241,7 @@ def diagonalize(
     subspace_dims = []
     relevant_states = states_init
     max_size = None
-    prev_energy = None
+    prev_energy = energy_init
 
     is_last = False
     for it in range(parameters.skqd.max_iterations):
@@ -260,13 +273,14 @@ def diagonalize(
                     time.time() - start, energy)
 
         terminate = (
-            (prev_energy is not None and prev_energy - energy < parameters.skqd.delta_e)
+            prev_energy - energy < parameters.skqd.delta_e
             or
             relevant_states.shape[0] >= parameters.skqd.max_subspace_dim
         )
 
         if not is_last and terminate:
-            sqd_result += (make_hproj(hamiltonian, sqd_states),)
+            states_p = np.packbits(states, axis=1)
+            sqd_result += (make_hproj(hamiltonian, states_p),)
             is_last = True
 
         if is_last:
@@ -312,26 +326,19 @@ if __name__ == '__main__':
         params = Parameters.model_validate_json(src.read())
 
     edata = load_reco(params, 'exp')
-    _, st_init = diagonalize_init(params, edata)
+    en_init, st_init = diagonalize_init(params, edata)
 
     if options.mode == 'init':
         sys.exit(0)
 
     if options.mode == 'random':
-        models = None  # pylint: disable=invalid-name
+        crbms = None  # pylint: disable=invalid-name
         rdata = load_reco(params, 'ref')
     else:
         rdata = None  # pylint: disable=invalid-name
-        models = [load_model(params, istep, istep % jax.device_count())[0]
-                  for istep in range(params.skqd.n_trotter_steps)]
+        crbms = [load_model(params, istep, istep % jax.device_count())[0]
+                 for istep in range(params.skqd.n_trotter_steps)]
+        LOG.info('Compiling CRBM models')
+        compile_models(params, crbms)
 
-        for istep, crbm in enumerate(models):
-            LOG.info('Compiling CRBM for Trotter step %d', istep)
-            with jax.default_device(crbm.weights_vu.value.device):
-                crbm.sample(
-                    jnp.zeros((params.crbm.gen_batch_size, crbm.weights_vu.shape[1]),
-                              dtype=np.uint8),
-                    size=params.skqd.num_gen
-                )
-
-    diagonalize(params, edata, st_init, crbm_models=models, ref_data=rdata)
+    diagonalize(params, edata, en_init, st_init, crbm_models=crbms, ref_data=rdata)

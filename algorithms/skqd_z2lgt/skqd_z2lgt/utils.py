@@ -17,7 +17,7 @@ def read_bits(
     num_bits = num_bits or dataset.attrs['num_bits']
     if align == 'left':
         return bits[..., offset:num_bits + offset]
-    return bits[..., -(offset + num_bits):-offset]
+    return bits[..., -(offset + num_bits):bits.shape[-1] - offset]
 
 
 def save_bits(group: h5py.Group, name: str, bits: np.ndarray) -> h5py.Dataset:
