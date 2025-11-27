@@ -87,6 +87,11 @@ class CircuitParameters(BaseModel):
                     ' the selection "rzz" will utilize CZ gates together with Rzz.',
         title='Base two-qubit gate'
     )
+    layout: Optional[list[int]] = Field(
+        default=None,
+        description='Qubit layout.',
+        title='Qubit layout'
+    )
     optimization_level: int = Field(
         default=3,
         description="Transpile: Optimization level of transpiler",
