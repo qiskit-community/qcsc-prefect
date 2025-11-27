@@ -13,14 +13,12 @@ import h5py
 import jax
 import jax.numpy as jnp
 from flax import nnx
-from qiskit.quantum_info import SparsePauliOp
-from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.sqd import sqd, make_hproj
 from skqd_z2lgt.extensions import extensions
-from skqd_z2lgt.mwpm import minimum_weight_link_state
 from skqd_z2lgt.crbm import ConditionalRBM
 from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.utils import read_bits
+from skqd_z2lgt.tasks.common import make_dual_lattice
 
 
 def generate_states(model, vtx_data, plaq_data, generate_fn, batch_size):
@@ -162,14 +160,6 @@ def save_skqd_result(out, sqd_states, energy, eigvec, ham_proj=None):
         group.create_dataset('indptr', data=ham_proj.indptr)
 
 
-def make_hamiltonian(parameters: Parameters) -> SparsePauliOp:
-    """Return the Ising hamiltonian for the given charge sector."""
-    lattice = TriangularZ2Lattice(parameters.lgt.lattice)
-    base_link_state = minimum_weight_link_state(parameters.lgt.charged_vertices, lattice)
-    dual_lattice = lattice.plaquette_dual(base_link_state)
-    return dual_lattice, dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
-
-
 def diagonalize_init(
     parameters: Parameters,
     exp_data: list[tuple[np.ndarray, np.ndarray]],
@@ -187,7 +177,8 @@ def diagonalize_init(
 
     logger.info('Performing SQD with observed (charge-corrected) plaquette states')
 
-    dual_lattice, hamiltonian = make_hamiltonian(parameters)
+    dual_lattice = make_dual_lattice(parameters)
+    hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
     states = np.concatenate([pdata for _, pdata in exp_data], axis=0)
     logger.info('Number of bitstrings from circuit sampling: %d', states.shape[0])
     for fname in parameters.skqd.extensions:
@@ -225,7 +216,7 @@ def diagonalize(
         logger.info('There is already an SKQD result saved in the file.')
         return saved_result[1]
 
-    dual_lattice, hamiltonian = make_hamiltonian(parameters)
+    dual_lattice = make_dual_lattice(parameters)
     num_steps = parameters.skqd.n_trotter_steps
 
     if crbm_models:

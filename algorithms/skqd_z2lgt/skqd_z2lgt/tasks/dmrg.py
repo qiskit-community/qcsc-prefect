@@ -10,6 +10,7 @@ from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.ising_dmrg import ising_dmrg, get_mps_probs
 from skqd_z2lgt.mwpm import minimum_weight_link_state
 from skqd_z2lgt.parameters import Parameters
+from skqd_z2lgt.tasks.common import make_dual_lattice
 
 
 def dmrg_flow(
@@ -26,13 +27,11 @@ def dmrg_flow(
         with h5py.File(path, 'r', libver='latest') as source:
             return source['energy'][()]
 
-    lattice = TriangularZ2Lattice(parameters.lgt.lattice)
-    base_link_state = minimum_weight_link_state(parameters.lgt.charged_vertices, lattice)
-    dual_lattice = lattice.plaquette_dual(base_link_state)
-    ising_hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
+    dual_lattice = make_dual_lattice(parameters)
+    hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
 
     logger.info('Invoking ITensorMPS DMRG function and sampling the MPS')
-    energy, states, probs = dmrg_fn(ising_hamiltonian)
+    energy, states, probs = dmrg_fn(hamiltonian)
 
     with h5py.File(path, 'w', libver='latest') as out:
         out.create_dataset('energy', data=energy)
