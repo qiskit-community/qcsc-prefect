@@ -1,4 +1,5 @@
 """Preprocess raw data (link states with errors) and convert them to vertex and plaquette data."""
+import os
 from collections.abc import Callable
 import logging
 from pathlib import Path
@@ -6,10 +7,11 @@ from typing import Optional
 import numpy as np
 import h5py
 from qiskit.primitives import BitArray
-from heavyhex_qft.triangular_z2 import TriangularZ2Lattice
 from skqd_z2lgt.parameters import Parameters
-from skqd_z2lgt.mwpm import convert_link_to_plaq, minimum_weight_link_state
+from skqd_z2lgt.mwpm import convert_link_to_plaq
 from skqd_z2lgt.utils import read_bits, save_bits
+from skqd_z2lgt.tasks.sample_quantum import load_raw
+from skqd_z2lgt.tasks.common import make_dual_lattice
 
 RecoData = list[tuple[np.ndarray, np.ndarray]]  # [(vertex data, plaquette data)] * steps
 
@@ -21,14 +23,18 @@ def save_reco(
 ):
     logger = logger or logging.getLogger(__name__)
     logger.info('Saving vertex and plaquette data')
-    for igroup, group in enumerate(['vtx', 'plaq']):
-        path = Path(parameters.pkgpath) / 'data' / f'{group}.h5'
-        with h5py.File(path, 'w', libver='latest') as out:
-            for etype, step_data in zip(['exp', 'ref'], reco_data):
-                group = out.create_group(etype)
-                for istep, arrays in enumerate(step_data):
-                    dname = f'step{istep}'
-                    save_bits(group, dname, arrays[igroup])
+    dirpath = Path(parameters.pkgpath) / 'data' / 'reco'
+    try:
+        os.makedirs(dirpath)
+    except FileExistsError:
+        pass
+
+    for etype, arrays in zip(['exp', 'ref'], reco_data):
+        for istep in range(parameters.skqd.n_trotter_steps):
+            path = dirpath / f'{etype}_step{istep}.h5'
+            with h5py.File(path, 'w', libver='latest') as out:
+                for name, array in zip(['vtx', 'plaq'], arrays[istep]):
+                    save_bits(out, name, array)
 
 
 def load_reco(
@@ -36,33 +42,28 @@ def load_reco(
     etype: Optional[str] = None,
     istep: Optional[int] = None
 ) -> tuple[RecoData, RecoData] | RecoData | tuple[np.ndarray, np.ndarray]:
-    if etype:
-        etypes = [etype]
-    else:
+    if etype is None:
         etypes = ['exp', 'ref']
-    if istep is not None:
-        isteps = [istep]
     else:
+        etypes = [etype]
+    if istep is None:
         isteps = list(range(parameters.skqd.n_trotter_steps))
+    else:
+        isteps = [istep]
 
-    group_data = {}
-    for group in ['vtx', 'plaq']:
-        path = Path(parameters.pkgpath) / 'data' / f'{group}.h5'
-        with h5py.File(path, 'r', libver='latest', swmr=True) as source:
-            group_data[group] = {
-                et: {ist: read_bits(source[f'{et}/step{ist}']) for ist in isteps}
-                for et in etypes
-            }
+    dirpath = Path(parameters.pkgpath) / 'data' / 'reco'
+    data = []
+    for etype in etypes:
+        data.append([])
+        for istep in isteps:
+            with h5py.File(dirpath / f'{etype}_step{istep}.h5', 'r', libver='latest') as source:
+                data[-1].append((read_bits(source['vtx']), read_bits(source['plaq'])))
 
-    if etype:
-        if istep is not None:
-            return (group_data['vtx'][etype][istep], group_data['plaq'][etype][istep])
-        return [(group_data['vtx'][etype][ist], group_data['plaq'][etype][ist])
-                for ist in isteps]
-    return tuple(
-        [(group_data['vtx'][et][ist], group_data['plaq'][et][ist]) for ist in isteps]
-        for et in etypes
-    )
+    if etype is None:
+        return tuple(data)
+    elif istep is None:
+        return data[0]
+    return data[0][0]
 
 
 def preprocess_flow(
@@ -92,12 +93,8 @@ def preprocess_flow(
     logger.info('Correcting the charge sector of link-state bitstrings and converting them to '
                 'vertex and plaquette data')
 
-    lattice = TriangularZ2Lattice(parameters.lgt.lattice)
-    base_link_state = minimum_weight_link_state(parameters.lgt.charged_vertices, lattice)
-    dual_lattice = lattice.plaquette_dual(base_link_state)
-
+    dual_lattice = make_dual_lattice(parameters)
     reco_data = convert_fn(raw_data, dual_lattice)
-
     save_reco(parameters, reco_data)
 
     return reco_data
@@ -119,3 +116,61 @@ def preprocess(
         return tuple(reco_data)
 
     return preprocess_flow(parameters, raw_data, convert_fn, logger)
+
+
+def preprocess_single_array(
+    parameters: Parameters,
+    etype: str,
+    istep: int,
+    logger: Optional[logging.Logger] = None
+):
+    """Preprocess one bit array parallelized over all cores and save the result."""
+    logger = logger or logging.getLogger(__name__)
+    logger.info('Preprocessing %s step %d', etype, istep)
+    
+    bit_array = load_raw(parameters, etype, istep)
+    dual_lattice = make_dual_lattice(parameters)
+    batch_size = bit_array.num_shots // (os.cpu_count() - 1)
+    arrays = convert_link_to_plaq(bit_array, dual_lattice, batch_size)
+
+    path = Path(parameters.pkgpath) / 'data' / 'reco' / f'{etype}_step{istep}.h5'
+    try:
+        os.makedirs(path.parent)
+    except FileExistsError:
+        pass
+
+    with h5py.File(path, 'w', libver='latest') as out:
+        for name, array in zip(['vtx', 'plaq'], arrays):
+            save_bits(out, name, array)
+
+
+if __name__ == '__main__':
+    import argparse
+    from mpi4py import MPI
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('pkgpath')
+    parser.add_argument('--etype')
+    parser.add_argument('--istep', type=int)
+    parser.add_argument('--mpi', action='store_true')
+    parser.add_argument('--log-level', default='INFO')
+    options = parser.parse_args()
+
+    logging.basicConfig(level=getattr(logging, options.log_level.upper()))
+
+    if options.mpi:
+        comm = MPI.COMM_WORLD
+        mpi_rank = comm.Get_rank()
+        nsteps = params.skqd.n_trotter_steps
+        if mpi_rank < nsteps:
+            et = 'exp'
+        else:
+            et = 'ref'
+        ist = mpi_rank % nsteps
+    else:
+        et = options.etype
+        ist = options.istep
+
+    with open(Path(options.pkgpath) / 'parameters.json', 'r', encoding='utf-8') as src:
+        params = Parameters.model_validate_json(src.read())
+    preprocess_single_array(params, et, ist)

@@ -96,22 +96,22 @@ def save_raw(
     logger: Optional[logging.Logger] = None
 ):
     logger = logger or logging.getLogger(__name__)
-
-    num_steps = parameters.skqd.n_trotter_steps
-
-    dirpath = Path(parameters.pkgpath) / 'data'
+    logger.info('Saving raw link data')
+    dirpath = Path(parameters.pkgpath) / 'data' / 'raw'
     try:
         os.makedirs(dirpath)
     except FileExistsError:
         pass
+
     ires = 0
     for etype in ['exp', 'ref']:
-        for istep in range(num_steps):
+        for istep in range(parameters.skqd.n_trotter_steps):
             path = dirpath / f'{etype}_step{istep}.h5'
             with h5py.File(path, 'w', libver='latest') as out:
                 bit_array = pub_result[ires].data.c
-                dataset = out.create_dataset('raw', data=bit_array.array)
+                dataset = out.create_dataset('link', data=bit_array.array)
                 dataset.attrs['num_bits'] = bit_array.num_bits
+                ires += 1
 
 
 def load_raw(
@@ -131,13 +131,13 @@ def load_raw(
     else:
         isteps = [istep]
 
-    dirpath = Path(parameters.pkgpath) / 'data'
+    dirpath = Path(parameters.pkgpath) / 'data' / 'raw'
     data = []
     for etype in etypes:
         data.append([])
         for istep in isteps:
             with h5py.File(dirpath / f'{etype}_step{istep}.h5', 'r', libver='latest') as source:
-                data[-1].append(read_bit_array(source['raw']))
+                data[-1].append(read_bit_array(source['link']))
 
     if etype is None:
         return tuple(data)
