@@ -68,54 +68,42 @@ def load_reco(
 
 def preprocess_flow(
     parameters: Parameters,
-    raw_data: tuple[list[BitArray], list[BitArray]],
     convert_fn: Callable,
     logger: Optional[logging.Logger] = None
-) -> tuple[RecoData, RecoData]:
-    """Correct the link-state bitstrings with MWPM and convert to plaquette-state bitstrings.
-
-    Args:
-        parameters: Configuration parameters.
-        cpu_pyfuncjob_name: Name of the PyFunctionJob block that runs a python function in an
-            interpreter in the current environment.
-        bit_arrays: Lists of BitArrays returned by sample_krylov_bitstrings.
-    """
+):
+    """Correct the link-state bitstrings with MWPM and convert to plaquette-state bitstrings."""
     logger = logger or logging.getLogger(__name__)
 
     try:
-        reco_data = load_reco(parameters)
+        load_reco(parameters)
     except FileNotFoundError:
         pass
     else:
-        logger.info('Loading existing reco data from output file')
-        return reco_data
+        logger.info('All link-state bitstrings already converted')
+        return
 
     logger.info('Correcting the charge sector of link-state bitstrings and converting them to '
                 'vertex and plaquette data')
-
-    dual_lattice = make_dual_lattice(parameters)
-    reco_data = convert_fn(raw_data, dual_lattice)
-    save_reco(parameters, reco_data)
-
-    return reco_data
+    convert_fn()
 
 
 def preprocess(
     parameters: Parameters,
-    raw_data: tuple[RecoData, RecoData],
     logger: Optional[logging.Logger] = None
-) -> tuple[RecoData, RecoData]:
-    def convert_fn(bit_arrays, dual_lattice):
-        batch_size = parameters.runtime.shots // 20
-        reco_data = []
-        for arrays in bit_arrays:
-            reco_data.append([])
-            for array in arrays:
-                reco_data[-1].append(convert_link_to_plaq(array, dual_lattice,
-                                                          batch_size=batch_size))
-        return tuple(reco_data)
+):
+    def convert_fn():
+        dual_lattice = make_dual_lattice(parameters)
+        raw_data = load_raw(parameters)
 
-    return preprocess_flow(parameters, raw_data, convert_fn, logger)
+        reco_data = ([], [])
+        batch_size = parameters.runtime.shots // 20
+        for raw, reco in zip(raw_data, reco_data):
+            for array in raw:
+                reco.append(convert_link_to_plaq(array, dual_lattice, batch_size=batch_size))
+
+        save_reco(parameters, reco_data)
+
+    preprocess_flow(parameters, convert_fn, logger=logger)
 
 
 def preprocess_single_array(
@@ -150,13 +138,16 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('pkgpath')
+    parser.add_argument('--mpi', action='store_true')
     parser.add_argument('--etype')
     parser.add_argument('--istep', type=int)
-    parser.add_argument('--mpi', action='store_true')
     parser.add_argument('--log-level', default='INFO')
     options = parser.parse_args()
 
     logging.basicConfig(level=getattr(logging, options.log_level.upper()))
+
+    with open(Path(options.pkgpath) / 'parameters.json', 'r', encoding='utf-8') as src:
+        params = Parameters.model_validate_json(src.read())
 
     if options.mpi:
         comm = MPI.COMM_WORLD
@@ -171,6 +162,4 @@ if __name__ == '__main__':
         et = options.etype
         ist = options.istep
 
-    with open(Path(options.pkgpath) / 'parameters.json', 'r', encoding='utf-8') as src:
-        params = Parameters.model_validate_json(src.read())
     preprocess_single_array(params, et, ist)

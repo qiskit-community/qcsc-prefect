@@ -17,28 +17,6 @@ from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.circuits import make_step_circuits, compose_trotter_circuits
 
 
-def check_saved_raw(
-    parameters: Parameters,
-    logger: Optional[logging.Logger] = None
-) -> tuple[list[BitArray], list[BitArray]] | None:
-    logger = logger or logging.getLogger(__name__)
-
-    num_steps = parameters.skqd.n_trotter_steps
-
-    path = Path(parameters.pkgpath) / 'data' / 'raw.h5'
-    if os.path.exists(path):
-        logger.info('Loading existing raw data from output file')
-        with h5py.File(path, 'r', libver='latest') as source:
-            dlists = ([], [])
-            for etype, dlist in zip(['exp', 'ref'], dlists):
-                for istep in range(num_steps):
-                    dataset = source[f'{etype}/step{istep}']
-                    dlist.append(BitArray(dataset[()], int(dataset.attrs['num_bits'])))
-
-        return dlists
-    return None
-
-
 def get_trotter_circuits(
     parameters: Parameters,
     target: Target,
@@ -152,12 +130,16 @@ def sample_quantum_flow(
     get_target_fn: Callable,
     sample_fn: Callable,
     logger: Optional[logging.Logger] = None
-) -> tuple[list[BitArray], list[BitArray]]:
+):
     logger = logger or logging.getLogger(__name__)
 
-    raw_data = check_saved_raw(parameters, logger)
-    if raw_data:
-        return raw_data
+    try:
+        load_raw(parameters)
+    except FileNotFoundError:
+        pass
+    else:
+        logger.info('Raw bitstrings already saved to file')
+        return
 
     if parameters.runtime.job_id:
         logger.info('Fetching result of workload %s', parameters.runtime.job_id)
@@ -178,10 +160,6 @@ def sample_quantum_flow(
             out.write(parameters.model_dump_json())
 
     save_raw(parameters, pub_result, logger)
-
-    num_steps = parameters.skqd.n_trotter_steps
-    return ([res.data.c for res in pub_result[:num_steps]],
-            [res.data.c for res in pub_result[num_steps:]])
 
 
 def sample_quantum(

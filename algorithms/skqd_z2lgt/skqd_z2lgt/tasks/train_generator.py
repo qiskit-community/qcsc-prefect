@@ -2,7 +2,7 @@
 import os
 import sys
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 import logging
 import pathlib
 import subprocess
@@ -19,12 +19,15 @@ from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.tasks.preprocess import load_reco
 
 
-def check_model(
-    parameters: Parameters,
-    istep: int
-) -> bool:
-    path = Path(parameters.pkgpath) / 'crbm' / f'step{istep}.h5'
-    return os.path.exists(path)
+def check_models(
+    parameters: Parameters
+) -> list[int]:
+    missing_isteps = []
+    dirpath = Path(parameters.pkgpath) / 'crbm'
+    for istep in range(parameters.skqd.n_trotter_steps):
+        if not os.path.exists(dirpath / f'step{istep}.h5'):
+            missing_isteps.append(istep)
+    return missing_isteps
 
 
 def load_model(
@@ -66,79 +69,49 @@ def save_model(
 
 def train_generator_flow(
     parameters: Parameters,
-    ref_data: list[tuple[np.ndarray, np.ndarray]],
     train_fn: Callable,
-    return_models: bool = True,
     logger: Optional[logging.Logger] = None
-) -> list[ConditionalRBM]:
+):
     logger = logger or logging.getLogger(__name__)
 
-    steps_to_train = []
-
-    if return_models:
-        models = []
-        for istep in range(parameters.skqd.n_trotter_steps):
-            try:
-                device_id = istep % jax.device_count()
-                model = load_model(parameters, istep, device_id)[0]
-            except FileNotFoundError:
-                models.append(None)
-                steps_to_train.append(istep)
-            else:
-                models.append(model)
-    else:
-        models = None
-        for istep in range(parameters.skqd.n_trotter_steps):
-            if not check_model(parameters, istep):
-                steps_to_train.append(istep)
-
+    steps_to_train = check_models(parameters)
     if not steps_to_train:
         logger.info('All models already trained')
         return models
 
     logger.info('Training CRBMs for Trotter steps %s', steps_to_train)
-
-    trained_models = train_fn(steps_to_train, ref_data)
-    if return_models:
-        for istep, model in trained_models.items():
-            models[istep] = model
-
-    return models
+    train_fn(steps_to_train)
 
 
 def train_generator(
     parameters: Parameters,
-    ref_data: list[tuple[np.ndarray, np.ndarray]],
     logger: Optional[logging.Logger] = None
-) -> list[ConditionalRBM]:
-    # def train_fn_threading(steps_to_train, _):
-    #     def train_on_device(istep, step_data, device_id):
+):
+    # def train_fn(steps_to_train):
+    #     def train_on_device(istep, device_id):
+    #         vdata, pdata = load_reco(parameters, etype='ref', istep=istep)
     #         with jax.default_device(jax.devices()[device_id]):
-    #             return train_step_model(istep, step_data[0], step_data[1], parameters.crbm)
+    #             return train_step_model(istep, vdata, pdata, parameters.crbm)
 
-    #     models = {}
     #     with ThreadPoolExecutor(jax.device_count()) as executor:
     #         futures = []
     #         for istep in steps_to_train:
     #             device_id = istep % jax.device_count()
     #             futures.append(
-    #                 executor.submit(train_on_device, istep, ref_data[istep], device_id)
+    #                 executor.submit(train_on_device, istep, device_id)
     #             )
 
     #     for istep, future in zip(steps_to_train, futures):
     #         model, records = future.result()
     #         save_model(parameters, istep, model, records)
-    #         models[istep] = model
 
-    #     return models
-
-    def train_fn_subprocess(steps_to_train, _):
+    def train_fn(steps_to_train):
         def run_script(istep, igpu):
             cmd = [
                 sys.executable,
                 str(pathlib.Path(__file__)),
                 parameters.pkgpath,
-                f'{istep}',
+                '--istep', f'{istep}',
                 '--gpu', f'{igpu}',  # train on igpu
             ]
             proc = subprocess.run(cmd, capture_output=True, check=True, text=True)
@@ -146,11 +119,6 @@ def train_generator(
                 stream.write(txt)
                 stream.flush()
 
-            # Load the model onto istep % ndev (instead of igpu)
-            model, _ = load_model(parameters, istep, istep % jax.device_count())
-            return model
-
-        models = {}
         with ThreadPoolExecutor(jax.device_count()) as executor:
             if (cvd := os.getenv('CUDA_VISIBLE_DEVICES')):
                 gpus = list(map(int, cvd.split(',')))
@@ -161,13 +129,9 @@ def train_generator(
                 igpu = gpus[iproc % len(gpus)]
                 futures.append(executor.submit(run_script, istep, igpu))
 
-        for istep, future in zip(steps_to_train, futures):
-            model = future.result()
-            models[istep] = model
+        wait(futures)    
 
-        return models
-
-    return train_generator_flow(parameters, ref_data, train_fn_subprocess, True, logger=logger)
+    train_generator_flow(parameters, train_fn, logger=logger)
 
 
 def train_step_model(
@@ -213,11 +177,17 @@ def train_step_model(
 
 if __name__ == '__main__':
     import argparse
+    from mpi4py import MPI
+
     parser = argparse.ArgumentParser()
     parser.add_argument('pkgpath')
-    parser.add_argument('istep', type=int)
+    parser.add_argument('--mpi', action='store_true')
+    parser.add_argument('--istep', type=int, nargs='+')
     parser.add_argument('--gpu')
+    parser.add_argument('--log-level', default='INFO')
     options = parser.parse_args()
+
+    logging.basicConfig(level=getattr(logging, options.log_level.upper()))
 
     if options.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = options.gpu
@@ -227,5 +197,16 @@ if __name__ == '__main__':
     with open(Path(options.pkgpath) / 'parameters.json', 'r', encoding='utf-8') as src:
         params = Parameters.model_validate_json(src.read())
 
-    vdata, pdata = load_reco(params, etype='ref', istep=options.istep)
-    train_step_model(params, options.istep, vdata, pdata)
+    if options.mpi:
+        if options.istep is None:
+            isteps = list(range(params.skqd.n_trotter_steps))
+        else:
+            isteps = options.istep
+
+        comm = MPI.COMM_WORLD
+        ist = isteps[comm.Get_rank()]
+    else:
+        ist = options.istep[0]
+
+    vdata, pdata = load_reco(params, etype='ref', istep=ist)
+    train_step_model(params, ist, vdata, pdata)

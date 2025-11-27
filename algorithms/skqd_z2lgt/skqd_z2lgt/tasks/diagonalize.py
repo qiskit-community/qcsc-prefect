@@ -18,6 +18,8 @@ from skqd_z2lgt.extensions import extensions
 from skqd_z2lgt.crbm import ConditionalRBM
 from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.utils import read_bits
+from skqd_z2lgt.tasks.preprocess import load_reco
+from skqd_z2lgt.tasks.train_generator import load_model
 from skqd_z2lgt.tasks.common import make_dual_lattice
 
 
@@ -162,7 +164,6 @@ def save_skqd_result(out, sqd_states, energy, eigvec, ham_proj=None):
 
 def diagonalize_init(
     parameters: Parameters,
-    exp_data: list[tuple[np.ndarray, np.ndarray]],
     jax_device_id: int = 0,
     logger: Optional[logging.Logger] = None
 ) -> tuple[float, np.ndarray]:
@@ -177,6 +178,7 @@ def diagonalize_init(
 
     logger.info('Performing SQD with observed (charge-corrected) plaquette states')
 
+    exp_data = load_reco(parameters, etype='exp')
     dual_lattice = make_dual_lattice(parameters)
     hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
     states = np.concatenate([pdata for _, pdata in exp_data], axis=0)
@@ -196,35 +198,31 @@ def diagonalize_init(
 
 def diagonalize(
     parameters: Parameters,
-    exp_data: list[tuple[np.ndarray, np.ndarray]],
     energy_init: float,
     states_init: np.ndarray,
-    crbm_models: Optional[list[ConditionalRBM]] = None,
-    ref_data: Optional[list[tuple[np.ndarray, np.ndarray]]] = None,
+    gen_mode: str,  # 'rcv' or 'rnd'
     jax_device_id: int = 0,
     logger: Optional[logging.Logger] = None
 ) -> float:
     logger = logger or logging.getLogger(__name__)
 
-    if crbm_models:
-        group_name = 'skqd_rcv'
-    else:
-        group_name = 'skqd_rnd'
-
+    group_name = f'skqd_{gen_mode}'
     saved_result = check_saved_result(parameters, group_name)
     if saved_result:
         logger.info('There is already an SKQD result saved in the file.')
         return saved_result[1]
 
+    exp_data = load_reco(parameters, etype='exp')
     dual_lattice = make_dual_lattice(parameters)
-    num_steps = parameters.skqd.n_trotter_steps
 
-    if crbm_models:
+    if gen_mode == 'rcv':
         generate_fn = make_batch_generator(parameters.skqd.num_gen)
-    elif ref_data is None:
-        logger.warning('Assuming single-plaquette flip probability of 0.5')
-        mean_activation = [np.full(exp_data[0][1].shape[1], 0.5)] * num_steps
+        logger.info('Loading and compiling CRBM models')
+        crbm_models = [load_model(parameters, istep, jax_device_id=istep % jax.device_count())[0]
+                       for istep in range(parameters.skqd.n_trotter_steps)]
+        compile_models(parameters, crbm_models)
     else:
+        ref_data = load_reco(parameters, etype='ref')
         logger.info('Using the mean of reference circuit data as single-plaquette probability')
         mean_activation = [np.mean(plaq_data, axis=0) for _, plaq_data in ref_data]
 
@@ -295,13 +293,11 @@ def diagonalize(
 if __name__ == '__main__':
     import sys
     import argparse
-    from skqd_z2lgt.tasks.preprocess import load_reco
-    from skqd_z2lgt.tasks.train_generator import load_model
 
     parser = argparse.ArgumentParser()
     parser.add_argument('pkgpath')
     parser.add_argument('--gpus', help='CUDA_VISIBLE_DEVICES')
-    parser.add_argument('--mode', default='full')
+    parser.add_argument('--mode', default='rcv')
     parser.add_argument('--log-level', default='INFO')
     options = parser.parse_args()
 
@@ -316,20 +312,11 @@ if __name__ == '__main__':
     with open(Path(options.pkgpath) / 'parameters.json', 'r', encoding='utf-8') as src:
         params = Parameters.model_validate_json(src.read())
 
-    edata = load_reco(params, 'exp')
-    en_init, st_init = diagonalize_init(params, edata)
+    en_init, st_init = diagonalize_init(params)
 
     if options.mode == 'init':
         sys.exit(0)
+    if options.mode not in ['rcv', 'rnd']:
+        raise ValueError(f'Invalid mode {options.mode}')
 
-    if options.mode == 'random':
-        crbms = None  # pylint: disable=invalid-name
-        rdata = load_reco(params, 'ref')
-    else:
-        rdata = None  # pylint: disable=invalid-name
-        crbms = [load_model(params, istep, istep % jax.device_count())[0]
-                 for istep in range(params.skqd.n_trotter_steps)]
-        LOG.info('Compiling CRBM models')
-        compile_models(params, crbms)
-
-    diagonalize(params, edata, en_init, st_init, crbm_models=crbms, ref_data=rdata)
+    diagonalize(params, en_init, st_init, options.mode)
