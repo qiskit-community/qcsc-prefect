@@ -123,21 +123,30 @@ def save_raw(
 
 def load_raw(
     parameters: Parameters,
-    etype: Optional[str] = None
-) -> tuple[list[BitArray], list[BitArray]] | list[BitArray]:
+    etype: Optional[str] = None,
+    istep: Optional[int] = None
+) -> tuple[list[BitArray], list[BitArray]] | list[BitArray] | BitArray:
     def read_bit_array(dataset):
         return BitArray(dataset[()], int(dataset.attrs['num_bits']))
-
-    num_steps = parameters.skqd.n_trotter_steps
+    
+    if etype is None:
+        etypes = ['exp', 'ref']
+    else:
+        etypes = [etype]
+    if istep is None:
+        isteps = list(range(parameters.skqd.n_trotter_steps))
+    else:
+        isteps = [istep]
 
     path = Path(parameters.pkgpath) / 'data' / 'raw.h5'
     with h5py.File(path, 'r', libver='latest') as source:
-        if etype is None:
-            return tuple(
-                [read_bit_array(source[f'{et}/step{istep}']) for istep in range(num_steps)]
-                for et in ['exp', 'ref']
-            )
-        return [read_bit_array(source[f'{etype}/step{istep}']) for istep in range(num_steps)]
+        data = tuple([read_bit_array(source[f'{et}/step{istep}']) for istep in isteps]
+                     for et in etypes)
+    if etype is None:
+        return data
+    elif istep is None:
+        return data[0]
+    return data[0][0]
 
 
 def sample_quantum_flow(
