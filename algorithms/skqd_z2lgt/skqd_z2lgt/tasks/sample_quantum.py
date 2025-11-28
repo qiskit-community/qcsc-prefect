@@ -4,7 +4,6 @@ from collections.abc import Callable
 import logging
 from pathlib import Path
 from typing import Optional
-import numpy as np
 import h5py
 from qiskit.circuit import QuantumCircuit
 from qiskit.transpiler import Target, PassManager, generate_preset_pass_manager
@@ -73,6 +72,7 @@ def save_raw(
     pub_result: PrimitiveResult,
     logger: Optional[logging.Logger] = None
 ):
+    """Save the sampled bitstrings to files."""
     logger = logger or logging.getLogger(__name__)
     logger.info('Saving raw link data')
     dirpath = Path(parameters.pkgpath) / 'data' / 'raw'
@@ -97,6 +97,7 @@ def load_raw(
     etype: Optional[str] = None,
     istep: Optional[int] = None
 ) -> tuple[list[BitArray], list[BitArray]] | list[BitArray] | BitArray:
+    """Load the sampled bitstrings from files."""
     def read_bit_array(dataset):
         return BitArray(dataset[()], int(dataset.attrs['num_bits']))
 
@@ -130,6 +131,7 @@ def sample_quantum_flow(
     sample_fn: Callable,
     logger: Optional[logging.Logger] = None
 ):
+    """General flow for obtaining bitstring samples from quantum circuits."""
     logger = logger or logging.getLogger(__name__)
 
     try:

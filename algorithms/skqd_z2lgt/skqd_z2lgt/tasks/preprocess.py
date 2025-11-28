@@ -1,3 +1,4 @@
+# pylint: disable=invalid-name
 """Preprocess raw data (link states with errors) and convert them to vertex and plaquette data."""
 import os
 from collections.abc import Callable
@@ -6,7 +7,6 @@ from pathlib import Path
 from typing import Optional
 import numpy as np
 import h5py
-from qiskit.primitives import BitArray
 from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.mwpm import convert_link_to_plaq
 from skqd_z2lgt.utils import read_bits, save_bits
@@ -21,6 +21,7 @@ def save_reco(
     reco_data: tuple[RecoData, RecoData],
     logger: Optional[logging.Logger] = None
 ):
+    """Save vertex and plaquette data to files."""
     logger = logger or logging.getLogger(__name__)
     logger.info('Saving vertex and plaquette data')
     dirpath = Path(parameters.pkgpath) / 'data' / 'reco'
@@ -42,6 +43,7 @@ def load_reco(
     etype: Optional[str] = None,
     istep: Optional[int] = None
 ) -> tuple[RecoData, RecoData] | RecoData | tuple[np.ndarray, np.ndarray]:
+    """Load vertex and plaquette data from files."""
     if etype is None:
         etypes = ['exp', 'ref']
     else:
@@ -53,14 +55,14 @@ def load_reco(
 
     dirpath = Path(parameters.pkgpath) / 'data' / 'reco'
     data = tuple([] for _ in range(len(etypes)))
-    for et, rdata in zip(etypes, data):
-        for ist in isteps:
-            with h5py.File(dirpath / f'{et}_step{ist}.h5', 'r', libver='latest') as source:
+    for etp, rdata in zip(etypes, data):
+        for istp in isteps:
+            with h5py.File(dirpath / f'{etp}_step{istp}.h5', 'r', libver='latest') as source:
                 rdata.append((read_bits(source['vtx']), read_bits(source['plaq'])))
 
     if etype is None:
         return data
-    elif istep is None:
+    if istep is None:
         return data[0]
     return data[0][0]
 
@@ -90,6 +92,7 @@ def preprocess(
     parameters: Parameters,
     logger: Optional[logging.Logger] = None
 ):
+    """Standalone preprocess function."""
     def convert_fn():
         dual_lattice = make_dual_lattice(parameters)
         raw_data = load_raw(parameters)
@@ -133,7 +136,7 @@ def preprocess_single_array(
 
 if __name__ == '__main__':
     import argparse
-    from mpi4py import MPI
+    from mpi4py import MPI  # pylint: disable=no-name-in-module
 
     parser = argparse.ArgumentParser()
     parser.add_argument('pkgpath')

@@ -22,6 +22,7 @@ from skqd_z2lgt.tasks.preprocess import load_reco
 def check_models(
     parameters: Parameters
 ) -> list[int]:
+    """Check existence of saved models without loading."""
     missing_isteps = []
     dirpath = Path(parameters.pkgpath) / 'crbm'
     for istep in range(parameters.skqd.n_trotter_steps):
@@ -35,6 +36,7 @@ def load_model(
     istep: int,
     jax_device_id: Optional[int] = None
 ) -> tuple[ConditionalRBM, dict[str, np.ndarray]]:
+    """Construct CRBM models from saved weights."""
     if jax_device_id is None:
         device = None
     else:
@@ -54,6 +56,7 @@ def save_model(
     model: ConditionalRBM,
     records: dict[str, np.ndarray]
 ):
+    """Save the weight parameters of the CRBM model into file."""
     path = Path(parameters.pkgpath) / 'crbm' / f'step{istep}.h5'
     try:
         os.makedirs(path.parent)
@@ -72,6 +75,7 @@ def train_generator_flow(
     train_fn: Callable,
     logger: Optional[logging.Logger] = None
 ):
+    """General flow for training CRBM models."""
     logger = logger or logging.getLogger(__name__)
 
     steps_to_train = check_models(parameters)
@@ -87,6 +91,7 @@ def train_generator(
     parameters: Parameters,
     logger: Optional[logging.Logger] = None
 ):
+    """Standalone training function."""
     # def train_fn(steps_to_train):
     #     def train_on_device(istep, device_id):
     #         vdata, pdata = load_reco(parameters, etype='ref', istep=istep)
@@ -141,6 +146,7 @@ def train_step_model(
     plaq_data: np.ndarray,
     logger: Optional[logging.Logger] = None
 ):
+    """Train a single CRBM model."""
     logger = logger or logging.getLogger(__name__)
 
     train_u = vtx_data[:80_000]
@@ -177,7 +183,7 @@ def train_step_model(
 
 if __name__ == '__main__':
     import argparse
-    from mpi4py import MPI
+    from mpi4py import MPI  # pylint: disable=no-name-in-module
 
     parser = argparse.ArgumentParser()
     parser.add_argument('pkgpath')

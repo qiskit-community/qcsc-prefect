@@ -23,7 +23,7 @@ from skqd_z2lgt.tasks.train_generator import load_model
 from skqd_z2lgt.tasks.common import make_dual_lattice
 
 
-def generate_states(model, vtx_data, plaq_data, generate_fn, batch_size):
+def _generate_states(model, vtx_data, plaq_data, generate_fn, batch_size):
     shots = plaq_data.shape[0]
     num_p = plaq_data.shape[1]
 
@@ -47,7 +47,7 @@ def generate_states(model, vtx_data, plaq_data, generate_fn, batch_size):
     return np.array(gen_data.reshape((-1, num_p)))
 
 
-def make_batch_generator(num_gen):
+def _make_batch_generator(num_gen):
     @nnx.scan(in_axes=(nnx.Carry, 0, 0), out_axes=(nnx.Carry, 0))
     @nnx.jit
     def generate_fn(model, vtx_batch, plaq_batch):
@@ -58,7 +58,7 @@ def make_batch_generator(num_gen):
     return generate_fn
 
 
-def generate_with_crbm(
+def _generate_with_crbm(
     parameters: Parameters,
     exp_data: list[tuple[np.ndarray, np.ndarray]],
     crbm_models: list[ConditionalRBM],
@@ -74,7 +74,7 @@ def generate_with_crbm(
     start = time.time()
     with ThreadPoolExecutor() as executor:
         futures = [
-            executor.submit(generate_states,
+            executor.submit(_generate_states,
                             crbm_models[istep], exp_data[istep][0], exp_data[istep][1],
                             generate_fn, parameters.crbm.gen_batch_size)
             for istep in range(len(exp_data))
@@ -85,6 +85,7 @@ def generate_with_crbm(
 
 
 def compile_models(parameters: Parameters, models: list[ConditionalRBM]):
+    """Compile the sample function of the CRBM models."""
     for crbm in models:
         with jax.default_device(crbm.weights_vu.value.device):
             crbm.sample(
@@ -94,7 +95,7 @@ def compile_models(parameters: Parameters, models: list[ConditionalRBM]):
             )
 
 
-def generate_random(
+def _generate_random(
     parameters: Parameters,
     exp_data: list[tuple[np.ndarray, np.ndarray]],
     mean_activation: list[np.ndarray],
@@ -119,7 +120,7 @@ def generate_random(
     return gen_states
 
 
-def get_relevant_states(states: np.ndarray, eigvec: np.ndarray, cutoff: float) -> np.ndarray:
+def _get_relevant_states(states: np.ndarray, eigvec: np.ndarray, cutoff: float) -> np.ndarray:
     return states[np.square(np.abs(eigvec)) > cutoff]
 
 
@@ -127,30 +128,29 @@ def check_saved_result(
     parameters: Parameters,
     result_name: str
 ) -> tuple[np.ndarray, float, np.ndarray] | None:
+    """Check and return the saved SKQD result."""
     path = Path(parameters.pkgpath) / f'{result_name}.h5'
     if os.path.exists(path):
         with h5py.File(path, 'r', libver='latest') as source:
-            states, energy, eigvec, _ = load_skqd_result(source)
-            return states, energy, eigvec
+            sqd_states = read_bits(source['sqd_states'])
+            energy = source['energy'][()]
+            eigvec = source['eigvec'][()]
+        return sqd_states, energy, eigvec
     return None
 
 
-def load_skqd_result(group):
-    sqd_states = read_bits(group['sqd_states'])
-    energy = group['energy'][()]
-    eigvec = group['eigvec'][()]
-    if (subgroup := group.get('ham_proj')) is None:
-        ham_proj = None
-    else:
-        data = subgroup['data'][()]
-        indices = subgroup['indices'][()]
-        indptr = subgroup['indptr'][()]
-        shape = (indptr.shape[0] - 1,) * 2
-        ham_proj = csr_array((data, indices, indptr), shape=shape)
-    return sqd_states, energy, eigvec, ham_proj
+def load_projected_hamiltonian(source: h5py.Group):
+    """Construct a CSR array from saved Hamiltonian data."""
+    subgroup = source['ham_proj']
+    data = subgroup['data'][()]
+    indices = subgroup['indices'][()]
+    indptr = subgroup['indptr'][()]
+    shape = (indptr.shape[0] - 1,) * 2
+    return csr_array((data, indices, indptr), shape=shape)
 
 
 def save_skqd_result(out, sqd_states, energy, eigvec, ham_proj=None):
+    """Save the SKQD result to file."""
     dataset = out.create_dataset('sqd_states', data=np.packbits(sqd_states, axis=1))
     dataset.attrs['num_bits'] = sqd_states.shape[-1]
     out.create_dataset('energy', data=energy)
@@ -167,13 +167,14 @@ def diagonalize_init(
     jax_device_id: int = 0,
     logger: Optional[logging.Logger] = None
 ) -> tuple[float, np.ndarray]:
+    """Project and diagonalize the Hamiltonian directly with MWPM-corrected plaquette states."""
     logger = logger or logging.getLogger(__name__)
 
     saved_result = check_saved_result(parameters, 'skqd_init')
     if saved_result:
         logger.info('There is already an SKQD result saved in the file.')
         states, energy, eigvec = saved_result[:3]
-        relevant_states = get_relevant_states(states, eigvec, parameters.skqd.probability_cutoff)
+        relevant_states = _get_relevant_states(states, eigvec, parameters.skqd.probability_cutoff)
         return energy, relevant_states
 
     logger.info('Performing SQD with observed (charge-corrected) plaquette states')
@@ -191,7 +192,7 @@ def diagonalize_init(
     with h5py.File(path, 'w', libver='latest') as out:
         save_skqd_result(out, states, energy, eigvec, ham_proj)
 
-    relevant_states = get_relevant_states(states, eigvec, parameters.skqd.probability_cutoff)
+    relevant_states = _get_relevant_states(states, eigvec, parameters.skqd.probability_cutoff)
 
     return energy, relevant_states
 
@@ -204,6 +205,7 @@ def diagonalize(
     jax_device_id: int = 0,
     logger: Optional[logging.Logger] = None
 ) -> float:
+    """Project and diagonalize the Hamiltonian with configuration recovery or random bitflips."""
     logger = logger or logging.getLogger(__name__)
 
     group_name = f'skqd_{gen_mode}'
@@ -217,7 +219,7 @@ def diagonalize(
     hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
 
     if gen_mode == 'rcv':
-        generate_fn = make_batch_generator(parameters.skqd.num_gen)
+        generate_fn = _make_batch_generator(parameters.skqd.num_gen)
         logger.info('Loading and compiling CRBM models')
         crbm_models = [load_model(parameters, istep, jax_device_id=istep % jax.device_count())[0]
                        for istep in range(parameters.skqd.n_trotter_steps)]
@@ -238,10 +240,10 @@ def diagonalize(
         logger.info('Iteration %d: %d relevant states', it, relevant_states.shape[0])
         is_last = it == parameters.skqd.max_iterations - 1
 
-        if crbm_models:
-            gen_states = generate_with_crbm(parameters, exp_data, crbm_models, generate_fn, logger)
+        if gen_mode == 'rcv':
+            gen_states = _generate_with_crbm(parameters, exp_data, crbm_models, generate_fn, logger)
         else:
-            gen_states = generate_random(parameters, exp_data, mean_activation, 12345 + it, logger)
+            gen_states = _generate_random(parameters, exp_data, mean_activation, 12345 + it, logger)
 
         states = np.concatenate([relevant_states] + gen_states, axis=0)
         for fname in parameters.skqd.extensions:
@@ -277,8 +279,8 @@ def diagonalize(
             break
 
         prev_energy = energy
-        relevant_states = get_relevant_states(sqd_states, eigvec,
-                                              parameters.skqd.probability_cutoff)
+        relevant_states = _get_relevant_states(sqd_states, eigvec,
+                                               parameters.skqd.probability_cutoff)
 
     ham_proj = sqd_result[-1]
 
