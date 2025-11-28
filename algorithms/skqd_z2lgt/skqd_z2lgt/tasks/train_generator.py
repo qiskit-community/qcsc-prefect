@@ -77,7 +77,7 @@ def train_generator_flow(
     steps_to_train = check_models(parameters)
     if not steps_to_train:
         logger.info('All models already trained')
-        return models
+        return
 
     logger.info('Training CRBMs for Trotter steps %s', steps_to_train)
     train_fn(steps_to_train)
@@ -129,7 +129,7 @@ def train_generator(
                 igpu = gpus[iproc % len(gpus)]
                 futures.append(executor.submit(run_script, istep, igpu))
 
-        wait(futures)    
+        wait(futures)
 
     train_generator_flow(parameters, train_fn, logger=logger)
 

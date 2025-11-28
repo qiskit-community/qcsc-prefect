@@ -214,6 +214,7 @@ def diagonalize(
 
     exp_data = load_reco(parameters, etype='exp')
     dual_lattice = make_dual_lattice(parameters)
+    hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
 
     if gen_mode == 'rcv':
         generate_fn = make_batch_generator(parameters.skqd.num_gen)

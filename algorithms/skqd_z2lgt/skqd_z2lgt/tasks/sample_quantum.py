@@ -99,7 +99,7 @@ def load_raw(
 ) -> tuple[list[BitArray], list[BitArray]] | list[BitArray] | BitArray:
     def read_bit_array(dataset):
         return BitArray(dataset[()], int(dataset.attrs['num_bits']))
-    
+
     if etype is None:
         etypes = ['exp', 'ref']
     else:
@@ -110,15 +110,14 @@ def load_raw(
         isteps = [istep]
 
     dirpath = Path(parameters.pkgpath) / 'data' / 'raw'
-    data = []
-    for etype in etypes:
-        data.append([])
-        for istep in isteps:
-            with h5py.File(dirpath / f'{etype}_step{istep}.h5', 'r', libver='latest') as source:
-                data[-1].append(read_bit_array(source['link']))
+    data = tuple([] for _ in range(len(etypes)))
+    for et, rdata in zip(etypes, data):
+        for ist in isteps:
+            with h5py.File(dirpath / f'{et}_step{ist}.h5', 'r', libver='latest') as source:
+                rdata.append(read_bit_array(source['link']))
 
     if etype is None:
-        return tuple(data)
+        return data
     elif istep is None:
         return data[0]
     return data[0][0]

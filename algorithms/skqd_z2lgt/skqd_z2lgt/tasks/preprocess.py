@@ -52,15 +52,14 @@ def load_reco(
         isteps = [istep]
 
     dirpath = Path(parameters.pkgpath) / 'data' / 'reco'
-    data = []
-    for etype in etypes:
-        data.append([])
-        for istep in isteps:
-            with h5py.File(dirpath / f'{etype}_step{istep}.h5', 'r', libver='latest') as source:
-                data[-1].append((read_bits(source['vtx']), read_bits(source['plaq'])))
+    data = tuple([] for _ in range(len(etypes)))
+    for et, rdata in zip(etypes, data):
+        for ist in isteps:
+            with h5py.File(dirpath / f'{et}_step{ist}.h5', 'r', libver='latest') as source:
+                rdata.append((read_bits(source['vtx']), read_bits(source['plaq'])))
 
     if etype is None:
-        return tuple(data)
+        return data
     elif istep is None:
         return data[0]
     return data[0][0]
@@ -115,7 +114,7 @@ def preprocess_single_array(
     """Preprocess one bit array parallelized over all cores and save the result."""
     logger = logger or logging.getLogger(__name__)
     logger.info('Preprocessing %s step %d', etype, istep)
-    
+
     bit_array = load_raw(parameters, etype, istep)
     dual_lattice = make_dual_lattice(parameters)
     batch_size = bit_array.num_shots // (os.cpu_count() - 1)
