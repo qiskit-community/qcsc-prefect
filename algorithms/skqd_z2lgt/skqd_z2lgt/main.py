@@ -19,6 +19,7 @@ from skqd_z2lgt.tasks.sample_quantum import sample_quantum_flow
 from skqd_z2lgt.tasks.preprocess import preprocess_flow
 from skqd_z2lgt.tasks.train_generator import train_generator_flow
 from skqd_z2lgt.tasks.diagonalize import check_saved_result
+from skqd_z2lgt.tasks.common import make_dual_lattice
 
 TASK_SCRIPT_DIR = Path(__file__).parents[0] / 'tasks'
 
@@ -97,29 +98,31 @@ async def dmrg(
     logger = get_run_logger()
     logger.info('Estimating ground-state energy via DMRG')
 
+    def run_dmrg_and_sampling(_parameters):
+        with tempfile.NamedTemporaryFile() as tfile:
+            filename = tfile.name
+
+        dual_lattice = make_dual_lattice(_parameters)
+        hamiltonian = dual_lattice.make_hamiltonian(_parameters.lgt.plaquette_energy)
+        dp = _parameters.dmrg
+        julia_bin = 'julia'
+        if dp.julia_sysimage:
+            julia_bin = ['julia', '--sysimage', dp.julia_sysimage]
+
+        energy = ising_dmrg(hamiltonian, filename=filename, nsweeps=dp.nsweeps, maxdim=dp.maxdim,
+                            cutoff=dp.cutoff, julia_bin=julia_bin)
+        states, probs = get_mps_probs(filename, num_samples=dp.num_samples,
+                                      num_threads=os.cpu_count(), julia_bin=julia_bin)
+        os.unlink(filename)
+        return energy, states, probs
+
     job_block = await PyFunctionJob.load(cpu_pyfuncjob_name)
 
-    dmrg_params = parameters.dmrg
-    julia_bin = 'julia'
-    if dmrg_params.julia_sysimage:
-        julia_bin = ['julia', '--sysimage', dmrg_params.julia_sysimage]
-
-    def dmrg_fn(hamiltonian):
-        async def fn():
-            with tempfile.NamedTemporaryFile(dir=parameters.pkgpath) as tfile:
-                filename = tfile.name
-            energy = await job_block.run(ising_dmrg, hamiltonian, filename=filename,
-                                         nsweeps=dmrg_params.nsweeps,
-                                         maxdim=dmrg_params.maxdim, cutoff=dmrg_params.cutoff,
-                                         julia_bin=julia_bin)
-            states, probs = await job_block.run(get_mps_probs, filename,
-                                                num_samples=dmrg_params.num_samples,
-                                                julia_bin=julia_bin)
-            os.unlink(filename)
-            return energy, states, probs
-
+    def dmrg_fn():
         with ThreadPoolExecutor(1) as executor:
-            return executor.submit(lambda: asyncio.run(fn())).result()
+            return executor.submit(
+                lambda: asyncio.run(job_block.run(run_dmrg_and_sampling, parameters))
+            ).result()
 
     return dmrg_flow(parameters, dmrg_fn, logger)
 

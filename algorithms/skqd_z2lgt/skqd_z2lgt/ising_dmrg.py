@@ -91,6 +91,7 @@ def ising_dmrg(
 def get_mps_probs(
     filename: str,
     num_samples: int = 100000,
+    num_threads: Optional[int] = None,
     julia_bin: str | list[str] = 'julia'
 ) -> tuple[np.ndarray, np.ndarray]:
     """Call mps_sparsity.jl and get the list of probable computational basis states."""
@@ -102,6 +103,9 @@ def get_mps_probs(
 
     if isinstance(julia_bin, str):
         julia_bin = [julia_bin]
+
+    if num_threads is not None:
+        julia_bin += ['-t', f'{num_threads}']
 
     proc = subprocess.run(julia_bin + [program, filename, str(num_samples)],
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
