@@ -111,6 +111,39 @@ def vertical_reflection(states: np.ndarray, dual_lattice: PlaquetteDual):
     return np.concatenate([states, states[:, reflection]], axis=0)
 
 
+def denoising(states: np.ndarray, dual_lattice: PlaquetteDual):
+    """Append "denoised" states where plaquettes disconnected to charges are removed."""
+    lattice = dual_lattice.primal
+    charge_dist = lattice.get_syndrome(dual_lattice.base_link_state)
+    charged_vertices = set(np.nonzero(charge_dist[::-1])[0].tolist())
+    if len(charged_vertices) == 0:
+        return np.zeros_like(states)
+
+    plaq_link_matrix = np.zeros((lattice.num_plaquettes, lattice.num_links), dtype=np.uint8)
+    for ip in range(lattice.num_plaquettes):
+        plaq_link_matrix[::-1, ::-1][ip, lattice.plaquette_links(ip)] = 1
+
+    link_states = np.bitwise_xor.reduce(states[..., None] * plaq_link_matrix[None, ...], axis=1)
+    link_states ^= dual_lattice.base_link_state
+    denoised_states = np.empty_like(states)
+    link_vtx_map = {key: value[:2] for key, value in lattice.graph.edge_index_map.items()}
+    for istate, link_state in enumerate(link_states):
+        rev_denoised_link_state = np.zeros_like(link_state)
+        lids = np.nonzero(link_state[::-1])[0]
+        edge_subgraph = lattice.graph.edge_subgraph([link_vtx_map[lid] for lid in lids])
+        cc = rx.connected_components(edge_subgraph)  # pylint: disable=no-member
+        for nodes in cc:
+            if charged_vertices <= nodes:
+                subgraph = lattice.graph.subgraph(nodes)
+                for link in subgraph.edges():
+                    rev_denoised_link_state[link.link_id] = 1
+                break
+
+        denoised_states[istate] = dual_lattice.map_link_state(rev_denoised_link_state[::-1])
+
+    return np.concatenate([states, denoised_states], axis=0)
+
+
 extensions = {
     'perturbation_0q': perturbation_0q,
     'perturbation_2q': perturbation_2q,
