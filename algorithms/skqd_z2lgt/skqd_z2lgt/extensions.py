@@ -6,12 +6,12 @@ from heavyhex_qft.plaquette_dual import PlaquetteDual
 from heavyhex_qft.pure_z2_lgt import DummyPlaquette
 
 
-def perturbation_0q(states: np.ndarray, dual_lattice: PlaquetteDual):
+def perturbation_0q(states: np.ndarray, dual_lattice: PlaquetteDual, order: int = 4):
     """Append perturbative states up to 4th order in the 0-charge sector."""
-    return np.concatenate([states, _plaquette_excitations(dual_lattice)], axis=0)
+    return np.concatenate([states, _plaquette_excitations(dual_lattice, order)], axis=0)
 
 
-def perturbation_2q(states: np.ndarray, dual_lattice: PlaquetteDual):
+def perturbation_2q(states: np.ndarray, dual_lattice: PlaquetteDual, order: int = 4):
     """Append perturbative states in a 2-charge sector."""
     lattice = dual_lattice.primal
     charge_dist = lattice.get_syndrome(dual_lattice.base_link_state)
@@ -26,22 +26,26 @@ def perturbation_2q(states: np.ndarray, dual_lattice: PlaquetteDual):
         links = [nodes_to_edge[(n1, n2)] for n1, n2 in zip(path[:-1], path[1:])]
         rev_link_state[links] = 1
         free_grounds[ipath] = dual_lattice.map_link_state(rev_link_state[::-1])
-    excitations = _plaquette_excitations(dual_lattice)
+    excitations = _plaquette_excitations(dual_lattice, order)
     free_grounds = np.tile(free_grounds, (1, excitations.shape[0]))
     pert_states = free_grounds.reshape((len(paths),) + excitations.shape) ^ excitations
     pert_states = np.unique(pert_states.reshape((-1, states.shape[1])), axis=0)
     return np.concatenate([states, pert_states], axis=0)
 
 
-def _plaquette_excitations(dual_lattice: PlaquetteDual):
+def _plaquette_excitations(dual_lattice: PlaquetteDual, order: int):
     num_p = dual_lattice.num_plaquettes
-    num_states = sum(math.comb(num_p, i) for i in range(5))
+    num_states = sum(math.comb(num_p, i) for i in range(order + 1))
     states = np.zeros((num_states, num_p), dtype=np.uint8)
+    if order < 1:
+        return states
     # 1 plaquette
     start = 1
     end = start + num_p
     states[np.arange(start, end), np.arange(num_p)[::-1]] = 1
     start = end
+    if order < 2:
+        return states
     # 2 plaquettes
     for idx in range(num_p):
         indices = np.arange(idx + 1, num_p)
@@ -49,6 +53,8 @@ def _plaquette_excitations(dual_lattice: PlaquetteDual):
         states[np.arange(start, end), idx] = 1
         states[np.arange(start, end), indices] = 1
         start = end
+    if order < 3:
+        return states
     # 3 plaquettes
     for idx1 in range(num_p):
         for idx2 in range(idx1 + 1, num_p):
@@ -58,6 +64,8 @@ def _plaquette_excitations(dual_lattice: PlaquetteDual):
             states[np.arange(start, end), idx2] = 1
             states[np.arange(start, end), indices] = 1
             start = end
+    if order < 4:
+        return states
     # 4 plaquettes
     for idx1 in range(num_p):
         for idx2 in range(idx1 + 1, num_p):
