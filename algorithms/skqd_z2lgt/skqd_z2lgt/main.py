@@ -346,8 +346,8 @@ if __name__ == '__main__':
                         format='%(asctime)s:%(name)s:%(levelname)s %(message)s')
 
     if os.path.isdir(args.parameters):
-        with open(Path(args.parameters) / 'parameters.json', 'r', encoding='utf-8') as source:
-            params = Parameters.model_validate_json(source.read())
+        with open(Path(args.parameters) / 'parameters.json', 'r', encoding='utf-8') as src:
+            params = Parameters.model_validate_json(src.read())
     else:
         with open(args.parameters, 'r', encoding='utf-8') as src:
             params = Parameters(**yaml.load(src, yaml.Loader))
