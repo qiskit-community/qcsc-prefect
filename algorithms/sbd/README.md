@@ -26,8 +26,8 @@ When the `sqd-runtime` block doesn't exist, the bit sampling switchs to the rand
 
 Before starting, make sure:
 
-- You have completed [How to Set Up IBM Quantum Access Credentials for Prefect](../howto/setup_prefect_qiskit.md).
-- You have completed [How to Set Up the MDX Workflow Server for QCSC Execution](../howto/setup_mdx_server.md).
+- You have completed [How to Set Up IBM Quantum Access Credentials for Prefect](../../docs/howto/howto_setup_prefect_qiskit.md).
+- You have completed [How to Set Up the MDX Workflow Server for QCSC Execution](../../docs/howto/howto_setup_mdx_server.md).
 
 ### SBD Integration
 Moreover, run the following command to register `prefect_sbd`.
