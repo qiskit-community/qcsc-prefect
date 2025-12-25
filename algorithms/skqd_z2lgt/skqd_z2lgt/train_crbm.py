@@ -46,8 +46,9 @@ class BaseCallback(nnx.Module):
         loss: jax.Array,
         iepoch: int,
         records: dict[str, Any]
-    ):
-        """Callback for per-epoch tests."""
+    ) -> bool:
+        """Callback for per-epoch tests. Returns True when stop condition is met."""
+        return False
 
 
 class DefaultCallback(BaseCallback):
@@ -136,12 +137,13 @@ class DefaultCallback(BaseCallback):
         loss: jax.Array,
         iepoch: int,
         records: dict[str, Any]
-    ):
+    ) -> bool:
         self._test_ext(model, test_u, test_v, loss, iepoch)
         self._test_update(model, test_u, test_v, loss)
         for metric, value in self.test_metrics.compute().items():
             records[f'test_{metric}'].append(float(value))
         self.test_metrics.reset()
+        return self._stop_training(iepoch, records)
 
     def _test_ext(
         self,
@@ -152,6 +154,16 @@ class DefaultCallback(BaseCallback):
         iepoch: int
     ):
         pass
+
+    def _stop_training(self, iepoch: int, records: dict[str, Any]) -> bool:
+        if iepoch < 5:
+            return False
+        recent = np.array(records['test_loss'][-5:])
+        if np.nonzero(np.diff(recent) > 0.)[0].shape[0] < 2:
+            return False
+        mean = np.mean(recent)
+        stddev = np.std(recent)
+        return np.all(np.abs(recent - mean) < stddev * 2.)
 
 
 class NLLCallback(DefaultCallback):
@@ -186,6 +198,16 @@ class SuccessRateCallback(DefaultCallback):
         samples = model.sample(test_u, 100)
         test = jnp.all(jnp.equal(test_v[None, ...], samples), axis=-1)
         return {f'success_{n}': jnp.any(test[:n], axis=0).astype(int) for n in [5, 10, 20, 100]}
+
+    def _stop_training(self, iepoch: int, records: dict[str, Any]) -> bool:
+        """Stop the training when more than 4 out of past 10 epochs failed to improve the smoothed
+        success rate in 100 samples."""
+        if iepoch < 20:
+            return False
+        sr = records['test_success_100']
+        nsr = len(sr)
+        smoothed = np.mean([sr[i:nsr - 9 + i] for i in range(10)], axis=0)
+        return np.count_nonzero(np.diff(smoothed[-10:]) < 0.) > 4
 
 
 @nnx.jit
@@ -255,7 +277,6 @@ def train_crbm(
     loss_fn: Callable[[ConditionalRBM, jax.Array, jax.Array], jax.Array],
     lr: float = 0.001,
     optax_fn: Optional[Callable] = None,
-    rtol: Optional[float] = None,
     seed: int = 0,
     callback: Optional[BaseCallback] = None,
     records: Optional[dict[str, Any]] = None
@@ -348,15 +369,8 @@ def train_crbm(
             epoch_losses.append(epoch_loss)
 
             test_loss = loss_fn(model, test_u, test_v)
-            callback.test(model, test_u, test_v, test_loss, iepoch, records)
-
-            if rtol is not None and iepoch >= 5:
-                recent = np.array(epoch_losses[-5:])
-                if np.nonzero(np.diff(recent) > 0.)[0].shape[0] >= 2:
-                    mean = np.mean(recent)
-                    stddev = np.std(recent)
-                    if np.all(np.abs(recent - mean) < stddev * rtol):
-                        break
+            if callback.test(model, test_u, test_v, test_loss, iepoch, records):
+                break
 
         except KeyboardInterrupt:
             LOG.info('Training interrupted by SIGINT')

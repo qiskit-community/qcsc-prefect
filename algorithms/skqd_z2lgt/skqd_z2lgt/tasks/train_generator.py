@@ -184,7 +184,7 @@ def train_single_model(
     best_model, records = train_crbm(model, train_u, train_v, test_u, test_v,
                                      crbm_params.train_batch_size, crbm_params.num_epochs,
                                      loss_fn, lr=crbm_params.learning_rate,
-                                     rtol=crbm_params.rtol, callback=SuccessRateCallback())
+                                     callback=SuccessRateCallback())
     save_model(parameters, best_model, records, idt, ikrylov, logger=logger)
 
 
