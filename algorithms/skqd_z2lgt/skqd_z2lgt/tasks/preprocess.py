@@ -128,16 +128,11 @@ def preprocess_single_array(
     logger.info('Preprocessing %s, time interval %f, Krylov vector %d',
                 etype, parameters.skqd.time_steps[idt], ikrylov)
 
-    bit_array = load_raw(parameters, etype, idt, ikrylov)
     dual_lattice = make_dual_lattice(parameters)
-    batch_size = bit_array.num_shots // (os.cpu_count() - 1)
+    batch_size = parameters.runtime.shots // (os.cpu_count() - 1)
+    bit_array = load_raw(parameters, etype, idt, ikrylov)
     arrays = convert_link_to_plaq(bit_array, dual_lattice, batch_size)
-
-    path = Path(parameters.pkgpath) / 'data' / 'reco' / f'{etype}_dt{idt}_k{ikrylov}.h5'
-    os.makedirs(path.parent, exist_ok=True)
-    with h5py.File(path, 'w', libver='latest') as out:
-        for name, array in zip(['vtx', 'plaq'], arrays):
-            save_bits(out, name, array)
+    save_reco(parameters, arrays, etype, idt, ikrylov, logger=logger)
 
 
 if __name__ == '__main__':
