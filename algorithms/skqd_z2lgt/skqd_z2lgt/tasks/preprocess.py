@@ -27,7 +27,7 @@ def save_reco(
 ):
     """Save vertex and plaquette data to files."""
     logger = logger or logging.getLogger(__name__)
-    logger.info('Saving vertex and plaquette data')
+    logger.info('Saving reco data for etype=%s idt=%d ikrylov=%d', etype, idt, ikrylov)
 
     path = Path(parameters.pkgpath) / 'data' / 'reco' / f'{etype}_dt{idt}_k{ikrylov}.h5'
     os.makedirs(path.parent, exist_ok=True)
@@ -42,7 +42,7 @@ def check_reco(
     idt: int,
     ikrylov: int,
     logger: Optional[logging.Logger] = None
-):
+) -> bool:
     logger = logger or logging.getLogger(__name__)
     path = Path(parameters.pkgpath) / 'data' / 'reco' / f'{etype}_dt{idt}_k{ikrylov}.h5'
     if os.path.exists(path):
@@ -86,8 +86,6 @@ def preprocess_flow(
 ):
     """Correct the link-state bitstrings with MWPM and convert to plaquette-state bitstrings."""
     logger = logger or logging.getLogger(__name__)
-    logger.info('Correcting the charge sector of link-state bitstrings and converting them to '
-                'vertex and plaquette data')
 
     tasks = []
     for etype in ['exp', 'ref']:
@@ -96,6 +94,11 @@ def preprocess_flow(
                 if not check_reco(parameters, etype, idt, ikrylov, logger=logger):
                     tasks.append((etype, idt, ikrylov))
 
+    if not tasks:
+        logger.info('All link-state bitstrings already converted to vertex and plaquette data')
+        return
+
+    logger.info('Correcting %d raw BitArrays to vertex and plaquette data', len(tasks))
     convert_fn(tasks)
 
 
@@ -158,7 +161,7 @@ if __name__ == '__main__':
         etypes = options.etype.split(',')
         idts = list(map(int, options.idt.split(',')))
         ikrylovs = list(map(int, options.ikrylov.split(',')))
-        if not (len(etypes) == len(idts) == len(ikrylovs)):
+        if not len(etypes) == len(idts) == len(ikrylovs):
             raise ValueError('Lengths of etype, idt, and ikrylov lists do not match')
         task_specs = list(zip(etypes, idts, ikrylovs))
     else:

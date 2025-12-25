@@ -259,15 +259,20 @@ async def train_generator(
     logger = get_run_logger()
     logger.info('Training conditional restricted Boltzmann machines')
 
-    job_block = await MiyabiJobBlock.load(cuda_scriptjob_name)
-    job_block.mpiprocs = 1
-    job_block.walltime = '01:00:00'
+    async def run_train_job(task_specs):
+        job_block = await MiyabiJobBlock.load(cuda_scriptjob_name)
+        job_block.mpiprocs = 1
+        job_block.walltime = '01:00:00'
+        job_block.num_nodes = len(task_specs)
 
-    async def run_train_job(steps_to_train):
-        job_block.num_nodes = len(steps_to_train)
         with job_block.get_executor() as executor:
-            arguments = [TASK_SCRIPT_DIR / 'train_generator.py', parameters.pkgpath, '--mpi']
-            arguments += ['--istep'] + [f'{istep}' for istep in steps_to_train]
+            arguments = [
+                TASK_SCRIPT_DIR / 'train_generator.py',
+                parameters.pkgpath,
+                '--mpi',
+                '--idt', ','.join(str(task[1]) for task in task_specs),
+                '--ikrylov', ','.join(str(task[2]) for task in task_specs)
+            ]
             exit_status = await executor.execute_job(
                 arguments=arguments,
                 **job_block.get_job_variables()
@@ -275,9 +280,9 @@ async def train_generator(
         if exit_status != 0:
             raise RuntimeError('PBS job train_generator.py failed')
 
-    def train_fn(steps_to_train):
+    def train_fn(task_specs):
         with ThreadPoolExecutor(1) as executor:
-            return executor.submit(lambda: asyncio.run(run_train_job(steps_to_train))).result()
+            return executor.submit(lambda: asyncio.run(run_train_job(task_specs))).result()
 
     train_generator_flow(parameters, train_fn, logger=logger)
 
