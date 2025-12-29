@@ -77,6 +77,7 @@ def load_model(
                     jnp.zeros((compile_for[0], model.weights_vu.shape[1]), dtype=np.uint8),
                     size=compile_for[1]
                 )
+    return model
 
 
 def train_generator_flow(

@@ -1,7 +1,6 @@
 # pylint: disable=no-member
 """SKQD with configuration recovery."""
 import os
-from collections.abc import Callable
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -11,77 +10,61 @@ import numpy as np
 from scipy.sparse import csr_array
 import h5py
 import jax
-import jax.numpy as jnp
 from flax import nnx
-from skqd_z2lgt.sqd import sqd, make_hproj
+from skqd_z2lgt.sqd import sqd, make_hproj, uniquify_states
 from skqd_z2lgt.extensions import extensions
 from skqd_z2lgt.crbm import ConditionalRBM
 from skqd_z2lgt.parameters import Parameters
-from skqd_z2lgt.utils import read_bits
+from skqd_z2lgt.utils import read_bits, save_bits
 from skqd_z2lgt.tasks.preprocess import RecoData, load_reco
 from skqd_z2lgt.tasks.train_generator import load_model
 from skqd_z2lgt.tasks.common import make_dual_lattice
 
 
-def _generate_states(model, reco_data, generate_fn, batch_size):
-    vtx_data, plaq_data = reco_data
-    shots = plaq_data.shape[0]
-    num_p = plaq_data.shape[1]
-
-    with jax.default_device(model.weights_vu.value.device):
-        num_batches = int(np.ceil(shots / batch_size).astype(int))
-        residue = num_batches * batch_size - shots
-        if residue != 0:
-            padding = np.zeros((residue,) + vtx_data.shape[1:], dtype=np.uint8)
-            vtx_data = jnp.concatenate([vtx_data, padding], axis=0)
-            padding = np.zeros((residue,) + plaq_data.shape[1:], dtype=np.uint8)
-            plaq_data = jnp.concatenate([plaq_data, padding], axis=0)
-        else:
-            vtx_data = jax.device_put(vtx_data)
-            plaq_data = jax.device_put(plaq_data)
-
-        vtx_data = vtx_data.reshape((num_batches, batch_size,) + vtx_data.shape[1:])
-        plaq_data = plaq_data.reshape((num_batches, batch_size,) + plaq_data.shape[1:])
-
-        gen_data = generate_fn(model, vtx_data, plaq_data)[1]
-
-    return np.array(gen_data.reshape((-1, num_p)))
-
-
-def _make_batch_generator(num_gen):
-    @nnx.scan(in_axes=(nnx.Carry, 0, 0), out_axes=(nnx.Carry, 0))
-    @nnx.jit
-    def generate_fn(model, vtx_batch, plaq_batch):
-        sample = model.sample(vtx_batch, size=num_gen)
+@nnx.jit(static_argnums=[3])
+def _generate_states(model, vtx_data, plaq_data, num_gen):
+    @nnx.scan(in_axes=(nnx.Carry, 0, 0), out_axes=(nnx.Carry, 0,))
+    def generate_fn(_model, vtx_batch, plaq_batch):
+        sample = _model.sample(vtx_batch, size=num_gen)
         flips = sample.transpose((1, 0, 2))
-        return model, plaq_batch[:, None, :] ^ flips
+        return _model, plaq_batch[:, None, :] ^ flips
 
-    return generate_fn
+    return generate_fn(model, vtx_data, plaq_data)[1].reshape((-1, plaq_data.shape[-1]))
+
+
+def _generate_states_on(model, vtx_data, plaq_data, num_gen):
+    with jax.default_device(model.weights_vu.value.device):
+        return _generate_states(model, vtx_data, plaq_data, num_gen)
 
 
 def _generate_cr(
     parameters: Parameters,
     exp_data: list[list[RecoData]],
     crbm_models: list[list[ConditionalRBM]],
-    generate_fn: Callable,
+    parallelize: bool = True,
     logger: Optional[logging.Logger] = None
 ) -> list[np.ndarray]:
     logger = logger or logging.getLogger(__name__)
-    num_steps = len(exp_data)
-    shots = exp_data[0][0].shape[0]
-
-    logger.info('Generating for %d steps, %d shots, %d samples per shot',
-                num_steps, shots, parameters.skqd.num_gen)
+    logger.info('Generating %d samples for each of %d shots',
+                parameters.skqd.num_gen, parameters.runtime.shots_exp)
     start = time.time()
-    with ThreadPoolExecutor() as executor:
-        futures = [
-            executor.submit(_generate_states,
-                            crbm_models[idt][ikr], exp_data[idt][ikr], generate_fn,
-                            parameters.crbm.gen_batch_size)
+    if parallelize:
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(_generate_states_on,
+                                crbm_models[idt][ikr], exp_data[idt][ikr][0], exp_data[idt][ikr][1],
+                                parameters.skqd.num_gen)
+                for idt in range(len(parameters.skqd.time_steps))
+                for ikr in range(parameters.skqd.num_krylov)
+            ]
+        gen_states = [future.result() for future in futures]
+    else:
+        gen_states = [
+            _generate_states_on(crbm_models[idt][ikr], exp_data[idt][ikr][0], exp_data[idt][ikr][1],
+                                parameters.skqd.num_gen)
             for idt in range(len(parameters.skqd.time_steps))
-            for ikr in range(len(parameters.skqd.num_krylov))
+            for ikr in range(parameters.skqd.num_krylov)
         ]
-    gen_states = [future.result() for future in futures]
     logger.info('Generation took %.2f seconds.', time.time() - start)
     return gen_states
 
@@ -142,8 +125,7 @@ def load_projected_hamiltonian(source: h5py.Group):
 
 def save_skqd_result(out, sqd_states, energy, eigvec, ham_proj=None):
     """Save the SKQD result to file."""
-    dataset = out.create_dataset('sqd_states', data=np.packbits(sqd_states, axis=1))
-    dataset.attrs['num_bits'] = sqd_states.shape[-1]
+    save_bits(out, 'sqd_states', sqd_states)
     out.create_dataset('energy', data=energy)
     out.create_dataset('eigvec', data=eigvec)
     if ham_proj is not None:
@@ -210,20 +192,43 @@ def diagonalize(
     exp_data = load_reco(parameters, etype='exp')
     dual_lattice = make_dual_lattice(parameters)
     hamiltonian = dual_lattice.make_hamiltonian(parameters.lgt.plaquette_energy)
+    num_vertices = dual_lattice.primal.num_vertices
+    num_plaquettes = dual_lattice.num_plaquettes
 
     if gen_mode == 'cr':
-        generate_fn = _make_batch_generator(parameters.skqd.num_gen)
+        shots = parameters.runtime.shots_exp
+        batch_size = parameters.crbm.gen_batch_size
+        num_batches = int(np.ceil(shots / batch_size).astype(int))
+        if (residue := num_batches * batch_size - shots) != 0:
+            padding = (
+                np.zeros((residue, num_vertices), dtype=np.uint8),
+                np.zeros((residue, num_plaquettes), dtype=np.uint8)
+            )
+        else:
+            padding = None
+
         logger.info('Loading and compiling CRBM models')
         idev = 0
         comp_shape = (parameters.crbm.gen_batch_size, parameters.skqd.num_gen)
         crbm_models = []
         for idt in range(len(parameters.skqd.time_steps)):
             crbm_models.append([])
-            for ikrylov in range(parameters.skqd.num_krylov):
+            for ikrylov in range(1, parameters.skqd.num_krylov + 1):
                 crbm_models[-1].append(
                     load_model(parameters, idt, ikrylov, compile_for=comp_shape, jax_device_id=idev)
                 )
-                idev += 1
+                device = jax.devices()[idev]
+                vtx_data, plaq_data = exp_data[idt][ikrylov - 1]
+                if padding:
+                    vtx_data = np.concatenate([vtx_data, padding[0]], axis=0)
+                    plaq_data = np.concatenate([plaq_data, padding[1]], axis=0)
+                vtx_data = jax.device_put(vtx_data, device)
+                plaq_data = jax.device_put(plaq_data, device)
+                exp_data[idt][ikrylov - 1] = (
+                    vtx_data.reshape((num_batches, batch_size, num_vertices)),
+                    plaq_data.reshape((num_batches, batch_size, num_plaquettes))
+                )
+                idev = (idev + 1) % jax.device_count()
     else:
         ref_data = load_reco(parameters, etype='ref')
         logger.info('Using the mean of reference circuit data as single-plaquette probability')
@@ -242,44 +247,45 @@ def diagonalize(
         is_last = it == parameters.skqd.max_iterations - 1
 
         if gen_mode == 'cr':
-            gen_states = _generate_cr(parameters, exp_data, crbm_models, generate_fn, logger)
+            states_list = _generate_cr(parameters, exp_data, crbm_models, parallelize=it > 0,
+                                       logger=logger)
         else:
-            gen_states = _generate_random(parameters, exp_data, mean_activation, 12345 + it, logger)
-
-        states = np.concatenate([relevant_states] + gen_states, axis=0)
+            states_list = _generate_random(parameters, exp_data, mean_activation, 12345 + it,
+                                           logger=logger)
+        if relevant_states is not None:
+            states_list.append(relevant_states)
+        states = np.concatenate(states_list, axis=0)
+        states = np.unpackbits(uniquify_states(states), axis=1)[:, :num_plaquettes]
         for fname in parameters.skqd.extensions:
             states = extensions[fname](states, dual_lattice)
+
         if max_size is None:
-            max_size = states.shape[0] + relevant_states.shape[0]
+            max_size = int(states.shape[0] * 1.2)
             logger.info('Set maximum array size to %d', max_size)
         if (excess := states.shape[0] - max_size) > 0:
-            max_size += 10 * excess
+            max_size += excess * (parameters.skqd.max_iterations - it)
             logger.info('Updated maximum array size to %d', max_size)
+
         logger.info('Diagonalizing the Hamiltonian projected onto %d states..', states.shape[0])
         start = time.time()
         sqd_result = sqd(hamiltonian, states, states_size=max_size, return_hproj=is_last,
                          jax_device_id=jax_device_id)
         energy, eigvec, sqd_states = sqd_result[:3]
-        energies.append(energy)
-        subspace_dims.append(sqd_states.shape[0])
         logger.info('Projection and diagonalization took %.2f seconds. Current energy %.4f',
                     time.time() - start, energy)
 
-        terminate = (
-            prev_energy - energy < parameters.skqd.delta_e
-            or
-            relevant_states.shape[0] >= parameters.skqd.max_subspace_dim
-        )
+        energies.append(energy)
+        subspace_dims.append(sqd_states.shape[0])
 
-        if not is_last and terminate:
-            states_p = np.packbits(states, axis=1)
-            sqd_result += (make_hproj(hamiltonian, states_p),)
-            is_last = True
-
+        if it > 0 and not is_last:
+            if (energies[-2] - energies[-1] < parameters.skqd.delta_e
+                    or subspace_dims[-1] >= parameters.skqd.max_subspace_dim):
+                states_p = np.packbits(states, axis=1)
+                sqd_result += (make_hproj(hamiltonian, states_p),)
+                is_last = True
         if is_last:
             break
 
-        prev_energy = energy
         relevant_states = _get_relevant_states(sqd_states, eigvec,
                                                parameters.skqd.probability_cutoff)
 
