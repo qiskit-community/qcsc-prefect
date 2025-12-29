@@ -7,7 +7,7 @@ class LGTParameters(BaseModel):
     """Parameters to specify the Z2 LGT."""
 
     lattice: str | tuple[int, int] = Field(
-        default=(8, 8),
+        default='full_156q',
         description='Two-dimensional lattice configuration.',
         title='Lattice Configuration'
     )

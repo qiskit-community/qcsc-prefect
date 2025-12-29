@@ -142,8 +142,8 @@ def sample_quantum_flow(
         layout, exp_circuits, ref_circuits = get_trotter_circuits(parameters, target, logger)
         # Run primitive
         logger.info('Submitting a runtime job')
-        pubs = [(circ, [], parameters.runtime.shots_exp) for circ in exp_circuits]
-        pubs += [(circ, [], parameters.runtime.shots_ref) for circ in ref_circuits]
+        pubs = [(circ, [], parameters.runtime.shots_exp) for circ in sum(exp_circuits, [])]
+        pubs += [(circ, [], parameters.runtime.shots_ref) for circ in sum(ref_circuits, [])]
         pub_result, job_id = sample_fn(pubs)
 
         parameters.circuit.layout = layout
