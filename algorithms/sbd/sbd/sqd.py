@@ -58,7 +58,7 @@ def walker_sqd(
     }
 
     try:
-        runtime = QuantumRuntime.load("sqd-runtime")
+        runtime = QuantumRuntime.load("ibm-runner")
     except ValueError:
         logger.warning(
             "Quantum Runtime block is not defined. Using random uniform sampling."
