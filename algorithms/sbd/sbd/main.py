@@ -93,10 +93,9 @@ def riken_sqd_de(
         raise
 
     logger.info(
-        "Solver OK: ref=%s mode=%s adetfile=%s",
+        "Solver OK: ref=%s mode=%s",
         parameters.solver_block_ref,
         getattr(solver, "solver_mode", "unknown"),
-        getattr(solver, "adetfile", None),
     )
 
     telemetry_data = []
