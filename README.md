@@ -5,6 +5,7 @@ that combines admin-defined execution profiles with user-adjustable tuning param
 
 The design allows users to flexibly adjust resource usage (nodes, memory, threads) 
 while keeping HPC-specific complexity safely encapsulated in centrally managed profiles.
+
 ---
 
 ## 1. Design Goals
