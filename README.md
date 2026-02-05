@@ -1,10 +1,10 @@
 # HPC Workflow Execution Design
 
 This document specifies an HPC workflow execution architecture
-that combines admin-defined execution profiles with user-adjustable tuning parameters.
+to run the same workflow code across multiple HPC systems (e.g. Fugaku, Miyabi, Slurm) without modification.
 
-The design allows users to flexibly adjust resource usage (nodes, memory, threads) 
-while keeping HPC-specific complexity safely encapsulated in centrally managed profiles.
+The key idea is to separate execution intent from execution environment
+and to encode HPC expertise in centrally managed profiles.
 
 ---
 
@@ -13,6 +13,7 @@ while keeping HPC-specific complexity safely encapsulated in centrally managed p
 - Enable one workflow to run on multiple HPC systems (Fugaku, Miyabi, Slurm)
   without modification
 - Reduce user burden by eliminating the need to write HPC-specific job blocks
+- Support future schedulers (e.g. Slurm) without redesign
 
 ---
 
@@ -26,13 +27,13 @@ while keeping HPC-specific complexity safely encapsulated in centrally managed p
    │  What to run (logical executable name)
    ▼
 [ Execution Profile Block ]
-   │  Recommended baseline configuration
+   │  HOW this command should be run
    ▼
 [ Tuning Parameters ]   ← user-adjustable (optional)
    │
    ▼
 [ HPC Profile Block ]
-   │  Scheduler / MPI / filesystem resolution
+   │  WHERE / SYSTEM-specific resolution
    ▼
 [ Executor ]
 ```
@@ -47,9 +48,9 @@ while keeping HPC-specific complexity safely encapsulated in centrally managed p
 - Define what command is executed
 
 **Characteristics**
-- Logical executable name only
 - No absolute paths
 - No scheduler or resource logic
+- No module/environment configuration
 
 **Examples**
 - `cmd-diag`
@@ -60,10 +61,10 @@ while keeping HPC-specific complexity safely encapsulated in centrally managed p
 ### 3.2 Execution Profile Block (Admin task)
 
 **Purpose**
-- Provide a  execution baseline for a specific command
+- Provide a execution baseline for a specific command
 
 **Characteristics**
-- Command-specific
+- One Execution Profile per command 
 - Safe, pre-validated defaults
 - Intended to cover common use cases
 
@@ -74,13 +75,31 @@ while keeping HPC-specific complexity safely encapsulated in centrally managed p
 - default launcher
 - default MPI hints
 - default modules / environment variables
+- execution semantics (placement intent)
 
 **Examples**
 - `exec-diag-n2`
 - `exec-diag-n16`
 - `exec-diag-gpu`
 
-> Execution Profiles express recommended intent, not fixed hardware allocations.
+```yaml
+common:
+  launcher: mpi
+  ranks: 16
+  threads_per_rank: 1
+
+overrides:
+  miyabi:
+    placement:
+      ranks_per_node: 16
+    env:
+      modules: ["intelmpi"]
+  fugaku:
+    placement:
+      ranks_per_node: 48
+    env:
+      spack: ["fjmpi"]
+```
 
 ---
 
@@ -93,10 +112,8 @@ while keeping HPC-specific complexity safely encapsulated in centrally managed p
 - Scheduler type (PJM / PBS / Slurm)
 - Batch template and submission logic
 - Resource-class → queue / resource-group mapping
-- MPI option derivation and validation
 - Executable path resolution
 - Enforcement of system limits
-- Reference to UserContext Block
 
 **Examples**
 - `hpc-fugaku`
