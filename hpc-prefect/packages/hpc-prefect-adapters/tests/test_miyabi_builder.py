@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from hpc_prefect_core.models.execution_profile import ExecutionProfile
+from hpc_prefect_adapters.miyabi.builder import MiyabiJobRequest, render_script
+
+
+def test_render_miyabi_script(tmp_path: Path):
+    profile = ExecutionProfile(
+        command_key="hello",
+        num_nodes=2,
+        mpiprocs=16,
+        ompthreads=1,
+        walltime="00:10:00",
+        launcher="mpirun",
+        modules=["intelmpi"],
+        environments={"OMP_NUM_THREADS": "1"},
+        arguments=["--foo", "bar"],
+    )
+    req = MiyabiJobRequest(queue_name="normal", project="z30541", executable="/path/to/hello")
+
+    text = render_script(work_dir=tmp_path, exec_profile=profile, req=req)
+
+    assert f"#PBS -q {req.queue_name}" in text
+    assert f"#PBS -l select={profile.num_nodes}" in text
+    assert f":mpiprocs={profile.mpiprocs}" in text
+    assert f":ompthreads={profile.ompthreads}" in text
+    assert f"#PBS -l walltime={profile.walltime}" in text
+    assert f"#PBS -W group_list={req.project}" in text
+    assert str(tmp_path) in text
+    assert "module load intelmpi" in text
+    assert 'export OMP_NUM_THREADS="1"' in text
+    assert req.executable in text
