@@ -71,6 +71,9 @@ testpaths = [
     "packages",
 ]
 addopts = "-ra"
+markers = [
+    "miyabi_integration: tests that require Miyabi login node and real qsub/qstat",
+]
 
 [tool.ruff]
 line-length = 100
@@ -84,4 +87,3 @@ strict = false
 warn_unused_configs = true
 warn_return_any = true
 ignore_missing_imports = true
-
