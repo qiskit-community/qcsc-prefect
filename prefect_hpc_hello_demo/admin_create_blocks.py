@@ -1,9 +1,3 @@
-"""
-Admin helper to create demo Blocks in Prefect (MPI hello).
-
-This demo assumes you compile ./hello_mpi in the repo root and submit from there.
-We set executable_map to "./hello_mpi" and the PBS script runs under PBS_O_WORKDIR.
-"""
 from prefect_hpc_demo.blocks import CommandBlock, ExecutionProfileBlock, MiyabiHPCProfileBlock
 
 CommandBlock(
@@ -21,7 +15,7 @@ ExecutionProfileBlock(
     ranks_per_node=4,
     threads_per_rank=1,
     launcher="mpiexec.hydra",
-    modules=None,  # e.g., ["openmpi/4.1.5"]
+    modules=None,  
 ).save("exec-hello-n2", overwrite=True)
 
 ExecutionProfileBlock(
@@ -49,8 +43,8 @@ ExecutionProfileBlock(
 MiyabiHPCProfileBlock(
     queue_cpu="regular-c",
     queue_gpu="regular-g",
-    project_cpu=None,      # set if your site requires it
-    module_init=None,      # e.g., ["module purge"]
+    project_cpu=None,      
+    module_init=None,      
     spack_setup=None,
     executable_map={
         "hello_mpi": "/work/gz09/z30541/hpc-execution-profiles/prefect_hpc_hello_demo/src/hello_mpi",
