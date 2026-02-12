@@ -65,7 +65,7 @@ cp examples/miyabi_prefect_bitcount_demo/bitcount_blocks.example.toml \
    examples/miyabi_prefect_bitcount_demo/bitcount_blocks.toml
 ```
 
-Edit `examples/miyabi_prefect_bitcount_demo/bitcount_blocks.toml` and set at least:
+Edit `examples/miyabi_prefect_bitcount_demo/bitcount_blocks.toml` and set only these required keys:
 
 - `project`
 - `queue`
@@ -79,7 +79,7 @@ uv run python examples/miyabi_prefect_bitcount_demo/create_blocks.py \
   --config examples/miyabi_prefect_bitcount_demo/bitcount_blocks.toml
 ```
 
-You can override individual values from CLI arguments:
+You can still override individual values from CLI arguments:
 
 ```bash
 cd /Users/hitomi/Project/hpc-execution-profiles/hpc-prefect
@@ -92,11 +92,19 @@ uv run python examples/miyabi_prefect_bitcount_demo/create_blocks.py \
 
 Legacy env vars are still supported for backward compatibility (`MIYABI_PBS_PROJECT`, `MIYABI_PBS_QUEUE`, etc.), but the config file approach is clearer for shared setup.
 
-`create_blocks.py` currently accepts these config keys:
+Defaulted keys (optional, no need to set unless you want to customize):
 
-- `project`, `queue`, `work_dir`
-- `launcher`, `walltime`, `num_nodes`, `mpiprocs`, `ompthreads`, `shots`
-- `modules`, `mpi_options`
+- `launcher="mpiexec"`
+- `walltime="00:10:00"`
+- `num_nodes=2`
+- `mpiprocs=5`
+- `ompthreads=1`
+- `shots=100000`
+- `modules=["intel/2023.2.0","impi/2021.10.0"]`
+- `mpi_options=[]`
+
+Optional advanced keys:
+
 - `wrapper_executable`, `optimized_executable`
 - `wrapper_block_name`, `command_block_name`, `execution_profile_block_name`, `hpc_profile_block_name`, `options_variable_name`
 
