@@ -21,12 +21,6 @@ def _split_csv(name: str) -> list[str] | None:
         return None
     return [item.strip() for item in raw.split(",") if item.strip()]
 
-
-def _resolve_default_work_dir(project: str) -> str:
-    user = os.getenv("USER", "").strip() or "your_user"
-    return f"/work/{project}/{user}/miyabi_bitcount_tutorial"
-
-
 def _resolve_example_path() -> Path:
     return Path(__file__).resolve().parent
 
@@ -146,7 +140,10 @@ def main() -> None:
     if not project:
         raise RuntimeError("Set 'project' in --config, --project, or MIYABI_PBS_PROJECT.")
 
-    queue = _pick_value(args.queue, config.get("queue"), env.get("queue"), "regular-c")
+    queue = _pick_value(args.queue, config.get("queue"), env.get("queue"))
+    if not queue:
+        raise RuntimeError("Set 'queue' in --config, --queue, or MIYABI_PBS_QUEUE.")
+
     launcher = _pick_value(args.launcher, config.get("launcher"), env.get("launcher"), "mpiexec")
     walltime = _pick_value(args.walltime, config.get("walltime"), env.get("walltime"), "00:10:00")
 
@@ -169,9 +166,10 @@ def main() -> None:
         _pick_value(args.optimized_executable, config.get("optimized_executable"), env.get("optimized_executable"), default_optimized_exec)
     ).strip()
 
-    work_dir_raw = str(
-        _pick_value(args.work_dir, config.get("work_dir"), env.get("work_dir"), _resolve_default_work_dir(project))
-    ).strip()
+    work_dir_raw = _pick_value(args.work_dir, config.get("work_dir"), env.get("work_dir"))
+    if not work_dir_raw:
+        raise RuntimeError("Set 'work_dir' in --config, --work-dir, or MIYABI_BITCOUNT_WORK_DIR.")
+    work_dir_raw = str(work_dir_raw).strip()
     work_dir = os.path.expandvars(work_dir_raw)
 
     wrapper_block_name = str(
