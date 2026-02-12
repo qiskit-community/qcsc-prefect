@@ -1,26 +1,24 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
+import tomllib
 from pathlib import Path
+from typing import Any
 
-from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
-
-from examples.miyabi_prefect_bitcount_demo.wrapper_block import BitCounterWrapperBlock
-
-
-def _env_int(name: str, default: int) -> int:
+def _env_int(name: str) -> int | None:
     raw = os.getenv(name, "").strip()
     if not raw:
-        return default
+        return None
     return int(raw)
 
 
-def _split_csv(name: str, default: list[str]) -> list[str]:
+def _split_csv(name: str) -> list[str] | None:
     raw = os.getenv(name, "").strip()
     if not raw:
-        return list(default)
+        return None
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
@@ -34,6 +32,9 @@ def _resolve_example_path() -> Path:
 
 
 def _register_block_types() -> None:
+    from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+    from examples.miyabi_prefect_bitcount_demo.wrapper_block import BitCounterWrapperBlock
+
     block_types = [
         CommandBlock,
         ExecutionProfileBlock,
@@ -54,37 +55,145 @@ def _set_variable(variable_name: str, shots: int) -> None:
     )
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Create Prefect blocks for Miyabi BitCount tutorial.")
+    parser.add_argument("--config", type=Path, help="Path to TOML/JSON config file.")
+    parser.add_argument("--project")
+    parser.add_argument("--queue")
+    parser.add_argument("--work-dir")
+    parser.add_argument("--launcher")
+    parser.add_argument("--walltime")
+    parser.add_argument("--num-nodes", type=int)
+    parser.add_argument("--mpiprocs", type=int)
+    parser.add_argument("--ompthreads", type=int)
+    parser.add_argument("--shots", type=int)
+    parser.add_argument("--modules", nargs="+")
+    parser.add_argument("--mpi-options", nargs="*")
+    parser.add_argument("--wrapper-executable")
+    parser.add_argument("--optimized-executable")
+    parser.add_argument("--wrapper-block-name")
+    parser.add_argument("--command-block-name")
+    parser.add_argument("--execution-profile-block-name")
+    parser.add_argument("--hpc-profile-block-name")
+    parser.add_argument("--options-variable-name")
+    return parser.parse_args()
+
+
+def _normalize_str_list(value: Any) -> list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    raise ValueError(f"Expected list[str] or CSV string, got: {type(value)}")
+
+
+def _load_config_file(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    if not path.exists():
+        raise FileNotFoundError(f"Config file was not found: {path}")
+    if path.suffix.lower() == ".json":
+        return json.loads(path.read_text(encoding="utf-8"))
+    with path.open("rb") as f:
+        return tomllib.load(f)
+
+
+def _pick_value(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _env_values() -> dict[str, Any]:
+    return {
+        "project": os.getenv("MIYABI_PBS_PROJECT", "").strip() or None,
+        "queue": os.getenv("MIYABI_PBS_QUEUE", "").strip() or None,
+        "work_dir": os.getenv("MIYABI_BITCOUNT_WORK_DIR", "").strip() or None,
+        "launcher": os.getenv("MIYABI_LAUNCHER", "").strip() or None,
+        "walltime": os.getenv("MIYABI_WALLTIME", "").strip() or None,
+        "num_nodes": _env_int("MIYABI_NUM_NODES"),
+        "mpiprocs": _env_int("MIYABI_MPIPROCS"),
+        "ompthreads": _env_int("MIYABI_OMPTHREADS"),
+        "shots": _env_int("BITCOUNT_SHOTS"),
+        "modules": _split_csv("MIYABI_MODULES"),
+        "mpi_options": _split_csv("MIYABI_MPI_OPTIONS"),
+        "wrapper_executable": os.getenv("BITCOUNT_WRAPPER_EXECUTABLE", "").strip() or None,
+        "optimized_executable": os.getenv("BITCOUNT_OPT_EXECUTABLE", "").strip() or None,
+        "wrapper_block_name": os.getenv("BITCOUNT_WRAPPER_BLOCK_NAME", "").strip() or None,
+        "command_block_name": os.getenv("BITCOUNT_CMD_BLOCK_NAME", "").strip() or None,
+        "execution_profile_block_name": os.getenv("BITCOUNT_EXEC_PROFILE_BLOCK_NAME", "").strip() or None,
+        "hpc_profile_block_name": os.getenv("BITCOUNT_HPC_PROFILE_BLOCK_NAME", "").strip() or None,
+        "options_variable_name": os.getenv("BITCOUNT_OPTIONS_VARIABLE", "").strip() or None,
+    }
+
+
 def main() -> None:
-    project = os.getenv("MIYABI_PBS_PROJECT", "").strip()
-    if not project:
-        raise RuntimeError("Set MIYABI_PBS_PROJECT before running create_blocks.py.")
+    args = _parse_args()
+    from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+    from examples.miyabi_prefect_bitcount_demo.wrapper_block import BitCounterWrapperBlock
 
-    queue = os.getenv("MIYABI_PBS_QUEUE", "regular-c").strip()
-    launcher = os.getenv("MIYABI_LAUNCHER", "mpiexec").strip()
-    walltime = os.getenv("MIYABI_WALLTIME", "00:10:00").strip()
-
-    num_nodes = _env_int("MIYABI_NUM_NODES", 2)
-    mpiprocs = _env_int("MIYABI_MPIPROCS", 5)
-    ompthreads = _env_int("MIYABI_OMPTHREADS", 1)
-    shots = _env_int("BITCOUNT_SHOTS", 100000)
-
-    modules = _split_csv("MIYABI_MODULES", ["intel/2023.2.0", "impi/2021.10.0"])
-    mpi_options = _split_csv("MIYABI_MPI_OPTIONS", [])
+    config = _load_config_file(args.config)
+    env = _env_values()
 
     example_dir = _resolve_example_path()
     default_wrapper_exec = str((example_dir / "bin/get_counts_json").resolve())
     default_optimized_exec = str((example_dir / "bin/get_counts_hist").resolve())
 
-    wrapper_exec = os.getenv("BITCOUNT_WRAPPER_EXECUTABLE", default_wrapper_exec).strip()
-    optimized_exec = os.getenv("BITCOUNT_OPT_EXECUTABLE", default_optimized_exec).strip()
+    project = _pick_value(args.project, config.get("project"), env.get("project"))
+    if not project:
+        raise RuntimeError("Set 'project' in --config, --project, or MIYABI_PBS_PROJECT.")
 
-    work_dir = os.getenv("MIYABI_BITCOUNT_WORK_DIR", _resolve_default_work_dir(project)).strip()
+    queue = _pick_value(args.queue, config.get("queue"), env.get("queue"), "regular-c")
+    launcher = _pick_value(args.launcher, config.get("launcher"), env.get("launcher"), "mpiexec")
+    walltime = _pick_value(args.walltime, config.get("walltime"), env.get("walltime"), "00:10:00")
 
-    wrapper_block_name = os.getenv("BITCOUNT_WRAPPER_BLOCK_NAME", "bit-counter-wrapper-demo").strip()
-    cmd_block_name = os.getenv("BITCOUNT_CMD_BLOCK_NAME", "cmd-bitcount-hist").strip()
-    exec_block_name = os.getenv("BITCOUNT_EXEC_PROFILE_BLOCK_NAME", "exec-bitcount-mpi").strip()
-    hpc_block_name = os.getenv("BITCOUNT_HPC_PROFILE_BLOCK_NAME", "hpc-miyabi-bitcount").strip()
-    options_variable_name = os.getenv("BITCOUNT_OPTIONS_VARIABLE", "miyabi-bitcount-options").strip()
+    num_nodes = int(_pick_value(args.num_nodes, config.get("num_nodes"), env.get("num_nodes"), 2))
+    mpiprocs = int(_pick_value(args.mpiprocs, config.get("mpiprocs"), env.get("mpiprocs"), 5))
+    ompthreads = int(_pick_value(args.ompthreads, config.get("ompthreads"), env.get("ompthreads"), 1))
+    shots = int(_pick_value(args.shots, config.get("shots"), env.get("shots"), 100000))
+
+    modules = _normalize_str_list(
+        _pick_value(args.modules, config.get("modules"), env.get("modules"), ["intel/2023.2.0", "impi/2021.10.0"])
+    )
+    mpi_options = _normalize_str_list(
+        _pick_value(args.mpi_options, config.get("mpi_options"), env.get("mpi_options"), [])
+    )
+
+    wrapper_exec = str(
+        _pick_value(args.wrapper_executable, config.get("wrapper_executable"), env.get("wrapper_executable"), default_wrapper_exec)
+    ).strip()
+    optimized_exec = str(
+        _pick_value(args.optimized_executable, config.get("optimized_executable"), env.get("optimized_executable"), default_optimized_exec)
+    ).strip()
+
+    work_dir_raw = str(
+        _pick_value(args.work_dir, config.get("work_dir"), env.get("work_dir"), _resolve_default_work_dir(project))
+    ).strip()
+    work_dir = os.path.expandvars(work_dir_raw)
+
+    wrapper_block_name = str(
+        _pick_value(args.wrapper_block_name, config.get("wrapper_block_name"), env.get("wrapper_block_name"), "bit-counter-wrapper-demo")
+    ).strip()
+    cmd_block_name = str(
+        _pick_value(args.command_block_name, config.get("command_block_name"), env.get("command_block_name"), "cmd-bitcount-hist")
+    ).strip()
+    exec_block_name = str(
+        _pick_value(
+            args.execution_profile_block_name,
+            config.get("execution_profile_block_name"),
+            env.get("execution_profile_block_name"),
+            "exec-bitcount-mpi",
+        )
+    ).strip()
+    hpc_block_name = str(
+        _pick_value(args.hpc_profile_block_name, config.get("hpc_profile_block_name"), env.get("hpc_profile_block_name"), "hpc-miyabi-bitcount")
+    ).strip()
+    options_variable_name = str(
+        _pick_value(args.options_variable_name, config.get("options_variable_name"), env.get("options_variable_name"), "miyabi-bitcount-options")
+    ).strip()
 
     _register_block_types()
 

@@ -11,6 +11,7 @@ The setup is script-driven so users mainly run scripts and choose block names at
 
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/build_binaries.sh`
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/create_blocks.py`
+- `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/bitcount_blocks.example.toml`
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/wrapper_block.py`
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/flow_wrapper.py`
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/flow_optimized.py`
@@ -56,37 +57,48 @@ This creates:
 
 ## Step 3. Create all Blocks and Variables by script
 
-Set required environment variables and run the setup script:
+Use a config file (recommended):
 
 ```bash
 cd /Users/hitomi/Project/hpc-execution-profiles/hpc-prefect
-export MIYABI_PBS_PROJECT=gz00
-export MIYABI_PBS_QUEUE=regular-c
-export MIYABI_BITCOUNT_WORK_DIR=/work/gz00/${USER}/miyabi_bitcount_tutorial
-uv run python examples/miyabi_prefect_bitcount_demo/create_blocks.py
+cp examples/miyabi_prefect_bitcount_demo/bitcount_blocks.example.toml \
+   examples/miyabi_prefect_bitcount_demo/bitcount_blocks.toml
 ```
 
-Optional tuning variables:
+Edit `examples/miyabi_prefect_bitcount_demo/bitcount_blocks.toml` and set at least:
+
+- `project`
+- `queue`
+- `work_dir`
+
+Then run:
 
 ```bash
-export MIYABI_NUM_NODES=2
-export MIYABI_MPIPROCS=5
-export MIYABI_OMPTHREADS=1
-export MIYABI_WALLTIME=00:10:00
-export MIYABI_LAUNCHER=mpiexec
-export MIYABI_MODULES=intel/2023.2.0,impi/2021.10.0
-export BITCOUNT_SHOTS=100000
+cd /Users/hitomi/Project/hpc-execution-profiles/hpc-prefect
+uv run python examples/miyabi_prefect_bitcount_demo/create_blocks.py \
+  --config examples/miyabi_prefect_bitcount_demo/bitcount_blocks.toml
 ```
 
-Optional block name overrides:
+You can override individual values from CLI arguments:
 
 ```bash
-export BITCOUNT_WRAPPER_BLOCK_NAME=bit-counter-wrapper-demo
-export BITCOUNT_CMD_BLOCK_NAME=cmd-bitcount-hist
-export BITCOUNT_EXEC_PROFILE_BLOCK_NAME=exec-bitcount-mpi
-export BITCOUNT_HPC_PROFILE_BLOCK_NAME=hpc-miyabi-bitcount
-export BITCOUNT_OPTIONS_VARIABLE=miyabi-bitcount-options
+cd /Users/hitomi/Project/hpc-execution-profiles/hpc-prefect
+uv run python examples/miyabi_prefect_bitcount_demo/create_blocks.py \
+  --config examples/miyabi_prefect_bitcount_demo/bitcount_blocks.toml \
+  --shots 200000 \
+  --num-nodes 4 \
+  --mpiprocs 8
 ```
+
+Legacy env vars are still supported for backward compatibility (`MIYABI_PBS_PROJECT`, `MIYABI_PBS_QUEUE`, etc.), but the config file approach is clearer for shared setup.
+
+`create_blocks.py` currently accepts these config keys:
+
+- `project`, `queue`, `work_dir`
+- `launcher`, `walltime`, `num_nodes`, `mpiprocs`, `ompthreads`, `shots`
+- `modules`, `mpi_options`
+- `wrapper_executable`, `optimized_executable`
+- `wrapper_block_name`, `command_block_name`, `execution_profile_block_name`, `hpc_profile_block_name`, `options_variable_name`
 
 ## Step 4A. Run Wrapper-compatible tutorial flow
 
@@ -141,6 +153,4 @@ Everything else (block schema, block instances, sampler options variable) is cre
 
 - The wrapper-compatible MPI executable (`get_counts_json`) is intentionally close to the original tutorial behavior.
 - The optimized executable (`get_counts_hist`) is preferred for larger shot counts.
-- If you need custom executable paths, set:
-  - `BITCOUNT_WRAPPER_EXECUTABLE`
-  - `BITCOUNT_OPT_EXECUTABLE`
+- If you need custom executable paths, set `wrapper_executable` and `optimized_executable` in the config file or pass `--wrapper-executable` / `--optimized-executable`.
