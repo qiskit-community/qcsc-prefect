@@ -1,4 +1,4 @@
-"""Miyabi-specific blocks (re-exports from common for backward compatibility)."""
+"""Fugaku-specific blocks (re-exports from common)."""
 
 from hpc_prefect_blocks.common.blocks import (
     CommandBlock,

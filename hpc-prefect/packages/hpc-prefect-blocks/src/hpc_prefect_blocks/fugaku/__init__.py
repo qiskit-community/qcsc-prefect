@@ -1,6 +1,6 @@
-"""Miyabi-specific blocks (re-exports from common for backward compatibility)."""
+"""Fugaku-specific Prefect blocks."""
 
-from hpc_prefect_blocks.common.blocks import (
+from hpc_prefect_blocks.fugaku.blocks import (
     CommandBlock,
     ExecutionProfileBlock,
     HPCProfileBlock,
