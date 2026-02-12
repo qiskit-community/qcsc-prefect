@@ -118,4 +118,3 @@ def test_run_fugaku_job_local_mock(tmp_path: Path, monkeypatch):
     table_rows = artifact_calls[0]["table"]
     assert "stats.job_id" in table_rows[0]
     assert "stats.host_name" in table_rows[0]
-
