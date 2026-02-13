@@ -12,9 +12,11 @@ The setup is script-driven so users mainly run scripts and choose block names at
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/build_binaries.sh`
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/create_blocks.py`
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/bitcount_blocks.example.toml`
+- `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/get_counts_integration.py`
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/wrapper_block.py`
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/flow_wrapper.py`
 - `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/flow_optimized.py`
+- `/Users/hitomi/Project/hpc-execution-profiles/hpc-prefect/examples/miyabi_prefect_bitcount_demo/flow_tutorial_style.py`
 
 ## Prerequisites
 
@@ -106,7 +108,27 @@ Defaulted keys (optional, no need to set unless you want to customize):
 Optional advanced keys:
 
 - `wrapper_executable`, `optimized_executable`
-- `wrapper_block_name`, `command_block_name`, `execution_profile_block_name`, `hpc_profile_block_name`, `options_variable_name`
+- `wrapper_block_name`, `bitcounter_block_name`, `command_block_name`, `execution_profile_block_name`, `hpc_profile_block_name`, `options_variable_name`, `tutorial_variable_name`
+
+After setup, `create_blocks.py` creates compatibility objects for legacy-style code:
+
+- `BitCounter` block: `miyabi-tutorial` (default)
+- Prefect variable: `miyabi-tutorial` (default)
+
+`BitCounter.load("miyabi-tutorial")` is a facade that internally resolves:
+
+- `CommandBlock` (default: `cmd-bitcount-hist`)
+- `ExecutionProfileBlock` (default: `exec-bitcount-mpi`)
+- `HPCProfileBlock` (default: `hpc-miyabi-bitcount`)
+
+So legacy-style flow code can keep `counter.get(bitstrings)` while using the current block architecture.
+
+## Step 4. Run tutorial-style flow (legacy code style)
+
+```bash
+cd /Users/hitomi/Project/hpc-execution-profiles/hpc-prefect
+uv run python examples/miyabi_prefect_bitcount_demo/flow_tutorial_style.py
+```
 
 ## Step 4A. Run Wrapper-compatible tutorial flow
 

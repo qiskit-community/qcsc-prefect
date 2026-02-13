@@ -9,17 +9,19 @@ from pathlib import Path
 from typing import Any
 
 
-def _import_wrapper_block_class():
+def _import_wrapper_block_classes():
     try:
         from examples.miyabi_prefect_bitcount_demo.wrapper_block import BitCounterWrapperBlock
+        from examples.miyabi_prefect_bitcount_demo.get_counts_integration import BitCounter
 
-        return BitCounterWrapperBlock
+        return BitCounterWrapperBlock, BitCounter
     except ModuleNotFoundError:
         # Supports direct script execution:
         # python examples/miyabi_prefect_bitcount_demo/create_blocks.py ...
         from wrapper_block import BitCounterWrapperBlock
+        from get_counts_integration import BitCounter
 
-        return BitCounterWrapperBlock
+        return BitCounterWrapperBlock, BitCounter
 
 
 def _env_int(name: str) -> int | None:
@@ -39,14 +41,14 @@ def _resolve_example_path() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _register_block_types(bit_counter_cls) -> None:
+def _register_block_types(*custom_block_classes) -> None:
     from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
 
     block_types = [
         CommandBlock,
         ExecutionProfileBlock,
         HPCProfileBlock,
-        bit_counter_cls,
+        *custom_block_classes,
     ]
     for block_cls in block_types:
         register = getattr(block_cls, "register_type_and_schema", None)
@@ -83,6 +85,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--execution-profile-block-name")
     parser.add_argument("--hpc-profile-block-name")
     parser.add_argument("--options-variable-name")
+    parser.add_argument("--tutorial-variable-name")
+    parser.add_argument("--bitcounter-block-name")
     return parser.parse_args()
 
 
@@ -134,13 +138,15 @@ def _env_values() -> dict[str, Any]:
         "execution_profile_block_name": os.getenv("BITCOUNT_EXEC_PROFILE_BLOCK_NAME", "").strip() or None,
         "hpc_profile_block_name": os.getenv("BITCOUNT_HPC_PROFILE_BLOCK_NAME", "").strip() or None,
         "options_variable_name": os.getenv("BITCOUNT_OPTIONS_VARIABLE", "").strip() or None,
+        "tutorial_variable_name": os.getenv("BITCOUNT_TUTORIAL_VARIABLE", "").strip() or None,
+        "bitcounter_block_name": os.getenv("BITCOUNTER_BLOCK_NAME", "").strip() or None,
     }
 
 
 def main() -> None:
     args = _parse_args()
     from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
-    bit_counter_cls = _import_wrapper_block_class()
+    bit_counter_wrapper_cls, bit_counter_facade_cls = _import_wrapper_block_classes()
 
     config = _load_config_file(args.config)
     env = _env_values()
@@ -205,10 +211,16 @@ def main() -> None:
     options_variable_name = str(
         _pick_value(args.options_variable_name, config.get("options_variable_name"), env.get("options_variable_name"), "miyabi-bitcount-options")
     ).strip()
+    tutorial_variable_name = str(
+        _pick_value(args.tutorial_variable_name, config.get("tutorial_variable_name"), env.get("tutorial_variable_name"), "miyabi-tutorial")
+    ).strip()
+    bitcounter_block_name = str(
+        _pick_value(args.bitcounter_block_name, config.get("bitcounter_block_name"), env.get("bitcounter_block_name"), "miyabi-tutorial")
+    ).strip()
 
-    _register_block_types(bit_counter_cls)
+    _register_block_types(bit_counter_wrapper_cls, bit_counter_facade_cls)
 
-    bit_counter_cls(
+    bit_counter_wrapper_cls(
         root_dir=work_dir,
         executable=wrapper_exec,
         queue_name=queue,
@@ -254,14 +266,29 @@ def main() -> None:
         executable_map={"bitcount_hist": optimized_exec},
     ).save(hpc_block_name, overwrite=True)
 
+    bit_counter_facade_cls(
+        root_dir=work_dir,
+        command_block_name=cmd_block_name,
+        execution_profile_block_name=exec_block_name,
+        hpc_profile_block_name=hpc_block_name,
+        script_filename="bitcount_facade.pbs",
+        metrics_artifact_key="miyabi-bitcount-facade-metrics",
+        bitlen=10,
+        user_args=[],
+    ).save(bitcounter_block_name, overwrite=True)
+
     _set_variable(options_variable_name, shots)
+    if tutorial_variable_name and tutorial_variable_name != options_variable_name:
+        _set_variable(tutorial_variable_name, shots)
 
     print("Saved blocks and variable for Miyabi BitCount demo")
     print(f"  Wrapper block: {wrapper_block_name}")
+    print(f"  BitCounter block: {bitcounter_block_name}")
     print(f"  Command block: {cmd_block_name}")
     print(f"  Execution profile block: {exec_block_name}")
     print(f"  HPC profile block: {hpc_block_name}")
     print(f"  Options variable: {options_variable_name}")
+    print(f"  Tutorial variable: {tutorial_variable_name}")
     print(f"  Work directory: {work_dir}")
     print(f"  Wrapper executable: {wrapper_exec}")
     print(f"  Optimized executable: {optimized_exec}")
