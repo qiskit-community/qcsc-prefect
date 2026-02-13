@@ -14,7 +14,6 @@ The setup is script-driven so users mainly run scripts and choose block names at
 - `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/bitcount_blocks.example.toml`
 - `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/get_counts_integration.py`
 - `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/wrapper_block.py`
-- `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/flow_wrapper.py`
 - `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/flow_optimized.py`
 - `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/flow_tutorial_style.py`
 
@@ -131,30 +130,12 @@ This helper takes block names and internally builds runtime requests (`Execution
 With this, workflow code can stay unchanged while switching HPC by changing block instances.
 (`create_blocks.py` in this directory prepares Miyabi defaults. For other HPC targets, prepare equivalent block instances and keep the same workflow code.)
 
-## Step 4. Run tutorial-style flow (legacy code style)
+## Step 4A. Run tutorial-style flow (legacy code style)
 
 ```bash
 cd /Users/hitomi/Project/hpc-prefect
 uv run python examples/miyabi_prefect_bitcount_demo/flow_tutorial_style.py
 ```
-
-## Step 4A. Run Wrapper-compatible tutorial flow
-
-This mirrors the legacy tutorial style with a wrapper block and `counter.get(bitstrings)`.
-
-```bash
-cd /Users/hitomi/Project/hpc-prefect
-uv run python examples/miyabi_prefect_bitcount_demo/flow_wrapper.py \
-  --runtime-block ibm-runner \
-  --counter-block bit-counter-wrapper-demo \
-  --options-variable miyabi-bitcount-options
-```
-
-Generated artifacts include:
-
-- `sampler-count-dict-wrapper`
-- `miyabi-bitcount-wrapper-metrics`
-- Job script and output files in `<work_dir>/job_xxxx/`
 
 ## Step 4B. Run Optimized tutorial flow
 
