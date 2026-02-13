@@ -4,18 +4,33 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any
 
 
 def _import_wrapper_block_classes():
+    # Ensure package-style imports work even when executed as:
+    # python examples/miyabi_prefect_bitcount_demo/create_blocks.py ...
+    project_root = str(Path(__file__).resolve().parents[2])
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
     try:
         from examples.miyabi_prefect_bitcount_demo.wrapper_block import BitCounterWrapperBlock
         from examples.miyabi_prefect_bitcount_demo.get_counts_integration import BitCounter
 
         return BitCounterWrapperBlock, BitCounter
-    except ModuleNotFoundError:
+    except ModuleNotFoundError as exc:
+        # If the failure is unrelated to module path resolution, surface it.
+        if exc.name not in {
+            "examples",
+            "examples.miyabi_prefect_bitcount_demo",
+            "examples.miyabi_prefect_bitcount_demo.wrapper_block",
+            "examples.miyabi_prefect_bitcount_demo.get_counts_integration",
+        }:
+            raise
         # Supports direct script execution:
         # python examples/miyabi_prefect_bitcount_demo/create_blocks.py ...
         from wrapper_block import BitCounterWrapperBlock
