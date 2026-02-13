@@ -19,7 +19,9 @@ work_dir = "/work/gz00/${USER}/miyabi_bitcount_tutorial"
 
 # Optional naming overrides
 # wrapper_block_name = "bit-counter-wrapper-demo"
+# bitcounter_block_name = "miyabi-tutorial"
 # command_block_name = "cmd-bitcount-hist"
 # execution_profile_block_name = "exec-bitcount-mpi"
 # hpc_profile_block_name = "hpc-miyabi-bitcount"
 # options_variable_name = "miyabi-bitcount-options"
+# tutorial_variable_name = "miyabi-tutorial"
