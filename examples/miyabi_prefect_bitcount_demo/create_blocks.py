@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 
-def _import_wrapper_block_classes():
+def _import_bitcounter_class():
     # Ensure package-style imports work even when executed as:
     # python examples/miyabi_prefect_bitcount_demo/create_blocks.py ...
     project_root = str(Path(__file__).resolve().parents[2])
@@ -18,25 +18,22 @@ def _import_wrapper_block_classes():
         sys.path.insert(0, project_root)
 
     try:
-        from examples.miyabi_prefect_bitcount_demo.wrapper_block import BitCounterWrapperBlock
         from examples.miyabi_prefect_bitcount_demo.get_counts_integration import BitCounter
 
-        return BitCounterWrapperBlock, BitCounter
+        return BitCounter
     except ModuleNotFoundError as exc:
         # If the failure is unrelated to module path resolution, surface it.
         if exc.name not in {
             "examples",
             "examples.miyabi_prefect_bitcount_demo",
-            "examples.miyabi_prefect_bitcount_demo.wrapper_block",
             "examples.miyabi_prefect_bitcount_demo.get_counts_integration",
         }:
             raise
         # Supports direct script execution:
         # python examples/miyabi_prefect_bitcount_demo/create_blocks.py ...
-        from wrapper_block import BitCounterWrapperBlock
         from get_counts_integration import BitCounter
 
-        return BitCounterWrapperBlock, BitCounter
+        return BitCounter
 
 
 def _env_int(name: str) -> int | None:
@@ -93,9 +90,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--shots", type=int)
     parser.add_argument("--modules", nargs="+")
     parser.add_argument("--mpi-options", nargs="*")
-    parser.add_argument("--wrapper-executable")
     parser.add_argument("--optimized-executable")
-    parser.add_argument("--wrapper-block-name")
     parser.add_argument("--command-block-name")
     parser.add_argument("--execution-profile-block-name")
     parser.add_argument("--hpc-profile-block-name")
@@ -146,9 +141,7 @@ def _env_values() -> dict[str, Any]:
         "shots": _env_int("BITCOUNT_SHOTS"),
         "modules": _split_csv("MIYABI_MODULES"),
         "mpi_options": _split_csv("MIYABI_MPI_OPTIONS"),
-        "wrapper_executable": os.getenv("BITCOUNT_WRAPPER_EXECUTABLE", "").strip() or None,
         "optimized_executable": os.getenv("BITCOUNT_OPT_EXECUTABLE", "").strip() or None,
-        "wrapper_block_name": os.getenv("BITCOUNT_WRAPPER_BLOCK_NAME", "").strip() or None,
         "command_block_name": os.getenv("BITCOUNT_CMD_BLOCK_NAME", "").strip() or None,
         "execution_profile_block_name": os.getenv("BITCOUNT_EXEC_PROFILE_BLOCK_NAME", "").strip() or None,
         "hpc_profile_block_name": os.getenv("BITCOUNT_HPC_PROFILE_BLOCK_NAME", "").strip() or None,
@@ -161,13 +154,12 @@ def _env_values() -> dict[str, Any]:
 def main() -> None:
     args = _parse_args()
     from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
-    bit_counter_wrapper_cls, bit_counter_facade_cls = _import_wrapper_block_classes()
+    bit_counter_cls = _import_bitcounter_class()
 
     config = _load_config_file(args.config)
     env = _env_values()
 
     example_dir = _resolve_example_path()
-    default_wrapper_exec = str((example_dir / "bin/get_counts_json").resolve())
     default_optimized_exec = str((example_dir / "bin/get_counts_hist").resolve())
 
     project = _pick_value(args.project, config.get("project"), env.get("project"))
@@ -193,9 +185,6 @@ def main() -> None:
         _pick_value(args.mpi_options, config.get("mpi_options"), env.get("mpi_options"), [])
     )
 
-    wrapper_exec = str(
-        _pick_value(args.wrapper_executable, config.get("wrapper_executable"), env.get("wrapper_executable"), default_wrapper_exec)
-    ).strip()
     optimized_exec = str(
         _pick_value(args.optimized_executable, config.get("optimized_executable"), env.get("optimized_executable"), default_optimized_exec)
     ).strip()
@@ -206,9 +195,6 @@ def main() -> None:
     work_dir_raw = str(work_dir_raw).strip()
     work_dir = os.path.expandvars(work_dir_raw)
 
-    wrapper_block_name = str(
-        _pick_value(args.wrapper_block_name, config.get("wrapper_block_name"), env.get("wrapper_block_name"), "bit-counter-wrapper-demo")
-    ).strip()
     cmd_block_name = str(
         _pick_value(args.command_block_name, config.get("command_block_name"), env.get("command_block_name"), "cmd-bitcount-hist")
     ).strip()
@@ -233,23 +219,7 @@ def main() -> None:
         _pick_value(args.bitcounter_block_name, config.get("bitcounter_block_name"), env.get("bitcounter_block_name"), "miyabi-tutorial")
     ).strip()
 
-    _register_block_types(bit_counter_wrapper_cls, bit_counter_facade_cls)
-
-    bit_counter_wrapper_cls(
-        root_dir=work_dir,
-        executable=wrapper_exec,
-        queue_name=queue,
-        project=project,
-        num_nodes=num_nodes,
-        num_mpi_processes=mpiprocs,
-        ompthreads=ompthreads,
-        walltime=walltime,
-        launcher=launcher,
-        load_modules=modules,
-        mpi_options=mpi_options,
-        environments={},
-        script_filename="bitcount_wrapper.pbs",
-    ).save(wrapper_block_name, overwrite=True)
+    _register_block_types(bit_counter_cls)
 
     CommandBlock(
         command_name="bitcount-hist",
@@ -281,7 +251,7 @@ def main() -> None:
         executable_map={"bitcount_hist": optimized_exec},
     ).save(hpc_block_name, overwrite=True)
 
-    bit_counter_facade_cls(
+    bit_counter_cls(
         root_dir=work_dir,
         command_block_name=cmd_block_name,
         execution_profile_block_name=exec_block_name,
@@ -297,7 +267,6 @@ def main() -> None:
         _set_variable(tutorial_variable_name, shots)
 
     print("Saved blocks and variable for Miyabi BitCount demo")
-    print(f"  Wrapper block: {wrapper_block_name}")
     print(f"  BitCounter block: {bitcounter_block_name}")
     print(f"  Command block: {cmd_block_name}")
     print(f"  Execution profile block: {exec_block_name}")
@@ -305,7 +274,6 @@ def main() -> None:
     print(f"  Options variable: {options_variable_name}")
     print(f"  Tutorial variable: {tutorial_variable_name}")
     print(f"  Work directory: {work_dir}")
-    print(f"  Wrapper executable: {wrapper_exec}")
     print(f"  Optimized executable: {optimized_exec}")
 
 
