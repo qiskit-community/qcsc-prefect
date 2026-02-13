@@ -1,9 +1,9 @@
-# Miyabi BitCount Tutorial (Wrapper-Compatible + Optimized)
+# Miyabi BitCount Tutorial (Tutorial-Style + Optimized)
 
 This tutorial provides **two BitCount workflows** for Miyabi:
 
-1. **Wrapper-compatible flow**: keeps the same structure as `create_qcsc_workflow.md` (`counter.get(bitstrings)` style).
-2. **Optimized flow**: uses the current `hpc-prefect` block architecture (`CommandBlock` / `ExecutionProfileBlock` / `HPCProfileBlock`) and optimized MPI output handling.
+1. **Tutorial-style flow**: keeps the `counter.get(bitstrings)` style.
+2. **Optimized flow**: uses reusable blocks (`CommandBlock` / `ExecutionProfileBlock` / `HPCProfileBlock`) and optimized MPI output handling.
 
 The setup is script-driven so users mainly run scripts and choose block names at execution time.
 
@@ -13,7 +13,6 @@ The setup is script-driven so users mainly run scripts and choose block names at
 - `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/create_blocks.py`
 - `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/bitcount_blocks.example.toml`
 - `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/get_counts_integration.py`
-- `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/wrapper_block.py`
 - `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/flow_optimized.py`
 - `/Users/hitomi/Project/hpc-prefect/examples/miyabi_prefect_bitcount_demo/flow_tutorial_style.py`
 
@@ -106,8 +105,8 @@ Defaulted keys (optional, no need to set unless you want to customize):
 
 Optional advanced keys:
 
-- `wrapper_executable`, `optimized_executable`
-- `wrapper_block_name`, `bitcounter_block_name`, `command_block_name`, `execution_profile_block_name`, `hpc_profile_block_name`, `options_variable_name`, `tutorial_variable_name`
+- `optimized_executable`
+- `bitcounter_block_name`, `command_block_name`, `execution_profile_block_name`, `hpc_profile_block_name`, `options_variable_name`, `tutorial_variable_name`
 
 After setup, `create_blocks.py` creates compatibility objects for legacy-style code:
 
@@ -137,7 +136,7 @@ cd /Users/hitomi/Project/hpc-prefect
 uv run python examples/miyabi_prefect_bitcount_demo/flow_tutorial_style.py
 ```
 
-## Step 4B. Run Optimized tutorial flow
+## Step 4B. Run optimized tutorial flow
 
 This version uses the current codebase design:
 
@@ -163,15 +162,13 @@ Generated artifacts include:
 
 ## What users still choose manually
 
-After setup, users only need to select block names at run time:
+After setup, users may choose block names at run time in the optimized flow:
 
-- Wrapper flow: `--counter-block`
 - Optimized flow: `--command-block`, `--execution-profile-block`, `--hpc-profile-block`
 
 Everything else (block schema, block instances, sampler options variable) is created by `create_blocks.py`.
 
 ## Notes
 
-- The wrapper-compatible MPI executable (`get_counts_json`) is intentionally close to the original tutorial behavior.
 - The optimized executable (`get_counts_hist`) is preferred for larger shot counts.
-- If you need custom executable paths, set `wrapper_executable` and `optimized_executable` in the config file or pass `--wrapper-executable` / `--optimized-executable`.
+- If you need a custom executable path, set `optimized_executable` in the config file or pass `--optimized-executable`.
