@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from prefect import flow
+from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 from prefect.variables import Variable
 from prefect_qiskit import QuantumRuntime
@@ -44,20 +44,15 @@ def _make_job_work_dir(base_work_dir: Path) -> Path:
     return job_dir
 
 
-@flow(name="miyabi-bitcount-optimized-flow")
-async def miyabi_bitcount_optimized_flow(
+@task(name="quantum-sampling-task")
+async def run_quantum_sampling_and_prepare_input(
     *,
-    runtime_block_name: str = "ibm-runner",
-    command_block_name: str = "cmd-bitcount-hist",
-    execution_profile_block_name: str = "exec-bitcount-mpi",
-    hpc_profile_block_name: str = "hpc-miyabi-bitcount",
-    options_variable_name: str = "miyabi-bitcount-options",
-    default_shots: int = 100000,
-    work_dir: str = "./work/miyabi_bitcount_optimized",
-    script_filename: str = "bitcount_optimized.pbs",
-):
+    runtime_block_name: str,
+    options_variable_name: str,
+    default_shots: int,
+    work_dir: str,
+) -> str:
     runtime = await QuantumRuntime.load(runtime_block_name)
-
     options = await Variable.get(
         options_variable_name,
         default={"params": {"shots": default_shots}},
@@ -83,12 +78,24 @@ async def miyabi_bitcount_optimized_flow(
     resolved_base_work_dir = Path(work_dir).expanduser().resolve()
     job_work_dir = _make_job_work_dir(resolved_base_work_dir)
     _write_input_u32(job_work_dir, bitstrings)
+    return str(job_work_dir)
 
+
+@task(name="hpc-bitcount-task")
+async def run_hpc_bitcount_from_input(
+    *,
+    command_block_name: str,
+    execution_profile_block_name: str,
+    hpc_profile_block_name: str,
+    job_work_dir: str,
+    script_filename: str,
+) -> dict[str, object]:
+    resolved_job_work_dir = Path(job_work_dir).expanduser().resolve()
     result = await run_job_from_blocks(
         command_block_name=command_block_name,
         execution_profile_block_name=execution_profile_block_name,
         hpc_profile_block_name=hpc_profile_block_name,
-        work_dir=job_work_dir,
+        work_dir=resolved_job_work_dir,
         script_filename=script_filename,
         watch_poll_interval=5.0,
         timeout_seconds=1800,
@@ -97,12 +104,45 @@ async def miyabi_bitcount_optimized_flow(
     if result.exit_status != 0:
         raise RuntimeError(f"Optimized BitCount job failed: exit_status={result.exit_status}")
 
-    hist = _read_hist_u64(job_work_dir / "hist_u64.bin")
+    hist = _read_hist_u64(resolved_job_work_dir / "hist_u64.bin")
     counts = {
         format(i, f"0{BITLEN}b"): c
         for i, c in enumerate(hist)
         if c > 0
     }
+    return {
+        "job_id": result.job_id,
+        "counts": counts,
+        "work_dir": str(resolved_job_work_dir),
+    }
+
+
+@flow(name="miyabi-bitcount-optimized-flow")
+async def miyabi_bitcount_optimized_flow(
+    *,
+    runtime_block_name: str = "ibm-runner",
+    command_block_name: str = "cmd-bitcount-hist",
+    execution_profile_block_name: str = "exec-bitcount-mpi",
+    hpc_profile_block_name: str = "hpc-miyabi-bitcount",
+    options_variable_name: str = "miyabi-bitcount-options",
+    default_shots: int = 100000,
+    work_dir: str = "./work/miyabi_bitcount_optimized",
+    script_filename: str = "bitcount_optimized.pbs",
+):
+    job_work_dir = await run_quantum_sampling_and_prepare_input(
+        runtime_block_name=runtime_block_name,
+        options_variable_name=options_variable_name,
+        default_shots=default_shots,
+        work_dir=work_dir,
+    )
+    hpc_result = await run_hpc_bitcount_from_input(
+        command_block_name=command_block_name,
+        execution_profile_block_name=execution_profile_block_name,
+        hpc_profile_block_name=hpc_profile_block_name,
+        job_work_dir=job_work_dir,
+        script_filename=script_filename,
+    )
+    counts = hpc_result["counts"]
 
     await create_table_artifact(
         table=[list(counts.keys()), list(counts.values())],
@@ -111,10 +151,10 @@ async def miyabi_bitcount_optimized_flow(
 
     return {
         "mode": "optimized",
-        "job_id": result.job_id,
+        "job_id": hpc_result["job_id"],
         "shots": int(sum(counts.values())),
         "num_unique_bitstrings": len(counts),
-        "work_dir": str(job_work_dir),
+        "work_dir": hpc_result["work_dir"],
     }
 
 

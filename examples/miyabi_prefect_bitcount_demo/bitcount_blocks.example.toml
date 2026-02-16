@@ -1,6 +1,6 @@
 project = "gz00"
 queue = "regular-c"
-work_dir = "/work/${GROUP:gz00}/${USER}/miyabi_bitcount_tutorial"
+work_dir = "/work/${GROUP:gz00}/${USER}/miyabi_tutorial"
 
 # Everything below is optional.
 # If omitted, create_blocks.py uses built-in defaults:
@@ -14,7 +14,7 @@ work_dir = "/work/${GROUP:gz00}/${USER}/miyabi_bitcount_tutorial"
 # mpi_options = []
 
 # Optional executable override
-# optimized_executable = "/work/gz00/<user>/miyabi_bitcount_tutorial/get_counts_hist"
+# optimized_executable = "/work/gz00/<user>/miyabi_tutorial/get_counts_hist"
 
 # Optional naming overrides
 # bitcounter_block_name = "miyabi-tutorial"

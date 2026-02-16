@@ -42,20 +42,11 @@ hpc-prefect/
 - Concept and architecture:
   - [HPC-Prefect Concept](./docs/concept.md)
 - Example guides:
-  - [Miyabi BitCount Tutorial](./examples/miyabi_prefect_bitcount_demo/README.md)
+  - [Miyabi BitCount Tutorial](./docs/tutorials/create_qcsc_workflow.md)
   - [Miyabi Hello Demo](./examples/miyabi_prefect_hello_demo/README.md)
   - [Fugaku Hello Demo](./examples/fugaku_prefect_hello_demo/README.md)
 
 ## Code Management
-
-This repository uses a monorepo workspace with [uv workspaces](https://docs.astral.sh/uv/concepts/projects/workspaces/).
-Each package is developed independently, but can be resolved together in one workspace environment.
-
-Use the root workspace for development:
-
-```bash
-uv sync
-```
 
 Code quality checks are configured with pre-commit (`.pre-commit-config.yaml`):
 
@@ -70,13 +61,11 @@ The root project is a workspace coordinator (`hpc-prefect-workspace`) and is not
 
 ## Contribution Guidelines
 
-1. Sync dependencies:
-   - `uv sync`
-2. Install pre-commit hooks:
+1. Install pre-commit hooks:
    - `pre-commit install`
-3. Run checks before commit:
+2. Run checks before commit:
    - `pre-commit run --all-files`
-4. Run tests as needed:
+3. Run tests as needed:
    - `uv run pytest`
 
 When adding a new HPC target, include:
