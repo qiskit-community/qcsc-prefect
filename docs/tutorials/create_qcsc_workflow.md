@@ -326,6 +326,10 @@ python examples/miyabi_prefect_bitcount_demo/flow_optimized.py \
 
 In this mode, the main user inputs are block names.
 
+We can also monitor the progress on the Prefect console:
+
+![Get Counts Flow Run](./images/img-get-counts-new.png)
+
 ### Step 7A.1. What `flow_optimized.py` does
 
 Code location:
@@ -368,7 +372,51 @@ python examples/miyabi_prefect_bitcount_demo/flow_tutorial_style.py
 ```
 
 This flow uses `BitCounter.load("miyabi-tutorial")`.
-`miyabi-tutorial` is already created in Step 5.
+`miyabi-tutorial` is already created in Step 6.
+
+### Step 7B.1. Why old tutorial code still works
+
+Compatibility is provided by the `BitCounter` facade block created by `create_blocks.py`.
+
+What `create_blocks.py` prepares:
+
+- `BitCounter` block: `miyabi-tutorial`
+- `CommandBlock`: `cmd-bitcount-hist`
+- `ExecutionProfileBlock`: `exec-bitcount-mpi`
+- `HPCProfileBlock`: `hpc-miyabi-bitcount`
+- Prefect Variable: `miyabi-tutorial` (sampler shots/options)
+
+The `miyabi-tutorial` block stores references to the three execution blocks above
+(`command_block_name`, `execution_profile_block_name`, `hpc_profile_block_name`)
+plus `root_dir` and script settings.
+
+Runtime path in legacy flow:
+
+1. `flow_tutorial_style.py` loads:
+   - `runtime = QuantumRuntime.load("ibm-runner")`
+   - `counter = BitCounter.load("miyabi-tutorial")`
+   - `options = Variable.get("miyabi-tutorial")`
+2. Quantum sampling runs and produces `bitstrings`.
+3. `counter.get(bitstrings)` calls the internal task in
+   `get_counts_integration.py`:
+   - writes `input.bin` under `root_dir/job_xxxx`
+   - calls `run_job_from_blocks(...)` using the block names stored in `miyabi-tutorial`
+4. The executor resolves those blocks and runs the same HPC pipeline as the optimized flow.
+5. Result is read from `hist_u64.bin` (or `output.json` fallback), then returned as `counts`.
+
+So the legacy API surface (`counter.get(bitstrings)`) stays unchanged, while
+execution is delegated to the current block-based architecture.
+
+You can inspect the facade block and referenced blocks:
+
+<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+```bash
+prefect block inspect bit-counter/miyabi-tutorial
+prefect block inspect hpc_command/cmd-bitcount-hist
+prefect block inspect execution_profile/exec-bitcount-mpi
+prefect block inspect hpc_profile/hpc-miyabi-bitcount
+prefect block ls | rg "miyabi-tutorial|cmd-bitcount-hist|exec-bitcount-mpi|hpc-miyabi-bitcount"
+```
 
 ---
 
