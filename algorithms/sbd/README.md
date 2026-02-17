@@ -22,6 +22,14 @@ Compatibility notes from old `prefect_sbd.sbd_job`:
 - `QuantumRuntime` block exists (for example `ibm-runner`).
 - SBD executable (`diag`) is already built on Miyabi and you know its absolute path.
 
+Build example:
+
+```bash
+cd /Users/hitomi/Project/hpc-prefect/algorithms/sbd/native
+bash ./build_sbd.sh
+realpath ./diag
+```
+
 ## Install
 
 From repository root:
@@ -56,6 +64,12 @@ Run block generator:
 
 ```bash
 python algorithms/sbd/create_blocks.py --config algorithms/sbd/sbd_blocks.toml
+```
+
+`sbd_executable` should point to your built binary, for example:
+
+```toml
+sbd_executable = "/work/gz00/z12345/hpc-prefect/algorithms/sbd/native/diag"
 ```
 
 This creates:

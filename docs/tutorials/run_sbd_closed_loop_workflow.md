@@ -75,11 +75,13 @@ uv pip install -e algorithms/sbd
 
 ## 3. Prepare SBD executable path on Miyabi
 
-If `diag` is already built, just confirm its path:
+Build `diag` under `algorithms/sbd/native`:
 
 <img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
 ```bash
-realpath /work/g00/z12345/sbd/diag
+cd /work/g00/z12345/hpc-prefect/algorithms/sbd/native
+bash ./build_sbd.sh
+realpath ./diag
 ```
 
 Use this absolute path in Step 4 (`sbd_executable`).
