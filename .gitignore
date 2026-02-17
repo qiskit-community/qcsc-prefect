@@ -208,3 +208,8 @@ __marimo__/
 
 #Bob
 .bobmodes
+
+# Native SBD build outputs
+algorithms/sbd/native/diag
+algorithms/sbd/native/*.o
+algorithms/sbd/native/sbd/
