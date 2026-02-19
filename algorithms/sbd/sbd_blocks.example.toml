@@ -2,7 +2,7 @@
 project = "gz00"
 queue = "regular-c"
 work_dir = "/work/gz00/<user>/sbd_jobs"
-sbd_executable = "/work/gz00/<user>/sbd/diag"
+sbd_executable = "/work/gz00/<user>/hpc-prefect/algorithms/sbd/native"
 
 # Optional execution profile
 launcher = "mpiexec.hydra"
