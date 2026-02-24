@@ -102,6 +102,7 @@ cd /path/to/work
 git clone git@github.com:hitomitak/hpc-prefect.git
 cd hpc-prefect
 
+source ~/venv/prefect/bin/activate
 uv pip install prefect-qiskit
 uv pip install --no-deps \
   -e packages/hpc-prefect-core \
@@ -184,7 +185,7 @@ vim examples/prefect_bitcount_demo/bitcount_blocks.toml
 Set at least these keys for Fugaku:
 
 - `hpc_target = "fugaku"`
-- `project` (Fugaku project)
+- `project` (Fugaku project e.g. ra00000)
 - `queue` (Fugaku rscgrp, e.g. `small`)
 - `work_dir`
 - `optimized_executable` (absolute path to `get_counts_hist`)

@@ -10,36 +10,30 @@
 {% if group_name %}
 #PJM -g {{ group_name }}                      
 {% endif %}
-
 {% if mpi_options_for_pjm %}
 {% for option in mpi_options_for_pjm %}
 #PJM --mpi "{{ option }}"
 {% endfor %}
 {% endif %}
-
 {% if gfscache %}
 #PJM -x PJM_LLIO_GFSCACHE={{ gfscache }}
 {% endif %}
-
 #PJM -o {{ stdout_path }}
 #PJM -e {{ stderr_path }}
 #PJM -S
 #PJM --spath {{ stat_path }}
 #PJM --name {{ job_name }}
-
 {% if environments %}
 {% for k, v in environments.items() %}
 export {{ k }}="{{ v }}"
 {% endfor %}
 {% endif %}
-
 {% if spack_modules %}
 . /vol0004/apps/oss/spack/share/spack/setup-env.sh
 {% for module in spack_modules %}
 spack load {{ module }}
 {% endfor %}
 {% endif %}
-
 {% if launcher == "single" %}
 {% set base_cmd = executable %}
 {% elif launcher == "mpiexec" %}
@@ -55,7 +49,6 @@ spack load {{ module }}
 {% set base_cmd = launcher ~ " " ~ executable %}
 {% endif %}
 {% endif %}
-
 {% if arguments %}
 {{ base_cmd }} {{ arguments | join(' ') }}
 {% else %}
