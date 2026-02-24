@@ -1,504 +1,414 @@
-# Run SBD Closed-loop Workflow (After BitCounts Tutorial)
+# Create Your QCSC Workflow with Prefect
 
-This tutorial walks us through reproducing an Sample-based Quantum Diagonalization (SQD) experiment from the paper [Closed-loop calculations of electronic structure on a quantum processor and a classical supercomputer at full scale](https://arxiv.org/abs/2511.00224).
-We will run a hybrid quantum-classical workflow using the [SBD](https://github.com/r-ccs-cms/sbd) solver to diagonalize a sparse chemistry Hamiltonian on the Miyabi-C environment, orchestrated via Prefect.
+This hands-on tutorial guides you through building a small C++ program on the Fugaku environment and integrating it into a Prefect workflow using a custom `FugakuJobBlock` class.
+On the Prefect workflow, we also use [Prefect Qiskit](https://github.com/qiskit-community/prefect-qiskit) to show how to write a complete QCSC workflow from scratch.
 
-<img src="./images/img-closed-loop.png" alt="sbd" width="90%"/><br>
+Our objective is to compute a count dictionary of sampler bitstrings using MPI programming on the QCSC architecture.
 
-The goal is to compute the ground state energy of N2-Mo State.
-## Prerequisites
+![Count BitStrings Flow](./images/img-counts-flow-fugaku.png)
+
+## Prefect Core Concepts (quick mapping with [Introduction to Prefect](./Prefect_tutorial_miyabi.pdf))
+
+You will see these terms:
+- **Flow**: the end-to-end workflow defined in sampler_workflow.py
+- **Task**: individual steps inside the flow (e.g., runtime.sampler(...), counter.get(...)) 
+- **Block**: reusable configuration + credentials stored in Prefect server
+  - `ibm-quantum-credentials` : IBM Cloud CRN + API key 
+  - `quantum-runtime` : runtime settings referencing credentials 
+  - `bit-counter` : HPC job configuration (queue, nodes, executable path, modules) 
+- **Variable**: run-time parameter stored server-side (sampler shots etc.) 
+
+## What you need
+
+- **Accounts / IDs**: (a) Fugaku account, (b) Prefect Web Portal account (API Key), (c) IBM Cloud API key + Service CRN (Quantum)
+- **Local tools**: SSH client and a modern browser.  
+
+---
+## Prerequisites (One-time setup)
+
+The whole process image is : 
+
+![Prerequisites Flow](./images/img-prerequisites-fugaku.png)
 
 Before starting, make sure:
 
-- You have completed [Create Your QCSC Workflow with Prefect](./create_qcsc_workflow_for_miyabi.md).
+- You have completed [Step1 : How to Set Up Python Environment on Fugaku Pre/Post Node](../howto/howto_setup_python_env_fugaku.md).
+- You have completed [Step2 : How to Set Up IBM Quantum Access Credentials for Prefect](../howto/howto_setup_prefect_qiskit_fugaku.md).
 
 > [!IMPORTANT]
-> - Replace `g00` and `z12345` with your actual group and account name.
-> - There is currently an issue where the `~` (home) directory on mdx runs out of available space. As a workaround, we can use the `/large` directory instead. In this tutorial, we use the `/large` directory.
-
-## 0. What changes from BitCounts?
-
-### What you did in BitCounts (quick recap)
-- **(HPC side)** Compile C++ and produce an executable (`get_counts`) — *build on the execution environment*.  
-- **(Prefect side)** Register a Block type from Python code (e.g., `prefect block register -f ...`).  
-- **(UI side)** Create a Block **instance** and save environment-specific parameters (queue, nodes, executable path, etc.).  
-- **(Flow side)** A Flow loads Blocks and Variables and runs tasks (quantum → HPC → post-process).
-
-### What SBD closed-loop adds
-- HPC execution expands from a single `get_counts` binary to a full **SBD solver (`diag`) + closed-loop logic**.
-- Additional Blocks are required (solver job block, MinIO/S3, etc.).
-- **Deployment (Deploy)** becomes important so that participants can run from the Prefect UI reliably.
-
+> Replace `ra00000`, `u12345` and `vol0000x` with your actual group, account name and mount volume.
 ---
-## 1. Big picture: Flow / Task / Block / Variable / Deployment
+## Create BitCounts Workflow
+![BitCounts Setup Flow](./images/img-counts-setup-flow-fugaku.png)
 
-### 1.1 Minimal “where it runs” model
-- **MDX workflow client (mdx-cli)**: where the Prefect process runs the Flow (the “runner/worker” side)
-- **Miyabi-C**: where HPC binaries (e.g., `diag`) run via PBS/MPI
-- **IBM Quantum**: where quantum sampling runs via Qiskit Runtime (if used by the workflow)
+## Step 1: Log in to Fugaku and execute the interact session for Pre/Post Node
 
-### 1.2 Mapping to Prefect core concepts
+Execute the interact session for Pre/Post Node in the login node.
 
-#### Flow (end-to-end experiment procedure)
-The entire closed-loop SQD experiment is implemented as a single Flow, including iterations, branching, and convergence checks.
-
-#### Tasks (individual steps)
-- Execute quantum sampling (IBM Quantum / Qiskit Runtime)
-- Subsampling / configuration recovery (Python on MDX)
-- Davidson diagonalization (PBS job on Miyabi-C)
-- Collect results and store artifacts (Prefect)
-
-#### Blocks (reusable “configuration + credentials”)
-- **Quantum**: IBM Quantum credentials / runtime configuration
-- **HPC**: SBD solver job settings (queue, nodes, executable path, modules, etc.)
-- **Storage**: MinIO credentials / S3 bucket configuration
-
-#### Variables (runtime parameters)
-- Quantum sampler options (shots, DD settings, etc.) and other run-time knobs are stored as Prefect Variables.
-
-#### Deployment (how the Flow becomes runnable from the UI)
-Deployment is the “launch entry” that tells Prefect:
-- which Flow to run,
-- under which deployment name,
-- and how it should be executed by a serving process.
-
----
-## 2. Tutorial steps
-![SBD Setup Flow](./images/img-sbd-setup-flow.png)
-### Step 1. SSH to the MDX workflow client (where the Flow is executed)
-
-Connect to the MDX workflow client using SSH. This is where we will install the workflow.
-
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
-ssh -A z12345@qii-kawasaki-miyabi-cli.cspp.cc.u-tokyo.ac.jp
+srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 ```
 
-### Step 2. Install the workflow code (bring the Flow definition into your environment)
-To run the workflow, you need to setup the following blocks.
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+## Step 2. Create a Project Directory (Pre/Post Node)
+
+Create a project directory:
+
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-git clone git@github.com:ibm-quantum-collaboration/qii-miyabi-kawasaki.git
+mkdir fugaku_tutorial && cd fugaku_tutorial
 ```
 
-Activate the environment:
+Activate a virtual environment and activate for prefect:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-source  ~/venv/prefect/bin/activate
+source ~/venv/prefect/bin/activate
 ```
 
-Install the SBD submodule:
+Install necessary packages:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-uv pip install -e ./qii-miyabi-kawasaki/algorithms/sbd
+uv pip install git+ssh://git@github.com/hitomitak/prefect-fugaku.git@main#subdirectory=framework/prefect-fugaku
 ```
 
-Check that the packages are installed correctly:
+Check installations:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-uv pip list | grep qii-
+uv pip list | grep prefect
 ```
 
 You should see output like:
 
 ```text
-prefect-miyabi                     0.1.0       /large/z12345/qii-miyabi-kawasaki/framework/prefect-miyabi
-prefect-sbd                        0.1.0       /large/z12345/qii-miyabi-kawasaki/framework/prefect-sbd
-qcsc-workflow-utility              0.1.0       /large/z12345/qii-miyabi-kawasaki/algorithms/qcsc_workflow_utility
-sbd                                0.1.0       /large/z12345/qii-miyabi-kawasaki/algorithms/sbd
+prefect                   3.4.20
+prefect-fugaku            0.1.0
+prefect-qiskit            0.2.0
 ```
 
----
+## Step 3: Execute the interact session for Compute Node (Login Node)
 
-### Step 3. Build the SBD solver on Miyabi-C (prepare the HPC executable)
-#### 3.1 Copy the build directory into `/work`
-Copy the DICE build script to your shared volume on Miyabi-C:
+Open a new terminal and connect to the login node and execute the interactive session for Compute node.
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
-cp -r ./qii-miyabi-kawasaki/framework/prefect-sbd/sbd /work/gz00/z12345
+pjsub --interact -g ra00000 -L "node=1" -L "rscgrp=int" -L "elapse=3:00:00" --sparam "wait-time=600" -x PJM_LLIO_GFSCACHE=/vol0004:/vol000x --no-check-directory --llio cn-read-cache=off --mpi "max-proc-per-node=1"
 ```
 
-#### 3.2 SSH to Miyabi-C and build inside an interactive job
+## Step 4. Create MPI Program (Compute Node)
+Change directory and open a C++ source code file:
+
+<img src="./images/icon-fugaku.png" alt="fugaku" width="70"/><br>
+```bash
+cd fugaku_tutorial
+vi get_counts.cpp
+```
+
+Add following lines to the file:
+
+```c++
+#include <mpi.h>
+#include <fstream>
+#include <vector>
+#include <iostream>
+
+const uint32_t BITLEN = 10;
+const uint32_t MAXVAL = 1 << BITLEN;
+
+int main(int argc, char** argv) {
+    MPI_Init(&argc, &argv);
+
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    uint32_t total_count = 0;
+    std::vector<uint32_t> data;
+
+    if (rank == 0) {
+        std::ifstream fin("input.bin", std::ios::binary | std::ios::ate);
+        total_count = fin.tellg() / sizeof(uint32_t);
+        fin.seekg(0, std::ios::beg);
+
+        data.resize(total_count);
+        fin.read(reinterpret_cast<char*>(data.data()), total_count * sizeof(uint32_t));
+        fin.close();
+    }
+
+    MPI_Bcast(&total_count, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+
+    uint32_t local_n = total_count / size;
+    std::vector<uint32_t> local_data(local_n);
+
+    MPI_Scatter(rank == 0 ? data.data() : nullptr, local_n, MPI_UNSIGNED,
+                local_data.data(), local_n, MPI_UNSIGNED,
+                0, MPI_COMM_WORLD);
+
+    std::vector<int> local_hist(MAXVAL, 0);
+    for (auto v : local_data) {
+        if (v < MAXVAL) local_hist[v]++;
+    }
+
+    std::vector<int> global_hist;
+    if (rank == 0) global_hist.resize(MAXVAL, 0);
+
+    MPI_Reduce(local_hist.data(),
+               rank == 0 ? global_hist.data() : nullptr,
+               MAXVAL, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        std::ofstream fout("output.json");
+        fout << "{";
+        bool first = true;
+        for (uint32_t i = 0; i < MAXVAL; ++i) {
+            if (global_hist[i] > 0) {
+                if (!first) fout << ",";
+                fout << "\"" << i << "\":" << global_hist[i];
+                first = false;
+            }
+        }
+        fout << "}\n";
+        fout.close();
+    }
+
+    MPI_Finalize();
+    return 0;
+}
+```
+
 > [!NOTE]
-> The operating system and computer architecture of the MDX workflow server differs from that of the Miyabi-C compute nodes.
-> To run programs written in compiled languages such as C++, it's important to build them directly on the environment where they will be executed.
+> This program reads the `input.bin` file including a 32-bit integer vector of bitstrings, splits the data across MPI processes, and counts how often each value appears.
+> Each process builds a local histgram from its share of the data.
+> MPI then combines all local results into a single global histogram, which rank 0 writes out as `output.json`.
 
-Open a new terminal and connect to the Miyabi-C login node:
+Load Fujutsu MPI library in your shell:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="./images/icon-fugaku.png" alt="fugaku" width="70"/><br>
 ```bash
-ssh -A z12345@miyabi-c.jcahpc.jp
+. /vol0004/apps/oss/spack/share/spack/setup-env.sh
+spack load fujitsu-mpi@head-gcc8
 ```
 
-You will be prompted to enter a verification code. Open your authenticator app and input the OTP.
+Compile the program. 
 
-Request an interactive job to avoid overloading the login node:
-
-<img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
+<img src="./images/icon-fugaku.png" alt="fugaku" width="70"/><br>
 ```bash
-qsub -I -W group_list=gz00 -q interact-c -l walltime=01:00:00
+mpiFCC get_counts.cpp -o get_counts
 ```
 
-Once the job starts, the current shell will switch to the compute node.
+Check the output file:
 
-Navigate to the directory where we copied the build script:
-
-<img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
+<img src="./images/icon-fugaku.png" alt="fugaku" width="70"/><br>
 ```bash
-cd /work/gz00/z12345/sbd
-sh ./build_sbd.sh
-```
-
-This process may take several minutes. After completion, a directory named `diag` in the `sbd` directory:
-
-<img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
-```bash
-ls -l | grep diag
+ls -l
 ```
 
 Example output:
 
 ```text
--rwxr-x--- 1 z12345 gz00 1542016 Nov 30 15:18 diag
+-rwxr-x--- 1 u12345 ra0000 63872 Sep 30 10:59 get_counts
+-rw-r----- 1 u12345 ra0000  1841 Sep 30 10:57 get_counts.cpp
 ```
 
-Great! You have completed building SBD on Miyabi-C!
+Get the absolute path to the `get_counts` executable:
 
-#### 3.3 Record the absolute path of `diag` (you will paste it into the solver Block)
-Get the absolute path to the SBD executable:
-
-<img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
+<img src="./images/icon-fugaku.png" alt="fugaku" width="70"/><br>
 ```bash
-realpath ./diag
+realpath ./get_counts
 ```
 
 Example output:
 
 ```text
-/work/gz00/z12345/sbd/diag
+/vol000x/mdt6/data/ra00000/u12345/fugaku_tutorial/get_counts
 ```
 
-We will need this path in the next step.
+We will need this path in the later step.
 
-Once we completed this step, we can escape from the session (e.g. press `<ctrl> + d`) and log out from the Miyabi login node.  
-Go back to the SSH shell of the MDX workflow server to proceed with the following steps.
+## Step 5. Configure the HPC execution block (Block)
 
----
+Instead of writing a Python binding (pybind), we write a Prefect block to run the get_counts executable:
 
-### Step 4. Register integrations and create Blocks (Block Type vs Block Instance)
+### Step 5.1. Define `bit-counter` block type (Pre/Post)
+In this step, we define a Block Type (“bit-counter”) in Python.
+This is the template/schema that tells Prefect what fields the block has and how it runs get_counts on HPC.
 
-This mirrors BitCounts:
-- BitCounts used `prefect block register -f ...` (register a Block Type from a file).
-- Here we use `prefect block register -m prefect_sbd` (register from a Python module).
+Back to the shell for the Pre/Post Node.
+In the project directory (`~/fugaku_tutorial`), open a new Python file:
 
-#### 4.1 Create a job working directory on `/work`
-
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-mkdir -p /work/gz09/z12345/observability_demo_jobs
-cd /work/gz09/z12345/observability_demo_jobs
+vi get_counts_integration.py
 ```
 
-#### 4.2 Register the Block Type (schema)
+Add following lines to the file:
 
-Update your prefect token:
+```python
+import json 
+import numpy as np
+from prefect import task
+from prefect_fugaku import FugakuJobBlock
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
-```bash
-prefect-auth login
+BITLEN = 10
+
+class BitCounter(FugakuJobBlock):
+
+    _block_type_name = "Bit Counter"
+    _block_type_slug = "bit-counter"
+
+    async def get(
+        self,
+        bitstrings: list[str],
+    ) -> dict[str, int]:
+        return await get_inner(self, bitstrings)
+
+@task(name="get_counts_mpi")
+async def get_inner(
+    job: BitCounter,
+    bitstrings: list[str],
+) -> dict[str, int]:
+    with job.get_executor() as executor:
+        # Write file
+        u32int_array = np.array(
+            [int(b, base=2) for b in bitstrings],
+            dtype=np.uint32,
+        )
+        u32int_array.tofile(executor.work_dir / "input.bin")
+        # Run MPI program
+        exit_code = await executor.execute_job(**job.get_job_variables())
+        # Read file
+        with open(executor.work_dir / "output.json", "r") as f:
+            int_counts = json.load(f)
+    return {format(int(k), f"0{BITLEN}b"): v for k, v in int_counts.items()}
 ```
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-prefect block register -m prefect_sbd
+prefect block register -f get_counts_integration.py
 ```
 
-#### 4.3 Create the solver Block Instance
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+### Step 5.2. Create `bit-counter` block instance (Pre/Post)
+In this step, we create a Block Instance (e.g., “fugaku-tutorial”).
+This is your environment-specific configuration, such as queue name, node count, and the executable path.
+Create a new configuration for the Bit Counter block:
+
+Create a new configuration for the Bit Counter block:
+
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-prefect block create sbd-solver-job
+prefect block create bit-counter
 ```
 
 This command will display a URL to the Prefect console.
-Open it in your browser and fill in the following fields. You may leave any fields blank unless otherwise specified.
-Fill in the UI :
+Open it in your browser and fill in the following fields:
 
 | Field | Value / Example |
 |---|---|
-| Block Name | `davidson-solver`|
-| Root Directory | `/work/gz09/z12345/observability_demo_jobs` <br>  The absolute path to the work directory we created above. |
-| Executable | `/work/gz00/z12345/sbd/diag` <br>  The absolute path to the `diag` executable. |
-| Executor | `pbs`|
-| Launcher | `mpiexec.hydra` |
-|️ Queue Name | `regular-c`|
-| Project | `gz00` (Your Miyabi project name.)|
-| Num Nodes | `1` |
-| Num MPI Processes | `48` |
-| MPI Options | `["-np","48"]` |
-| Max Walltime | `02:00:00`|
-| Task Comm Size | `1` |
-| Aded Comm Size | `1` |
-| Bdet Comm Size | `1` |
-| Block | `10` |
-| Iteration | `2` |
-| Tolerance | `0.0001` |
-| Carryover Ratio | `0.5`|
-| Solver Mode | `cpu`|
+| Block Name | `fugaku-tutorial` |
+| Executor | `pjm`|
+| GFSCACHE Volume | `/vol0004:/vol000x` |
+| Launcher | `mpiexec` |
+| Num MPI Processes | `2` |
+| Num Nodes | `2` |
+| Root Directory | `/vol000x/mdt6/data/ra000000/u12345/fugaku_tutorial` <br> (The path to the `fugaku_tutorial` directory in Fugaku)| 
+| Executable | `/vol0000/mdt6/data/ra000000/u12345/fugaku_tutorial/get_counts` <br> (The absolute path to the `get_counts` executable)|
+| group_name| `ra000000` (Your Fugaku group name) |
+| Max Elapse Time| `00:05:00`|
+| MPI Options| `["-n", "2"]`|
+| Load Spack Modules| `["fujitsu-mpi@head-gcc8"]`|
+| Resource Group | `small`|
+| MPI Options for PJM | `["max-proc-per-node=1"]` |
 
+## Step 6. Create Prefect Workflow (Pre/Post)
+
+Next, in the same directory, create a separate Python file to define the Prefect workflow.
+This script may look like a regular Qiskit pattern, namely, create a `QuantumCircuit`, make a PUB (Primitive
+Unified Bloc) with it, and run the sampler primitive. Then, postprocess the result data and save it in some filesystem
+(in this case, we use the Prefect server storage). You might not even realize it’s using HPC just by looking at the
+workflow code.
+
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+```bash
+vi sampler_workflow.py
+```
+
+Add following lines to the file:
+
+```python
+import asyncio
+from prefect import flow
+from prefect.artifacts import create_table_artifact
+from prefect.variables import Variable
+from prefect_qiskit import QuantumRuntime
+from qiskit import QuantumCircuit
+from qiskit.transpiler import generate_preset_pass_manager
+from get_counts_integration import BitCounter
+
+BITLEN = 10
+
+@flow(name="fugaku_tutorial")
+async def main():
+    # Load configurations
+    runtime = await QuantumRuntime.load("ibm-runner")
+    counter = await BitCounter.load("fugaku-tutorial")
+    options = await Variable.get("fugaku-tutorial")
+    # Create a PUB payload
+    target = await runtime.get_target()
+    qc_ghz = QuantumCircuit(BITLEN)
+    qc_ghz.h(0)
+    qc_ghz.cx(0, range(1, BITLEN))
+    qc_ghz.measure_active()
+    pm = generate_preset_pass_manager(
+        optimization_level=3, 
+        target=target, 
+        seed_transpiler=123,
+    )
+    isa = pm.run(qc_ghz)
+    pub_like = (isa, )
+    # Execute
+    results = await runtime.sampler([pub_like], options=options)
+    bitstrings = results[0].data.meas.get_bitstrings()
+    counts = await counter.get(bitstrings)
+    # Save in Prefect artifacts
+    await create_table_artifact(
+        table=[list(counts.keys()), list(counts.values())],
+        key="sampler-count-dict",
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Step 7. Execute the Workflow (Pre/Post Node)
+
+To execute the workflow, run the following Python script:
+
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+```bash
+python sampler_workflow.py
+```
+
+We can also monitor the progress on the Prefect console:
+
+![Get Counts Flow Run](./images/img-get-counts-fugaku.png)
+
+Upon successful completion of the workflow, Prefect will generate the following artifacts:
+
+- `sampler-count-dict`: Count dictionary computed by our MPI program.
+- `job-metrics`: Performance metrics of IBM primitive execution.
+- `fugaku-job-metrics`: Performance metrics of Fugaku job execution.
+
+See the official [Artifacts](https://docs.prefect.io/v3/concepts/artifacts) guide about Prefect artifacts.
+
+The metrics artifacts are automatically generated by Prefect integration libraries.
+This information might be useful to optimize computing resources.
 
 > [!NOTE]
-> Adding more processes yields shorter wall-clock time, but it demands more memory space to copy state vectors.
-> With too many processes, the job will be killed by out-of-memory (OOM-killed).
-
-![Setup SBD Solver Job](./images/img-sbd-block.png)
-
-#### 4.4 Create MinIO / S3 related Blocks (for telemetry and outputs)
-Create the required MinIO credentials and bucket Blocks as specified by your environment.
-
-We store auxiliary data such as sampled and carryover bitstrings on MinIO, an S3 compatible object storage service. For this purpose, we host a dedicated S3 service on the MDX platform.
-
-To use this storage, set up Prefect S3 integration. Start by setting up your MinIO credentials:
-
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
-```bash
-prefect block create minio-credentials
-```
-
-This command will display a URL to the Prefect console.
-Open it in your browser and fill in the following fields. You may leave any fields blank unless otherwise specified.
-
-| Field | Value / Example |
-|---|---|
-| Block Name | `prefect-minio-cred` |
-| Minio Root User | `z12345` <br> Your Miyabi ID|
-| Minio Root Password | `********` <br> Please ask the admin about the password.|
-| Use SSL | `true` |
-| Endpoint URL | `https://qii-kawasaki-miyabi-serv.cspp.cc.u-tokyo.ac.jp` |
-
-
-![Setup MinIO cred](./images/img-minio-cred-block.png)
-
-Next, configure the S3 bucket where binary objects will be stored:
-
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
-```bash
-prefect block create s3-bucket
-```
-
-This command will display a URL to the Prefect console.
-Open it in your browser and fill in the following fields. You may leave any fields blank unless otherwise specified.
-
-| Field | Value / Example |
-|---|---|
-| Block Name | `s3-sqd`|
-| Bucket Name | `bucket-z12345` <br> Please change z12345 to your ID|
-| Credentials | `prefect-minio-cred` <br> the MinIO credential block you created in the previous step |
-
-![Setup S3 bucket](./images/img-s3-bucket-block.png)
-
-
-### Step 5. Set Variables (runtime options)
-
-This is the same pattern as BitCounts `prefect variable set ...` but with SBD/SQD options.
-Provide sampler execution options: `sqd_options`.
-
-Example:
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
-```bash
-prefect variable set sqd_options '{"params": {"shots": 500000, "options": {"dynamical_decoupling": {"enable": true, "sequence_type": "XY4", "skip_reset_qubits": true}}}}' --overwrite
-```
-
-### Step 6. Deploy SBD Work Flow
-
-**Deploy = register a Flow as a runnable entry point (Deployment) so it can be started from the Prefect UI/CLI by name.**
-
-Having Python code on disk is not enough for stable UI-driven execution. Deployment records “what to run” and “how to run it”.
-
-Start a screen session:
-
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
-```bash
-screen -S sbd-workflow
-```
-
-To avoid using a small filesystem on MDX, set the following environment variable and Prefect configuration:
-
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
-```bash
-source ~/venv/prefect/bin/activate
-mkdir -p /large/z12345/tmp/ray
-export RAY_TMPDIR="/large/z12345/tmp/ray"
-```
-
-> [!NOTE]
-> By setting this environment variable, we intend to change the temporary directory used by Ray from `/tmp` to `/large/z12345/tmp/` in order to aboid overuse `/tmp`. However, it has been reported that this configuration is not taking effect, and Ray continues to use `/tmp` instead. 
-> 
-> At the moment, `/tmp` still has sufficient storage, so this is not causing any immediate issues. However, we need to identify a suitable workaround to prepare for a situation where `/tmp` may run out of space.
-
-Deploy the workflow:
-
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
-```bash
-sbd-deploy
-```
-
-You should see:
-
-```text
-Your flow 'riken-sqd-de' is being served and polling for scheduled runs!
-
-To trigger a run for this flow, use the following command:
-
-        $ prefect deployment run 'riken-sqd-de/riken_sqd_de'
-
-You can also run your flow via the Prefect UI: ...
-```
-
-Detach the screen session (`<ctrl> + a`, then `d`).
-
-### Step 7. Provide Workflow Parameters
-
-In the Prefect console, click **Run** → **Custom run** and set as following. Any fields not explicitly specified may remain at their default values.
-
-| Field | Value / Example |
-|---|---|
-| FCIDump File | `/large/z1234/qii-miyabi-kawasaki/algorithms/sbd/data/fcidump_N2_MO.txt` | 
-| SQD Subspace Dimension (Optional) | `10000000` |
-| Sabre Layout Trials (Optional) | `40000` |
-| Differential Evolution Iterations (Optional)| `2` |
-
-> [!NOTE]
-> For this tutorial, the number of iterations is set to 2, but feel free to increase it as needed.
-
-![Setup SBD Workflow Parameters](./images/img-sbd-workflow-paramaters-small.png)
-
-### Step 8. Execute the Workflow
-
-Click **Start Now** → **Submit**.
-
-![SBD Flow Run](./images/img-sbd-flow-run.png)
-
-After the run completes, check the `sqd-telemetry` artifact. It should contain 8 (= 4 walker $\times$ 2 iter) rows of intermediate energies. The final energy should converge around -326.64 Hartree.
-
-![SQD Telemetry](./images/img-sqd-telemetry.png)
-
-### Step 9. Cleanup
-Follow [How to shutdown the workflow](../howto/howto_shutdown_workflow.md).
+> Note that this example does not significantly benefit from MPI parallel execution,
+> as data input and output on the rank 0 process is the dominant performance bottleneck.
+> This example is chosen to demonstrate how MPI programs look like.
 
 ---
-
-## 3. What happens when you “Submit” from the Prefect UI?
-
-### 3.1 What the UI actually creates
-When you choose **Run → Custom run → Submit**, the Prefect server creates a **Flow Run request** for a specific Deployment, with the parameters you provided.
-
-### 3.2 What actually executes the Flow (the key mental model)
-The process started by `sbd-deploy` is the **serving process**. It:
-1. polls the Prefect server for new Flow Runs,
-2. when it finds one, it executes the Flow **on mdx-cli**.
-
-> If the `screen` session dies (or `sbd-deploy` stops), the UI can still create Flow Runs, but there is no active “runner” to pick them up — so the run will not progress.
-
-### 3.3 Confirm the information of the deployment 
-Instead of memorizing filenames, teach participants to trace the entry point:
-
-1) List deployments  
-```bash
-prefect deployment ls
-```
-
-2) Inspect the deployment (shows the entry point / flow reference)  
-```bash
-prefect deployment inspect 'riken-sqd-de/riken_sqd_de'
-```
-
-3) Locate the Flow definition in the repo  
-https://github.com/ibm-quantum-collaboration/qii-miyabi-kawasaki/blob/main/algorithms/sbd/sbd/main.py#L73
-
-
----
-
-## Appendix: Using GPU Solvers and Custom Solver Blocks
-
-This section explains how to:
-1. Create a GPU-enabled SBD solver Block
-2. Select which Solver to use at run time
-3. Add custom Solver configurations without modifying the workflow code
-
-This is an advanced usage of the SBD closed-loop workflow.
-
-### B. Creating a GPU Solver Block
-You already created a CPU solver Block:
-```
-davidson-solver
-```
-Now, we will create a GPU-enabled version.
-
-#### B.1 Create a new Block Instance 
-
-Run:
-
-```
-prefect block create sbd-solver-job
-```
-
-Open the displayed URL and fill in the fields.
-| Field | Value / Example |
-|---|---|
-| Block Name | `davidson-solver-gpu`|
-| Root Directory | `/work/gz09/z12345/observability_demo_jobs` <br>  The absolute path to the work directory we created above. |
-| Executable | `/work/gz00/z12345/sbd/diag` <br>  The absolute path to the `GPU version's diag` executable. |
-| Executor | `pbs`|
-| Launcher | `mpirun` |
-|️ Queue Name | `regular-g`|
-| Project | `gz00` (Your Miyabi project name.)|
-| Num Nodes | `1` |
-| Num MPI Processes | `1` |
-| MPI Options | `["-n","1"]` |
-| Max Walltime | `02:00:00`|
-| Task Comm Size | `1` |
-| Aded Comm Size | `1` |
-| Bdet Comm Size | `1` |
-| Block | `10` |
-| Iteration | `2` |
-| Tolerance | `0.0001` |
-| Carryover Ratio | `0.5`|
-| Solver Mode | `gpu`|
-
-
-## C. How the Workflow Selects a Solver
-
-The workflow does not hard-code Solver names.
-Instead, it accepts a Block reference at run time.
-
-The format is:
-
-```
-<block_type_slug>/<block_name>
-```
-
-For example:
-
-```
-sbd_solver_job/davidson-solver
-sbd_solver_job/davidson-solver-gpu
-```
-
-## D. Selecting the Solver at Run Time
-
-When launching a run from the Prefect UI:
-1. Click Run → Custom run
-2. Set the parameter:
-
-| Field	| Example |  
-|---|---|
-| Solver Block Ref | sbd_solver_job/davidson-solver-gpu |
-
-This tells the workflow to use the GPU solver Block.
-
-----
 *END OF TUTORIAL*
