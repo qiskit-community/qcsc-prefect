@@ -3,7 +3,7 @@
 This tutorial walks us through reproducing a Sample-based Quantum Diagonalization (SQD) experiment using the `hpc-prefect` architecture.
 We will run a hybrid quantum-classical workflow using the [SBD](https://github.com/r-ccs-cms/sbd) solver to diagonalize a sparse chemistry Hamiltonian on Fugaku, orchestrated via Prefect.
 
-<img src="./images/img-closed-loop.png" alt="sbd" width="90%"/><br>
+<img src="./images/img-closed-loop-fugaku.png" alt="sbd" width="90%"/><br>
 
 The goal is to compute the ground state energy of N2-MO state.
 
@@ -12,7 +12,7 @@ The goal is to compute the ground state energy of N2-MO state.
 Before starting, make sure:
 
 - You have completed [Create Your QCSC Workflow with Prefect for Fugaku](./create_qcsc_workflow_for_fugaku.md).
-- You have completed [How to Set Up IBM Quantum Access Credentials for Prefect](../howto/howto_setup_prefect_qiskit.md).
+- You have completed [How to Set Up IBM Quantum Access Credentials for Prefect](../howto/howto_setup_prefect_qiskit_fugaku.md).
 
 > [!IMPORTANT]
 > - Replace account, group, and project placeholders with your actual values.
@@ -67,7 +67,7 @@ Deployment is the launch entry that tells Prefect:
 
 ---
 ## 2. Tutorial steps
-<img src="./images/img-sbd-setup-flow.png" alt="sbd setup" width="90%"/><br>
+<img src="./images/img-sbd-setup-flow-fugaku.png" alt="sbd setup" width="90%"/><br>
 
 ### Step 1. Enter your workflow environment
 
@@ -78,19 +78,24 @@ Connect to the environment where Prefect CLI is configured and Fugaku scheduler 
 ssh -A <your_account>@<fugaku_login_host>
 ```
 
-Activate the environment:
+Execute the interact session for Pre/Post Node in the login node.
 
-<img src="./images/icon-fugaku.png" alt="fugaku" width="50"/><br>
+<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
-source ~/venv/prefect/bin/activate
+srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 ```
 
-### Step 2. Install required packages (bring the Flow definition into your environment)
+## Step 2. Prepare Prefect and Quantum runtime (Pre/Post Node)
 
-<img src="./images/icon-fugaku.png" alt="fugaku" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-cd /work/<group>/<user>/hpc-prefect
+cd /path/to/work
 
+git clone git@github.com:hitomitak/hpc-prefect.git
+cd hpc-prefect
+
+source ~/venv/prefect/bin/activate
+uv pip install prefect-qiskit
 uv pip install --no-deps \
   -e packages/hpc-prefect-core \
   -e packages/hpc-prefect-adapters \
@@ -101,22 +106,31 @@ uv pip install -e algorithms/qcsc_workflow_utility
 uv pip install -e algorithms/sbd
 ```
 
+
 Check installation:
 
-<img src="./images/icon-fugaku.png" alt="fugaku" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 uv pip list | grep -E "(hpc-prefect|sbd|qcsc)"
+
+hpc-prefect-blocks                 0.1.0
+hpc-prefect-core                   0.1.0
+hpc-prefect-executor               0.1.0
+prefect-sbd                        0.1.0
+qcsc-workflow-utility              0.1.0 
+sbd                                0.1.0
 ```
 
 ---
 
-### Step 3. Build the SBD solver on Fugaku (prepare the HPC executable)
+### Step 3. Build the SBD solver on Fugaku Login Node (prepare the HPC executable)
 
+Create a new terminal and login to Fugaku Login Node. 
 Navigate to native source and build:
 
 <img src="./images/icon-fugaku.png" alt="fugaku" width="50"/><br>
 ```bash
-cd /work/<group>/<user>/hpc-prefect/algorithms/sbd/native
+cd /path/to/work/hpc-prefect/algorithms/sbd/native
 bash ./build_sbd_fugaku.sh
 ```
 
@@ -131,29 +145,36 @@ realpath ./diag
 Example output:
 
 ```text
-/work/<group>/<user>/hpc-prefect/algorithms/sbd/native/diag
+/path/to/work/hpc-prefect/algorithms/sbd/native/diag
 ```
 
 We will use this path in the next step.
 
 ---
 
-### Step 4. Generate Prefect blocks by script (Block Type vs Block Instance)
+### Step 4. Generate Prefect blocks by script (Pre/Post Node)
 
 #### 4.1 Create a job working directory and copy config template
 
-<img src="./images/icon-fugaku.png" alt="fugaku" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-cd /work/<group>/<user>/hpc-prefect
-mkdir -p /work/<group>/<user>/sbd_jobs
-cp algorithms/sbd/sbd_blocks.example.toml algorithms/sbd/sbd_blocks.toml
+cd /path/to/work/hpc-prefect
+mkdir -p /path/to/work/sbd_jobs
 ```
-
-If you use On-Prem Prefect, run login:
-
-<img src="./images/icon-fugaku.png" alt="fugaku" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-prefect-auth login
+realpath /path/to/work/sbd_jobs
+```
+Example output:
+
+```text
+/volxxxxx/mdt6/data/raxxxxx/uxxxxx/sbd_jobs
+```
+We will use this path in the next step.
+
+```
+cp algorithms/sbd/sbd_blocks.example.toml algorithms/sbd/sbd_blocks.toml
+vim algorithms/sbd/sbd_blocks.toml
 ```
 
 #### 4.2 Edit the configuration file
@@ -165,11 +186,12 @@ Edit `algorithms/sbd/sbd_blocks.toml` and set at least:
 - `queue`
 - `work_dir`
 - `sbd_executable`
+- `fugaku_gfscache`
 
 | Parameter | Value / Example | Description |
 |---|---|---|
 | `hpc_target` | `fugaku` | Target scheduler backend |
-| `project` | `hpXXXXXX` | Fugaku project |
+| `project` | `raXXXXXX` | Fugaku project |
 | `queue` | `small` | Fugaku resource group (`rscgrp`) |
 | `work_dir` | `/work/<group>/<user>/sbd_jobs` | Job working directory |
 | `sbd_executable` | `/work/<group>/<user>/hpc-prefect/algorithms/sbd/native/diag` | Absolute path to executable |
@@ -182,7 +204,7 @@ Edit `algorithms/sbd/sbd_blocks.toml` and set at least:
 
 #### 4.3 Run block creation script
 
-<img src="./images/icon-fugaku.png" alt="fugaku" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 python algorithms/sbd/create_blocks.py \
   --config algorithms/sbd/sbd_blocks.toml \
@@ -199,27 +221,15 @@ This creates the following blocks (default names):
 
 ---
 
-### Step 5. Deploy SBD workflow
+### Step 5. Deploy SBD workflow (Pre/Post Node)
 
 **Deploy = register a Flow as a runnable entry point (Deployment) so it can be started from the Prefect UI/CLI by name.**
 
-Start a detached session:
-
-<img src="./images/icon-fugaku.png" alt="fugaku" width="50"/><br>
-```bash
-screen -S sbd-workflow
-```
-
 Deploy:
-
-<img src="./images/icon-fugaku.png" alt="fugaku" width="50"/><br>
+<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-cd /work/<group>/<user>/hpc-prefect
-source ~/venv/prefect/bin/activate
 sbd-deploy
 ```
-
-Detach screen (`<ctrl> + a`, then `d`).
 
 ### Step 6. Provide workflow parameters
 
@@ -227,7 +237,7 @@ In the Prefect console, click **Run** → **Custom run** and set at least:
 
 | Field | Value / Example |
 |---|---|
-| FCIDump File | `/work/<group>/<user>/hpc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
+| FCIDump File | `/path/to/work/hpc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
 | SQD Subspace Dimension (Optional) | `10000000` (start small for testing) |
 | Differential Evolution Iterations (Optional) | `1` (start small for testing) |
 | Solver Block Ref | `sbd_solver_job/davidson-solver` |
