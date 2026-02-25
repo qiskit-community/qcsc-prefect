@@ -9,6 +9,7 @@ from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_table_artifact
 from prefect.cache_policies import RUN_ID, Inputs
 from prefect.futures import PrefectFutureList
+from prefect.task_runners import ConcurrentTaskRunner
 from prefect_ray import RayTaskRunner
 from pydantic import BaseModel, Field
 from qcsc_workflow_utility.chem import (
@@ -26,6 +27,27 @@ from .np_type_extension import NpStrict2DArrayBool
 from .sqd import walker_sqd
 
 MODULE_RNG = np.random.default_rng(seed=4574)
+THREAD_ENV = {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+}
+
+
+def _build_task_runner():
+    mode = os.getenv("SBD_TASK_RUNNER", "ray").strip().lower()
+    if mode == "concurrent":
+        return ConcurrentTaskRunner()
+
+    ray_cpus = int(os.getenv("PREFECT_RAY_NUM_CPUS", str(os.cpu_count() or 8)))
+    return RayTaskRunner(
+        init_kwargs={
+            "num_cpus": ray_cpus,
+            "runtime_env": {"env_vars": THREAD_ENV},
+        }
+    )
 
 
 class OptimizerState(BaseModel):
@@ -72,12 +94,13 @@ class OptimizerState(BaseModel):
 
 
 @flow(
-    task_runner=RayTaskRunner,
+    task_runner=_build_task_runner(),
 )
 def riken_sqd_de(
     parameters: FlowParameters,
 ):
     logger = get_run_logger()
+    logger.info("Task runner mode: %s", os.getenv("SBD_TASK_RUNNER", "ray").strip().lower())
 
     # ★ fail-fast: solver block existence & sanity check
     slug, name = parse_block_ref(parameters.solver_block_ref)

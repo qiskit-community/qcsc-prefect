@@ -237,6 +237,9 @@ python examples/prefect_bitcount_demo/flow_optimized.py \
 ```
 
 In this mode, the main user inputs are block names.
+We can also monitor the progress on the Prefect console:
+
+![Get Counts Flow Run](./images/img-get-counts-fugaku.png)
 
 ### Step 7.1. What `flow_optimized.py` does
 
