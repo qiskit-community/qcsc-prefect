@@ -219,7 +219,6 @@ This creates the following blocks (default names):
 - **CommandBlock**: `cmd-sbd-diag`
 - **ExecutionProfileBlock**: `exec-sbd-fugaku`
 - **HPCProfileBlock**: `hpc-fugaku-sbd`
-- **SBD Solver Job**: `davidson-solver`
 - **Prefect Variable**: `sqd_options`
 
 ---
