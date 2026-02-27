@@ -48,7 +48,16 @@ cd "$BUILD_DIR"
 
 echo ""
 echo "Running CMake configuration..."
-cmake ..
+
+# Detect if running on Miyabi
+if command -v mpiicpc &> /dev/null; then
+    echo "Detected Miyabi environment (mpiicpc found)"
+    echo "Configuring with MIYABI=ON..."
+    cmake .. -DMIYABI=ON -DCMAKE_C_COMPILER=mpiicc -DCMAKE_CXX_COMPILER=mpiicpc
+else
+    echo "Configuring for local environment..."
+    cmake ..
+fi
 
 echo ""
 echo "Building..."
