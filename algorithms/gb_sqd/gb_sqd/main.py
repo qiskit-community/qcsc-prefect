@@ -1,7 +1,5 @@
 """GB SQD Prefect workflows."""
 
-from __future__ import annotations
-
 import json
 import os
 import pathlib
