@@ -50,8 +50,12 @@ async def ext_sqd_simple_flow(
     This is a minimal implementation that wraps the existing gb-demo binary.
     
     Args:
-        command_block_name: Name of the CommandBlock
-        execution_profile_block_name: Name of the ExecutionProfileBlock
+        init_command_block_name: Name of init CommandBlock
+        recovery_command_block_name: Name of recovery CommandBlock
+        finalize_command_block_name: Name of finalize CommandBlock
+        init_execution_profile_block_name: Name of init ExecutionProfileBlock
+        recovery_execution_profile_block_name: Name of recovery ExecutionProfileBlock
+        finalize_execution_profile_block_name: Name of finalize ExecutionProfileBlock
         hpc_profile_block_name: Name of the HPCProfileBlock
         fcidump_file: Path to FCIDUMP file
         count_dict_file: Path to count dictionary file
@@ -174,8 +178,12 @@ async def trim_sqd_simple_flow(
     Run a simple TrimSQD workflow (single execution).
     
     Args:
-        command_block_name: Name of the CommandBlock
-        execution_profile_block_name: Name of the ExecutionProfileBlock
+        init_command_block_name: Name of init CommandBlock
+        recovery_command_block_name: Name of recovery CommandBlock
+        finalize_command_block_name: Name of finalize CommandBlock
+        init_execution_profile_block_name: Name of init ExecutionProfileBlock
+        recovery_execution_profile_block_name: Name of recovery ExecutionProfileBlock
+        finalize_execution_profile_block_name: Name of finalize ExecutionProfileBlock
         hpc_profile_block_name: Name of the HPCProfileBlock
         fcidump_file: Path to FCIDUMP file
         count_dict_file: Path to count dictionary file
@@ -292,8 +300,12 @@ from .tasks import (
 
 @flow(name="GB-SQD-ExtSQD")
 async def ext_sqd_flow(
-    command_block_name: str,
-    execution_profile_block_name: str,
+    init_command_block_name: str,
+    recovery_command_block_name: str,
+    finalize_command_block_name: str,
+    init_execution_profile_block_name: str,
+    recovery_execution_profile_block_name: str,
+    finalize_execution_profile_block_name: str,
     hpc_profile_block_name: str,
     fcidump_file: str,
     count_dict_file: str,
@@ -319,8 +331,12 @@ async def ext_sqd_flow(
     This workflow splits execution into multiple tasks for better observability.
     
     Args:
-        command_block_name: Name of the CommandBlock
-        execution_profile_block_name: Name of the ExecutionProfileBlock
+        init_command_block_name: Name of init CommandBlock
+        recovery_command_block_name: Name of recovery CommandBlock
+        finalize_command_block_name: Name of finalize CommandBlock
+        init_execution_profile_block_name: Name of init ExecutionProfileBlock
+        recovery_execution_profile_block_name: Name of recovery ExecutionProfileBlock
+        finalize_execution_profile_block_name: Name of finalize ExecutionProfileBlock
         hpc_profile_block_name: Name of the HPCProfileBlock
         fcidump_file: Path to FCIDUMP file
         count_dict_file: Path to count dictionary file
@@ -347,10 +363,16 @@ async def ext_sqd_flow(
     logger.info("Starting GB-SQD ExtSQD workflow (task-based)")
     
     # Step 1: Initialize
-    init_data = initialize_task(
+    init_data = await initialize_task(
+        mode="ext_sqd",
+        command_block_name=init_command_block_name,
+        execution_profile_block_name=init_execution_profile_block_name,
+        hpc_profile_block_name=hpc_profile_block_name,
         fcidump_file=fcidump_file,
         count_dict_file=count_dict_file,
         work_dir=work_dir,
+        verbose=verbose,
+        max_time=max_time,
     )
     
     # Step 2: Recovery iterations (sequential)
@@ -360,12 +382,13 @@ async def ext_sqd_flow(
         
         result = await recovery_iteration_task(
             iteration_id=iter_id,
-            command_block_name=command_block_name,
-            execution_profile_block_name=execution_profile_block_name,
+            command_block_name=recovery_command_block_name,
+            execution_profile_block_name=recovery_execution_profile_block_name,
             hpc_profile_block_name=hpc_profile_block_name,
             init_data=init_data,
             previous_result=recovery_results[-1] if recovery_results else None,
             mode="ext_sqd",
+            num_recovery=num_recovery,
             num_batches=num_batches,
             num_samples_per_batch=num_samples_per_batch,
             num_samples_per_recovery=None,
@@ -390,9 +413,14 @@ async def ext_sqd_flow(
         recovery_results.append(result)
     
     # Step 3: Final diagonalization
-    final_result = final_diagonalization_task(
+    final_result = await final_diagonalization_task(
+        command_block_name=finalize_command_block_name,
+        execution_profile_block_name=finalize_execution_profile_block_name,
+        hpc_profile_block_name=hpc_profile_block_name,
         recovery_results=recovery_results,
         work_dir=work_dir,
+        verbose=verbose,
+        max_time=max_time,
     )
     
     # Step 4: Output results
@@ -407,8 +435,12 @@ async def ext_sqd_flow(
 
 @flow(name="GB-SQD-TrimSQD")
 async def trim_sqd_flow(
-    command_block_name: str,
-    execution_profile_block_name: str,
+    init_command_block_name: str,
+    recovery_command_block_name: str,
+    finalize_command_block_name: str,
+    init_execution_profile_block_name: str,
+    recovery_execution_profile_block_name: str,
+    finalize_execution_profile_block_name: str,
     hpc_profile_block_name: str,
     fcidump_file: str,
     count_dict_file: str,
@@ -438,8 +470,12 @@ async def trim_sqd_flow(
     This workflow splits execution into multiple tasks for better observability.
     
     Args:
-        command_block_name: Name of the CommandBlock
-        execution_profile_block_name: Name of the ExecutionProfileBlock
+        init_command_block_name: Name of init CommandBlock
+        recovery_command_block_name: Name of recovery CommandBlock
+        finalize_command_block_name: Name of finalize CommandBlock
+        init_execution_profile_block_name: Name of init ExecutionProfileBlock
+        recovery_execution_profile_block_name: Name of recovery ExecutionProfileBlock
+        finalize_execution_profile_block_name: Name of finalize ExecutionProfileBlock
         hpc_profile_block_name: Name of the HPCProfileBlock
         fcidump_file: Path to FCIDUMP file
         count_dict_file: Path to count dictionary file
@@ -470,10 +506,16 @@ async def trim_sqd_flow(
     logger.info("Starting GB-SQD TrimSQD workflow (task-based)")
     
     # Step 1: Initialize
-    init_data = initialize_task(
+    init_data = await initialize_task(
+        mode="trim_sqd",
+        command_block_name=init_command_block_name,
+        execution_profile_block_name=init_execution_profile_block_name,
+        hpc_profile_block_name=hpc_profile_block_name,
         fcidump_file=fcidump_file,
         count_dict_file=count_dict_file,
         work_dir=work_dir,
+        verbose=verbose,
+        max_time=max_time,
     )
     
     # Step 2: Recovery iterations (sequential)
@@ -483,12 +525,13 @@ async def trim_sqd_flow(
         
         result = await recovery_iteration_task(
             iteration_id=iter_id,
-            command_block_name=command_block_name,
-            execution_profile_block_name=execution_profile_block_name,
+            command_block_name=recovery_command_block_name,
+            execution_profile_block_name=recovery_execution_profile_block_name,
             hpc_profile_block_name=hpc_profile_block_name,
             init_data=init_data,
             previous_result=recovery_results[-1] if recovery_results else None,
             mode="trim_sqd",
+            num_recovery=num_recovery,
             num_batches=num_batches,
             num_samples_per_batch=None,
             num_samples_per_recovery=num_samples_per_recovery,
@@ -513,9 +556,19 @@ async def trim_sqd_flow(
         recovery_results.append(result)
     
     # Step 3: Final diagonalization
-    final_result = final_diagonalization_task(
+    final_result = await final_diagonalization_task(
+        command_block_name=finalize_command_block_name,
+        execution_profile_block_name=finalize_execution_profile_block_name,
+        hpc_profile_block_name=hpc_profile_block_name,
         recovery_results=recovery_results,
         work_dir=work_dir,
+        carryover_ratio_batch=carryover_ratio_batch,
+        carryover_ratio_combined=carryover_ratio_combined,
+        adet_comm_size_combined=adet_comm_size_combined,
+        bdet_comm_size_combined=bdet_comm_size_combined,
+        task_comm_size_combined=task_comm_size_combined,
+        verbose=verbose,
+        max_time=max_time,
     )
     
     # Step 4: Output results
@@ -548,4 +601,3 @@ def deploy_trim_sqd():
         name="gb-sqd-trim-sqd",
         description="GB-SQD TrimSQD workflow with task-based execution for improved visibility.",
     )
-

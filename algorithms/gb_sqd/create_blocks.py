@@ -97,8 +97,40 @@ def _parse_args() -> argparse.Namespace:
         help="Name for TrimSQD command block (overrides config)",
     )
     parser.add_argument(
+        "--command-block-name-init",
+        help="Name for init subcommand block (overrides config)",
+    )
+    parser.add_argument(
+        "--command-block-name-recovery",
+        help="Name for recovery subcommand block (overrides config)",
+    )
+    parser.add_argument(
+        "--command-block-name-finalize",
+        help="Name for finalize subcommand block (overrides config)",
+    )
+    parser.add_argument(
         "--execution-profile-block-name",
-        help="Name for execution profile block (overrides config)",
+        help="(Legacy) Name for Ext/Trim execution profile block (overrides config)",
+    )
+    parser.add_argument(
+        "--execution-profile-block-name-ext",
+        help="Name for ExtSQD execution profile block (overrides config)",
+    )
+    parser.add_argument(
+        "--execution-profile-block-name-trim",
+        help="Name for TrimSQD execution profile block (overrides config)",
+    )
+    parser.add_argument(
+        "--execution-profile-block-name-init",
+        help="Name for init execution profile block (overrides config)",
+    )
+    parser.add_argument(
+        "--execution-profile-block-name-recovery",
+        help="Name for recovery execution profile block (overrides config)",
+    )
+    parser.add_argument(
+        "--execution-profile-block-name-finalize",
+        help="Name for finalize execution profile block (overrides config)",
     )
     parser.add_argument(
         "--hpc-profile-block-name",
@@ -175,14 +207,38 @@ def main() -> None:
         script_dir = Path(__file__).parent
         executable_path = str((script_dir / "gb_demo_2026/build/gb-demo").resolve())
     
+    target_name = "miyabi" if is_miyabi else "fugaku"
+
     # Block names
     cmd_block_ext = get_value("command_block_name_ext", default="cmd-gb-sqd-ext")
     cmd_block_trim = get_value("command_block_name_trim", default="cmd-gb-sqd-trim")
-    exec_block_name = get_value("execution_profile_block_name") or (
-        f"exec-gb-sqd-{'miyabi' if is_miyabi else 'fugaku'}"
+    cmd_block_init = get_value("command_block_name_init", default="cmd-gb-sqd-init")
+    cmd_block_recovery = get_value("command_block_name_recovery", default="cmd-gb-sqd-recovery")
+    cmd_block_finalize = get_value("command_block_name_finalize", default="cmd-gb-sqd-finalize")
+
+    legacy_exec_block_name = get_value("execution_profile_block_name")
+    exec_block_ext = get_value(
+        "execution_profile_block_name_ext",
+        default=legacy_exec_block_name or f"exec-gb-sqd-ext-{target_name}",
+    )
+    exec_block_trim = get_value(
+        "execution_profile_block_name_trim",
+        default=legacy_exec_block_name or f"exec-gb-sqd-trim-{target_name}",
+    )
+    exec_block_init = get_value(
+        "execution_profile_block_name_init",
+        default=f"exec-gb-sqd-init-{target_name}",
+    )
+    exec_block_recovery = get_value(
+        "execution_profile_block_name_recovery",
+        default=f"exec-gb-sqd-recovery-{target_name}",
+    )
+    exec_block_finalize = get_value(
+        "execution_profile_block_name_finalize",
+        default=f"exec-gb-sqd-finalize-{target_name}",
     )
     hpc_block_name = get_value("hpc_profile_block_name") or (
-        f"hpc-{'miyabi' if is_miyabi else 'fugaku'}-gb-sqd"
+        f"hpc-{target_name}-gb-sqd"
     )
     
     # Create CommandBlocks
@@ -203,27 +259,78 @@ def main() -> None:
         default_args=["--mode", "trim_sqd"],
     ).save(cmd_block_trim, overwrite=True)
     print(f"  ✓ {cmd_block_trim}")
+
+    CommandBlock(
+        command_name="gb-sqd-init",
+        executable_key="gb_sqd",
+        description="GB SQD init subcommand",
+        default_args=["init"],
+    ).save(cmd_block_init, overwrite=True)
+    print(f"  ✓ {cmd_block_init}")
+
+    CommandBlock(
+        command_name="gb-sqd-recovery",
+        executable_key="gb_sqd",
+        description="GB SQD recovery subcommand",
+        default_args=["recovery"],
+    ).save(cmd_block_recovery, overwrite=True)
+    print(f"  ✓ {cmd_block_recovery}")
+
+    CommandBlock(
+        command_name="gb-sqd-finalize",
+        executable_key="gb_sqd",
+        description="GB SQD finalize subcommand",
+        default_args=["finalize"],
+    ).save(cmd_block_finalize, overwrite=True)
+    print(f"  ✓ {cmd_block_finalize}")
     
     # Create ExecutionProfileBlock
     print("\nCreating ExecutionProfileBlock...")
     
-    ExecutionProfileBlock(
-        profile_name=f"gb-sqd-{'miyabi' if is_miyabi else 'fugaku'}",
-        command_name="gb-sqd-ext",  # Can be used for both ext and trim
-        resource_class="cpu",
-        num_nodes=num_nodes,
-        mpiprocs=mpiprocs,
-        ompthreads=ompthreads,
-        walltime=walltime,
-        launcher=launcher,
-        mpi_options=mpi_options,
-        modules=modules,
-        environments={
-            "OMP_NUM_THREADS": str(ompthreads),
-            "KMP_AFFINITY": "granularity=fine,compact,1,0",
-        },
-    ).save(exec_block_name, overwrite=True)
-    print(f"  ✓ {exec_block_name}")
+    def _save_execution_profile(*, block_name: str, profile_name: str, command_name: str) -> None:
+        ExecutionProfileBlock(
+            profile_name=profile_name,
+            command_name=command_name,
+            resource_class="cpu",
+            num_nodes=num_nodes,
+            mpiprocs=mpiprocs,
+            ompthreads=ompthreads,
+            walltime=walltime,
+            launcher=launcher,
+            mpi_options=mpi_options,
+            modules=modules,
+            environments={
+                "OMP_NUM_THREADS": str(ompthreads),
+                "KMP_AFFINITY": "granularity=fine,compact,1,0",
+            },
+        ).save(block_name, overwrite=True)
+        print(f"  ✓ {block_name}")
+
+    _save_execution_profile(
+        block_name=exec_block_ext,
+        profile_name=f"gb-sqd-ext-{target_name}",
+        command_name="gb-sqd-ext",
+    )
+    _save_execution_profile(
+        block_name=exec_block_trim,
+        profile_name=f"gb-sqd-trim-{target_name}",
+        command_name="gb-sqd-trim",
+    )
+    _save_execution_profile(
+        block_name=exec_block_init,
+        profile_name=f"gb-sqd-init-{target_name}",
+        command_name="gb-sqd-init",
+    )
+    _save_execution_profile(
+        block_name=exec_block_recovery,
+        profile_name=f"gb-sqd-recovery-{target_name}",
+        command_name="gb-sqd-recovery",
+    )
+    _save_execution_profile(
+        block_name=exec_block_finalize,
+        profile_name=f"gb-sqd-finalize-{target_name}",
+        command_name="gb-sqd-finalize",
+    )
     
     # Create HPCProfileBlock
     print("\nCreating HPCProfileBlock...")
@@ -270,18 +377,29 @@ def main() -> None:
     print(f"\nCommand Blocks:")
     print(f"  - {cmd_block_ext}")
     print(f"  - {cmd_block_trim}")
-    print(f"Execution Profile Block: {exec_block_name}")
+    print(f"  - {cmd_block_init}")
+    print(f"  - {cmd_block_recovery}")
+    print(f"  - {cmd_block_finalize}")
+    print("Execution Profile Blocks:")
+    print(f"  - {exec_block_ext}")
+    print(f"  - {exec_block_trim}")
+    print(f"  - {exec_block_init}")
+    print(f"  - {exec_block_recovery}")
+    print(f"  - {exec_block_finalize}")
     print(f"HPC Profile Block: {hpc_block_name}")
     print("\nNext steps:")
     print("1. Build the gb-demo executable if not already built:")
     print("   cd native && ./build_gb_sqd.sh")
     print("2. Run the workflow:")
-    print(f"   python -m gb_sqd.main \\")
-    print(f"     --command-block {cmd_block_ext} \\")
-    print(f"     --execution-profile {exec_block_name} \\")
-    print(f"     --hpc-profile {hpc_block_name}")
+    print("   Use these block names in ext_sqd_flow / trim_sqd_flow parameters:")
+    print(f"     init_command_block_name={cmd_block_init}")
+    print(f"     recovery_command_block_name={cmd_block_recovery}")
+    print(f"     finalize_command_block_name={cmd_block_finalize}")
+    print(f"     init_execution_profile_block_name={exec_block_init}")
+    print(f"     recovery_execution_profile_block_name={exec_block_recovery}")
+    print(f"     finalize_execution_profile_block_name={exec_block_finalize}")
+    print(f"     hpc_profile_block_name={hpc_block_name}")
 
 
 if __name__ == "__main__":
     main()
-

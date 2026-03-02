@@ -30,6 +30,7 @@ async def recovery_iteration_task(
     init_data: dict[str, Any],
     previous_result: dict[str, Any] | None,
     mode: str,
+    num_recovery: int,
     num_batches: int,
     num_samples_per_batch: int | None,
     num_samples_per_recovery: int | None,
@@ -103,20 +104,21 @@ async def recovery_iteration_task(
     iter_dir = work_path / f"recovery_{iteration_id}"
     iter_dir.mkdir(parents=True, exist_ok=True)
     
-    # Check for previous carryover
-    carryover_file = None
+    # Resolve input/output state for subcommand execution.
     if previous_result:
-        carryover_file = previous_result.get("carryover_file")
-        if carryover_file and Path(carryover_file).exists():
-            logger.info(f"Using carryover from iteration {iteration_id-1}: {carryover_file}")
-    
-    # Build command arguments
+        state_in = Path(previous_result["state_file"]).expanduser().resolve()
+    else:
+        state_in = Path(init_data["state_file"]).expanduser().resolve()
+    if not state_in.exists():
+        raise RuntimeError(f"State input file not found for iteration {iteration_id}: {state_in}")
+
+    state_out = iter_dir / f"state_iter_{iteration_id + 1:03d}.json"
+
+    # Build command arguments for `gb-demo recovery`.
     user_args = [
-        "--fcidump", init_data["fcidump_file"],
-        "--count_dict_file", init_data["count_dict_file"],
-        "--mode", mode,
-        "--num_batches", str(num_batches),
-        "--num_recovery", "1",  # Single iteration per task
+        "--state-in", str(state_in),
+        "--state-out", str(state_out),
+        "--num-iters", "1",
         "--iteration", str(iteration),
         "--block", str(block),
         "--tolerance", str(tolerance),
@@ -127,7 +129,7 @@ async def recovery_iteration_task(
         "--carryover_threshold", str(carryover_threshold),
         "--output_dir", str(iter_dir),
     ]
-    
+
     # Mode-specific parameters
     if mode == "ext_sqd":
         if num_samples_per_batch is not None:
@@ -147,19 +149,19 @@ async def recovery_iteration_task(
             user_args.extend(["--bdet_comm_size_combined", str(bdet_comm_size_combined)])
         if task_comm_size_combined is not None:
             user_args.extend(["--task_comm_size_combined", str(task_comm_size_combined)])
+        # In trim mode with one-iteration tasks, only the global final iteration should
+        # use carryover_type=3.
+        if iteration_id + 1 < num_recovery:
+            user_args.append("--trim_no_final_carryover_type3")
     
     # Optional flags
     if with_hf:
         user_args.append("--with_hf")
     if verbose:
         user_args.append("-v")
-    
-    # Add carryover file if available
-    if carryover_file:
-        user_args.extend(["--initial_occupancies", str(carryover_file)])
-    
+
     logger.info(f"Iteration directory: {iter_dir}")
-    logger.info(f"Mode: {mode}, Batches: {num_batches}")
+    logger.info(f"Mode: {mode}, state_in={state_in.name}, num_batches={num_batches}")
     
     # Execute the job
     script_filename = f"recovery_{iteration_id}.pbs"  # or .pjm for Fugaku
@@ -175,25 +177,27 @@ async def recovery_iteration_task(
         timeout_seconds=max_time * 2,  # Allow buffer
         metrics_artifact_key=f"gb-sqd-recovery-{iteration_id}-metrics",
     )
-    
-    # Verify output files
-    energy_log_file = iter_dir / "energy_log.json"
-    carryover_output = iter_dir / "carryover_bitstrings.txt"
-    
-    if not energy_log_file.exists():
-        logger.warning(f"energy_log.json not found in {iter_dir}")
-        energy_data = None
-    else:
-        with open(energy_log_file, "r") as f:
-            energy_data = json.load(f)
-        logger.info(f"Energy: {energy_data.get('energy_final', 'N/A')}")
-    
-    # Check for carryover file
-    if not carryover_output.exists():
-        logger.warning(f"Carryover file not found: {carryover_output}")
-        carryover_output = None
-    else:
-        logger.info(f"Carryover saved: {carryover_output}")
+    if result.exit_status != 0:
+        raise RuntimeError(
+            f"Recovery iteration {iteration_id} failed: exit_status={result.exit_status}"
+        )
+    if not state_out.exists():
+        raise RuntimeError(f"State output file was not created: {state_out}")
+
+    # Read state to extract summary fields.
+    state_data = json.loads(state_out.read_text())
+    state_section = state_data.get("state", {})
+    energy_history = state_section.get("energy_history", [])
+    energy_final = energy_history[-1] if energy_history else None
+    if energy_final is not None:
+        logger.info(f"Energy (latest): {energy_final}")
+
+    carryover_alpha_path = state_section.get("carryover_alpha_path")
+    carryover_alpha_file = None
+    if carryover_alpha_path:
+        candidate = Path(carryover_alpha_path)
+        carryover_alpha_file = str(candidate if candidate.is_absolute() else state_out.parent / candidate)
+        logger.info(f"Carryover(alpha): {carryover_alpha_file}")
     
     logger.info(f"✓ Recovery iteration {iteration_id} complete")
     
@@ -201,9 +205,8 @@ async def recovery_iteration_task(
         "iteration_id": iteration_id,
         "status": "success",
         "iter_dir": str(iter_dir),
-        "energy_log_file": str(energy_log_file) if energy_log_file.exists() else None,
-        "carryover_file": str(carryover_output) if carryover_output else None,
-        "energy_data": energy_data,
+        "state_file": str(state_out),
+        "energy_data": {"energy_final": energy_final},
+        "carryover_file": carryover_alpha_file,
         "job_result": result,
     }
-
