@@ -300,7 +300,6 @@ def main() -> None:
             mpi_options=mpi_options,
             modules=modules,
             environments={
-                "OMP_NUM_THREADS": str(ompthreads),
                 "KMP_AFFINITY": "granularity=fine,compact,1,0",
             },
         ).save(block_name, overwrite=True)
