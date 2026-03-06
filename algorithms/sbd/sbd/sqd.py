@@ -6,7 +6,6 @@ from typing import Any
 
 import numpy as np
 from prefect import get_run_logger, task
-from prefect.transactions import CommitMode, transaction
 from prefect.variables import Variable
 from prefect_qiskit import QuantumRuntime
 from qcsc_workflow_utility.chem import ElectronicProperties, NpStrict1DArrayF64
@@ -78,19 +77,16 @@ def walker_sqd(
             n_lucj_layers=circuit_params.n_lucj_layers,
             use_reset_mitigation=circuit_params.use_reset_mitigation,
         )
-        # This function is very expensive due to massive Sabre trials,
-        # but the result is cached through the same flow run.
-        # Fix deadlock issue; See https://github.com/PrefectHQ/prefect/issues/18600
-        # The find_optimal_layout task is SERIALIZABLE isolation.
-        with transaction(commit_mode=CommitMode.EAGER):
-            layout = find_optimal_layout(
-                test_circuit=vir_circuit,
-                target=target,
-                optimization_level=circuit_params.optimization_level,
-                max_iterations=circuit_params.sabre_max_iterations,
-                swap_trials=circuit_params.sabre_swap_trials,
-                layout_trials=circuit_params.sabre_layout_trials,
-            )
+        # This function is expensive due to massive Sabre trials.
+        # Cache is scoped to the current flow run.
+        layout = find_optimal_layout(
+            test_circuit=vir_circuit,
+            target=target,
+            optimization_level=circuit_params.optimization_level,
+            max_iterations=circuit_params.sabre_max_iterations,
+            swap_trials=circuit_params.sabre_swap_trials,
+            layout_trials=circuit_params.sabre_layout_trials,
+        )
         isa_circuit = transpile_circuit(
             circuit=vir_circuit,
             target=target,
