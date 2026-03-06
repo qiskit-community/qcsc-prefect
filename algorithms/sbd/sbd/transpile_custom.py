@@ -6,10 +6,7 @@ from ffsim.qiskit import PRE_INIT
 from prefect import task
 from prefect.artifacts import create_table_artifact
 from prefect.cache_policies import RUN_ID
-from prefect.locking.filesystem import FileSystemLockManager
 from prefect.logging import get_run_logger
-from prefect.settings import PREFECT_HOME
-from prefect.transactions import IsolationLevel
 from qiskit import QuantumCircuit
 from qiskit.passmanager import ConditionalController
 from qiskit.transpiler import Layout, Target, generate_preset_pass_manager
@@ -66,13 +63,8 @@ def transpile_circuit(
     return cusotm_pm.run(circuit)
 
 
-# Run single task at a time to prevent race condition.
-cache_policy = RUN_ID.configure(
-    isolation_level=IsolationLevel.SERIALIZABLE,
-    lock_manager=FileSystemLockManager(
-        lock_files_directory=PREFECT_HOME.value() / "locks"
-    )
-)
+# Cache only within a flow run without explicit filesystem locking.
+cache_policy = RUN_ID
 
 
 @task(
