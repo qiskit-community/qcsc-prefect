@@ -309,6 +309,7 @@ async def ext_sqd_flow(
     finalize_execution_profile_block_name: str = "exec-gb-sqd-finalize-miyabi",
     hpc_profile_block_name: str = "hpc-miyabi-gb-sqd",
     num_recovery: int = 3,
+    num_iters_per_recovery: int = 1,
     num_batches: int = 8,
     num_samples_per_batch: int = 1000,
     iteration: int = 1,
@@ -339,7 +340,8 @@ async def ext_sqd_flow(
         fcidump_file: Path to FCIDUMP file
         count_dict_file: Path to count dictionary file
         work_dir: Working directory for outputs
-        num_recovery: Number of configuration recovery iterations
+        num_recovery: Number of recovery tasks/checkpoints
+        num_iters_per_recovery: Number of gb-demo iterations per recovery task
         num_batches: Number of batches
         num_samples_per_batch: Number of samples per batch
         iteration: Maximum number of Davidson iterations
@@ -359,6 +361,11 @@ async def ext_sqd_flow(
     """
     logger = get_run_logger()
     logger.info("Starting GB-SQD ExtSQD workflow (task-based)")
+
+    if num_recovery < 1:
+        raise ValueError("num_recovery must be >= 1")
+    if num_iters_per_recovery < 1:
+        raise ValueError("num_iters_per_recovery must be >= 1")
     
     # Step 1: Initialize
     init_data = await initialize_task(
@@ -387,6 +394,7 @@ async def ext_sqd_flow(
             previous_result=recovery_results[-1] if recovery_results else None,
             mode="ext_sqd",
             num_recovery=num_recovery,
+            num_iters_per_recovery=num_iters_per_recovery,
             num_batches=num_batches,
             num_samples_per_batch=num_samples_per_batch,
             num_samples_per_recovery=None,
@@ -444,6 +452,7 @@ async def trim_sqd_flow(
     finalize_execution_profile_block_name: str = "exec-gb-sqd-finalize-miyabi",
     hpc_profile_block_name: str = "hpc-miyabi-gb-sqd",
     num_recovery: int = 3,
+    num_iters_per_recovery: int = 1,
     num_batches: int = 8,
     num_samples_per_recovery: int = 10000,
     iteration: int = 1,
@@ -478,7 +487,8 @@ async def trim_sqd_flow(
         fcidump_file: Path to FCIDUMP file
         count_dict_file: Path to count dictionary file
         work_dir: Working directory for outputs
-        num_recovery: Number of configuration recovery iterations
+        num_recovery: Number of recovery tasks/checkpoints
+        num_iters_per_recovery: Number of gb-demo iterations per recovery task
         num_batches: Number of batches
         num_samples_per_recovery: Number of samples per recovery iteration
         iteration: Maximum number of Davidson iterations
@@ -502,6 +512,11 @@ async def trim_sqd_flow(
     """
     logger = get_run_logger()
     logger.info("Starting GB-SQD TrimSQD workflow (task-based)")
+
+    if num_recovery < 1:
+        raise ValueError("num_recovery must be >= 1")
+    if num_iters_per_recovery < 1:
+        raise ValueError("num_iters_per_recovery must be >= 1")
     
     # Step 1: Initialize
     init_data = await initialize_task(
@@ -530,6 +545,7 @@ async def trim_sqd_flow(
             previous_result=recovery_results[-1] if recovery_results else None,
             mode="trim_sqd",
             num_recovery=num_recovery,
+            num_iters_per_recovery=num_iters_per_recovery,
             num_batches=num_batches,
             num_samples_per_batch=None,
             num_samples_per_recovery=num_samples_per_recovery,

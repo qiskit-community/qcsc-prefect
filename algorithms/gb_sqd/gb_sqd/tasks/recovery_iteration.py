@@ -31,6 +31,7 @@ async def recovery_iteration_task(
     previous_result: dict[str, Any] | None,
     mode: str,
     num_recovery: int,
+    num_iters_per_recovery: int,
     num_batches: int,
     num_samples_per_batch: int | None,
     num_samples_per_recovery: int | None,
@@ -67,6 +68,8 @@ async def recovery_iteration_task(
         init_data: Initialization data from initialize_task
         previous_result: Result from previous iteration (None for first iteration)
         mode: "ext_sqd" or "trim_sqd"
+        num_recovery: Number of recovery tasks/checkpoints
+        num_iters_per_recovery: Number of gb-demo iterations to run in this task
         num_batches: Number of batches
         num_samples_per_batch: Samples per batch (ExtSQD)
         num_samples_per_recovery: Samples per recovery (TrimSQD)
@@ -118,7 +121,7 @@ async def recovery_iteration_task(
     user_args = [
         "--state-in", str(state_in),
         "--state-out", str(state_out),
-        "--num-iters", "1",
+        "--num-iters", str(num_iters_per_recovery),
         "--iteration", str(iteration),
         "--block", str(block),
         "--tolerance", str(tolerance),
@@ -149,8 +152,7 @@ async def recovery_iteration_task(
             user_args.extend(["--bdet_comm_size_combined", str(bdet_comm_size_combined)])
         if task_comm_size_combined is not None:
             user_args.extend(["--task_comm_size_combined", str(task_comm_size_combined)])
-        # In trim mode with one-iteration tasks, only the global final iteration should
-        # use carryover_type=3.
+        # In trim mode, only the final recovery task should use carryover_type=3.
         if iteration_id + 1 < num_recovery:
             user_args.append("--trim_no_final_carryover_type3")
     
@@ -161,7 +163,10 @@ async def recovery_iteration_task(
         user_args.append("-v")
 
     logger.info(f"Iteration directory: {iter_dir}")
-    logger.info(f"Mode: {mode}, state_in={state_in.name}, num_batches={num_batches}")
+    logger.info(
+        f"Mode: {mode}, state_in={state_in.name}, num_batches={num_batches}, "
+        f"num_iters_per_recovery={num_iters_per_recovery}"
+    )
     
     # Execute the job
     script_filename = f"recovery_{iteration_id}.pbs"  # or .pjm for Fugaku

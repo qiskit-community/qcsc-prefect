@@ -90,6 +90,7 @@ result = await ext_sqd_flow(
     count_dict_file="./data/count_dict.txt",
     work_dir="./results",
     num_recovery=3,
+    num_iters_per_recovery=1,
     num_batches=8,
 )
 
@@ -106,12 +107,13 @@ result = await trim_sqd_flow(
     count_dict_file="./data/count_dict.txt",
     work_dir="./results",
     num_recovery=3,
+    num_iters_per_recovery=1,
     num_batches=8,
 )
 ```
 
 **Benefits of Task-Based Workflows:**
-- ✅ Progress visibility in Prefect dashboard for each recovery iteration
+- ✅ Progress visibility in Prefect dashboard for each recovery task/checkpoint
 - ✅ Failure localization by step (`init` / each `recovery` / `finalize`)
 - ✅ Detailed telemetry and logging for each step
 - ✅ Better debugging and monitoring
@@ -138,7 +140,10 @@ result = await ext_sqd_simple_flow(
 
 ### Task-Based Workflow Structure
 
-The task-based workflows split execution into multiple Prefect tasks:
+The task-based workflows split execution into multiple Prefect tasks.
+`num_recovery` controls how many recovery tasks/checkpoints Prefect creates.
+`num_iters_per_recovery` controls how many `gb-demo recovery` iterations run inside each task.
+Total recovery iterations = `num_recovery * num_iters_per_recovery`.
 
 ```
 Flow: GB-SQD-ExtSQD / GB-SQD-TrimSQD
@@ -146,7 +151,7 @@ Flow: GB-SQD-ExtSQD / GB-SQD-TrimSQD
 │  └─ Run `gb-demo init` and produce `init/state_iter_000.json`
 │
 ├─ Task 2-N: recovery_iteration_0..N (sequential)
-│  └─ Run `gb-demo recovery` with `--num-iters 1`
+│  └─ Run `gb-demo recovery` with `--num-iters <num_iters_per_recovery>`
 │     └─ Uses MPI parallelization internally (gb-demo binary)
 │
 ├─ Task Final: final_diagonalization
