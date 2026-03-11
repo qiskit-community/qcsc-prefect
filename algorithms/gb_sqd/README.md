@@ -167,6 +167,30 @@ result = bulk_gb_sqd_flow(
 
 For the full Fugaku run procedure, see `docs/bulk_submission_flow_runbook.md`.
 
+If you want to run the bulk flow once and then rerun only the failed targets
+with different parameters, use the rerun helper:
+
+```python
+from gb_sqd import bulk_gb_sqd_flow_with_failed_target_rerun
+
+result = bulk_gb_sqd_flow_with_failed_target_rerun(
+    mode="ext_sqd",
+    input_root_dir="./data/ligand",
+    output_root_dir="/shared/gb_sqd_runs/ligand_ext",
+    command_block_name="cmd-gb-sqd-ext",
+    execution_profile_block_name="exec-gb-sqd-ext-fugaku",
+    hpc_profile_block_name="hpc-fugaku-gb-sqd",
+    max_jobs_in_queue=8,
+    max_prefect_concurrency=8,
+    num_recovery=2,
+    num_batches=2,
+    num_samples_per_batch=1000,
+    failed_target_override_parameters={
+        "carryover_threshold": 1e-3,
+    },
+)
+```
+
 ## Workflow Architecture
 
 ### Task-Based Workflow Structure
