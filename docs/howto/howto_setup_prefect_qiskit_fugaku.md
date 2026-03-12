@@ -32,7 +32,11 @@ Activate your virtual environment:
 <img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
+export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
 ```
+
+If `SSL_CERT_FILE` is not set, IBM Quantum access may fail with
+`[SSL: CERTIFICATE_VERIFY_FAILED] unable to get local issuer certificate`.
 
 Install the Prefect Qiskit integration:
 
@@ -117,4 +121,3 @@ Example output:
 
 If the blocks don't appear, it's likely that the Prefect profile setup failed.
 Go back to **Step 3** and ensure you have successfully logged in to the Prefect Cloud workspace.
-

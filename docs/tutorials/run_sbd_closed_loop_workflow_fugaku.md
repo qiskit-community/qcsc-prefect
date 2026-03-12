@@ -115,6 +115,7 @@ git clone git@github.com:hitomitak/hpc-prefect.git
 cd hpc-prefect
 
 source ~/venv/prefect/bin/activate
+export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
 uv pip install prefect-qiskit
 uv pip install --no-deps \
   -e packages/hpc-prefect-core \
