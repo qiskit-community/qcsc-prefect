@@ -18,7 +18,7 @@ srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 
 ### Step 2: Load Spack Module and Install UV
 
-Load Python3.11 and sqlite and Install `uv`.
+Load Python3.12 and sqlite and Install `uv`.
 
 <img src="./images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
 ```bash
@@ -30,20 +30,25 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ### Step 3: Create a Python Virtual Environment
 
-Use `uv` to create a virtual environment with Python 3.11:
+Use `uv` to create a virtual environment with Python 3.12:
 
 <img src="./images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
 ```bash
-uv venv ~/venv/prefect -p 3.11
+uv venv ~/venv/prefect -p 3.12
 ```
 
-This will install Python 3.11 and set up a new environment named `prefect`.
+This will install Python 3.12 and set up a new environment named `prefect`.
 
 ### Step 4: Activate the Environment
 
-Activate the virtual environment:
+Activate the virtual environment and point OpenSSL to the CA bundle installed by `certifi`:
 
 <img src="./images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
+export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
 ```
+
+This avoids IBM Quantum HTTPS failures such as
+`[SSL: CERTIFICATE_VERIFY_FAILED] unable to get local issuer certificate`
+when using the `uv`-managed Python environment on Fugaku.
