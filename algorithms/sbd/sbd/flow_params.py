@@ -44,7 +44,7 @@ class CircuitParameters(BaseModel):
     )
     
     sabre_layout_trials: int = Field(
-        default=100_000,
+        default=1_024,
         description="The number of random seed trials to run layout with.",
         title="Sabre Layout Trials",
         ge=1,
