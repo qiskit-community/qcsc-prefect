@@ -2,6 +2,8 @@
 #
 # Author: Naoki Kanazawa (knzwnao@jp.ibm.com)
 
+from time import perf_counter
+
 from ffsim.qiskit import PRE_INIT
 from prefect import task
 from prefect.artifacts import create_table_artifact
@@ -24,6 +26,7 @@ from qiskit.transpiler.passmanager import PassManager
 from qiskit_ibm_runtime.transpiler.passes import FoldRzzAngle
 
 TRANSPILE_SEED = 6538
+SLOW_LAYOUT_TRIAL_THRESHOLD = 4_096
 
 
 @task
@@ -80,6 +83,25 @@ def find_optimal_layout(
 ) -> Layout:
     logger = get_run_logger()
     coupling_map = target.build_coupling_map()
+    num_qubits = len(test_circuit.qubits)
+
+    logger.info(
+        "Starting SABRE layout search for %s qubits "
+        "(optimization_level=%s, max_iterations=%s, swap_trials=%s, layout_trials=%s).",
+        num_qubits,
+        optimization_level,
+        max_iterations,
+        swap_trials,
+        layout_trials,
+    )
+    if layout_trials > SLOW_LAYOUT_TRIAL_THRESHOLD:
+        logger.warning(
+            "SABRE layout search is configured with %s layout_trials. "
+            "IBM Quantum submission starts only after this search finishes, so large values "
+            "can make the closed loop look stuck on Fugaku. For troubleshooting, start around "
+            "256-1024 layout trials.",
+            layout_trials,
+        )
 
     test_pm = generate_preset_pass_manager(
         optimization_level=optimization_level,
@@ -117,9 +139,16 @@ def find_optimal_layout(
             ),
         ]
     )
+    start = perf_counter()
     isa_trial = test_pm.run(test_circuit)
+    elapsed = perf_counter() - start
     depth = isa_trial.depth(lambda inst: inst.operation.name not in ("rz", "barrier", "measure"))
-    logger.info(f"Circuit depth = {depth}\nInstruction counts = {dict(isa_trial.count_ops())}")
+    logger.info(
+        "Completed SABRE layout search in %.2fs. Circuit depth = %s. Instruction counts = %s",
+        elapsed,
+        depth,
+        dict(isa_trial.count_ops()),
+    )
     final_sabre_layout = isa_trial.layout.initial_virtual_layout(filter_ancillas=True)
 
     layout_info = []

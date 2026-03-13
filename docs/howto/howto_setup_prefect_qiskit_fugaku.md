@@ -32,24 +32,23 @@ Activate your virtual environment:
 <img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
-export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
 ```
-
-If `SSL_CERT_FILE` is not set, IBM Quantum access may fail with
-`[SSL: CERTIFICATE_VERIFY_FAILED] unable to get local issuer certificate`.
-
 Install the Prefect Qiskit integration:
 
 <img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 uv pip install prefect-qiskit
+export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
 ```
+If `SSL_CERT_FILE` is not set, IBM Quantum access may fail with
+`[SSL: CERTIFICATE_VERIFY_FAILED] unable to get local issuer certificate`.
+
 
 ### Step 3: Configure Prefect Profile
 
 Create API Key in Prefect Cloud. Settings -> API Keys
 
-![Create API Keys](./images/img-prefect-api-keys.png)
+![Create API Keys](./images/img-prefect-api.png)
 
 Create and switch to a new Prefect profile:
 

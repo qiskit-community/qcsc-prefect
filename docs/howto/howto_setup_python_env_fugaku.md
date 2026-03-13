@@ -23,7 +23,6 @@ Load Python3.12 and sqlite and Install `uv`.
 <img src="./images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
 ```bash
 . /vol0004/apps/oss/spack/share/spack/setup-env.sh
-spack load /k6mf2vt 
 spack load sqlite@3.46.0
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
@@ -46,9 +45,4 @@ Activate the virtual environment and point OpenSSL to the CA bundle installed by
 <img src="./images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
-export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
 ```
-
-This avoids IBM Quantum HTTPS failures such as
-`[SSL: CERTIFICATE_VERIFY_FAILED] unable to get local issuer certificate`
-when using the `uv`-managed Python environment on Fugaku.

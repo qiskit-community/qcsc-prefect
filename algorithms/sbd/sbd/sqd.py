@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone
+from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -67,8 +68,14 @@ def walker_sqd(
     options = Variable.get("sqd_options")
 
     if runtime is not None:
+        logger.info("Preparing quantum sampling on backend %s.", runtime.resource_name)
+        target_start = perf_counter()
         target = runtime.get_target()
-        logger.debug(f"Sampling bitstrings with {runtime.resource_name}.")
+        logger.info(
+            "Loaded backend target for %s in %.2fs.",
+            runtime.resource_name,
+            perf_counter() - target_start,
+        )
         vir_circuit = create_lucj_circuit(
             ucj_parameter=ucj_parameter,
             elec_props=elec_props,
@@ -77,8 +84,14 @@ def walker_sqd(
             n_lucj_layers=circuit_params.n_lucj_layers,
             use_reset_mitigation=circuit_params.use_reset_mitigation,
         )
-        # This function is expensive due to massive Sabre trials.
-        # Cache is scoped to the current flow run.
+        logger.info(
+            "Searching ISA layout for backend %s "
+            "(max_iterations=%s, swap_trials=%s, layout_trials=%s).",
+            runtime.resource_name,
+            circuit_params.sabre_max_iterations,
+            circuit_params.sabre_swap_trials,
+            circuit_params.sabre_layout_trials,
+        )
         layout = find_optimal_layout(
             test_circuit=vir_circuit,
             target=target,
@@ -87,18 +100,42 @@ def walker_sqd(
             swap_trials=circuit_params.sabre_swap_trials,
             layout_trials=circuit_params.sabre_layout_trials,
         )
+        logger.info("Transpiling ISA circuit for backend %s.", runtime.resource_name)
+        transpile_start = perf_counter()
         isa_circuit = transpile_circuit(
             circuit=vir_circuit,
             target=target,
             layout=layout,
             optimization_level=circuit_params.optimization_level,
         )
-        pub_result = runtime.sampler(
-            sampler_pubs=[(isa_circuit,)],
-            options=options,
-            tags=["res: quantum"],
+        logger.info(
+            "Completed ISA transpilation for %s in %.2fs.",
+            runtime.resource_name,
+            perf_counter() - transpile_start,
         )
-        logger.debug("Completed bitstring sampling.")
+        logger.info(
+            "Submitting sampler workload to %s (shots=%s).",
+            runtime.resource_name,
+            options.get("params", {}).get("shots"),
+        )
+        sampling_start = perf_counter()
+        try:
+            pub_result = runtime.sampler(
+                sampler_pubs=[(isa_circuit,)],
+                options=options,
+                tags=["res: quantum"],
+            )
+        except Exception:
+            logger.exception(
+                "Sampler submission or execution failed for backend %s.",
+                runtime.resource_name,
+            )
+            raise
+        logger.info(
+            "Completed sampler workload on %s in %.2fs.",
+            runtime.resource_name,
+            perf_counter() - sampling_start,
+        )
         # Reset mitigation
         meas_bits = pub_result[0].data.meas
         if circuit_params.use_reset_mitigation:

@@ -7,7 +7,7 @@
     "optimization_level": 3,
     "sabre_max_iterations": 8,
     "sabre_swap_trials": 10,
-    "sabre_layout_trials": 40000
+    "sabre_layout_trials": 512
   },
   "de_params": {
     "num_walkers": 4,
