@@ -1,6 +1,6 @@
-# Run SBD Closed-loop Workflow on Miyabi (hpc-prefect)
+# Run SBD Closed-loop Workflow on Miyabi (qcsc-prefect)
 
-This tutorial walks us through reproducing a Sample-based Quantum Diagonalization (SQD) experiment using the `hpc-prefect` architecture.
+This tutorial walks us through reproducing a Sample-based Quantum Diagonalization (SQD) experiment using the `qcsc-prefect` architecture.
 We will run a hybrid quantum-classical workflow using the [SBD](https://github.com/r-ccs-cms/sbd) solver to diagonalize a sparse chemistry Hamiltonian on the Miyabi-C environment, orchestrated via Prefect.
 
 For Fugaku, see [Run SBD Closed-loop Workflow on Fugaku](./run_sbd_closed_loop_workflow_fugaku.md).
@@ -110,13 +110,13 @@ source ~/venv/prefect/bin/activate
 
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
-cd /work/gz00/z12345/hpc-prefect
+cd /work/gz00/z12345/qcsc-prefect
 
 uv pip install --no-deps \
-  -e packages/hpc-prefect-core \
-  -e packages/hpc-prefect-adapters \
-  -e packages/hpc-prefect-blocks \
-  -e packages/hpc-prefect-executor
+  -e packages/qcsc-prefect-core \
+  -e packages/qcsc-prefect-adapters \
+  -e packages/qcsc-prefect-blocks \
+  -e packages/qcsc-prefect-executor
 
 uv pip install -e algorithms/qcsc_workflow_utility
 uv pip install -e algorithms/sbd
@@ -126,12 +126,12 @@ Check that the packages are installed correctly:
 
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
-uv pip list | grep -E "(hpc-prefect|sbd|qcsc)"
+uv pip list | grep -E "(qcsc-prefect|sbd|qcsc)"
 
-hpc-prefect-adapters               0.1.0
-hpc-prefect-blocks                 0.1.0
-hpc-prefect-core                   0.1.0
-hpc-prefect-executor               0.1.0
+qcsc-prefect-adapters               0.1.0
+qcsc-prefect-blocks                 0.1.0
+qcsc-prefect-core                   0.1.0
+qcsc-prefect-executor               0.1.0
 qcsc-workflow-utility              0.1.0
 sbd                                0.1.0
 ```
@@ -155,7 +155,7 @@ Navigate to the directory and build:
 
 <img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
 ```bash
-cd /work/gz00/z12345/hpc-prefect/algorithms/sbd/native
+cd /work/gz00/z12345/qcsc-prefect/algorithms/sbd/native
 bash ./build_sbd.sh
 ```
 
@@ -185,7 +185,7 @@ realpath ./diag
 Example output:
 
 ```text
-/work/gz00/z12345/hpc-prefect/algorithms/sbd/native/diag
+/work/gz00/z12345/qcsc-prefect/algorithms/sbd/native/diag
 ```
 
 We will need this path in the next step.
@@ -203,7 +203,7 @@ This approach uses automated block creation via script instead of manual UI edit
 
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
-cd /work/gz00/z12345/hpc-prefect
+cd /work/gz00/z12345/qcsc-prefect
 mkdir -p /work/gz00/z12345/sbd_jobs
 cp algorithms/sbd/sbd_blocks.example.toml algorithms/sbd/sbd_blocks.toml
 ```
@@ -213,7 +213,7 @@ Update your prefect token (Only On Prem) if your token is expired.
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect-auth login
-/work/gz00/z12345/hpc-prefect/scripts/prefect_sync_env_to_config.sh -p mdx
+/work/gz00/z12345/qcsc-prefect/scripts/prefect_sync_env_to_config.sh -p mdx
 ```
 
 #### 4.2 Edit the configuration file
@@ -231,7 +231,7 @@ Set at least:
 | `project` | `gz00` | Your Miyabi project name |
 | `queue` | `regular-c` | Queue name on Miyabi |
 | `work_dir` | `/work/gz00/z12345/sbd_jobs` | Job working directory |
-| `sbd_executable` | `/work/gz00/z12345/hpc-prefect/algorithms/sbd/native/diag` | Absolute path to diag executable |
+| `sbd_executable` | `/work/gz00/z12345/qcsc-prefect/algorithms/sbd/native/diag` | Absolute path to diag executable |
 | `mpiprocs` | `8` | Number of MPI processes |
 | `mpi_options` | `["-np", "8"]` | MPI options |
 | `task_comm_size` | `1` | Task communicator size |
@@ -289,7 +289,7 @@ Activate environment and deploy:
 
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
-cd /work/gz00/z12345/hpc-prefect
+cd /work/gz00/z12345/qcsc-prefect
 source ~/venv/prefect/bin/activate
 sbd-deploy
 ```
@@ -314,7 +314,7 @@ In the Prefect console, click **Run** → **Custom run** and set as following. A
 
 | Field | Value / Example |
 |---|---|
-| FCIDump File | `/work/gz00/z12345/hpc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
+| FCIDump File | `/work/gz00/z12345/qcsc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
 | SQD Subspace Dimension (Optional) | `1000000` (start small for testing) |
 | Differential Evolution Iterations (Optional)| `1` (start small for testing) |
 | Solver Block Ref | `sbd_solver_job/davidson-solver` |
@@ -417,7 +417,7 @@ Edit `algorithms/sbd/sbd_blocks_gpu.toml` and change:
 |---|---|
 | `block_name` | `davidson-solver-gpu` |
 | `queue` | `regular-g` |
-| `sbd_executable` | `/work/gz00/z12345/hpc-prefect/algorithms/sbd/native/diag` (GPU version) |
+| `sbd_executable` | `/work/gz00/z12345/qcsc-prefect/algorithms/sbd/native/diag` (GPU version) |
 | `launcher` | `mpirun` |
 | `mpiprocs` | `1` |
 | `mpi_options` | `["-n", "1"]` |

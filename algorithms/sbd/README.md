@@ -1,12 +1,12 @@
-# SBD Closed-Loop Workflow on hpc-prefect (Miyabi/Fugaku)
+# SBD Closed-Loop Workflow on qcsc-prefect (Miyabi/Fugaku)
 
 This workflow performs SQD closed-loop optimization and runs SBD diagonalization
-jobs on Miyabi or Fugaku through the current `hpc-prefect` architecture.
+jobs on Miyabi or Fugaku through the current `qcsc-prefect` architecture.
 
 The old `prefect-sbd` / `prefect-miyabi` runtime path is replaced by:
 
-- `hpc_prefect_blocks` (`CommandBlock`, `ExecutionProfileBlock`, `HPCProfileBlock`)
-- `hpc_prefect_executor.run_job_from_blocks(...)`
+- `qcsc_prefect_blocks` (`CommandBlock`, `ExecutionProfileBlock`, `HPCProfileBlock`)
+- `qcsc_prefect_executor.run_job_from_blocks(...)`
 - local `SBD Solver Job` block (`sbd.solver_job.SBDSolverJob`)
 
 Compatibility notes from old `prefect_sbd.sbd_job`:
@@ -26,12 +26,12 @@ Build examples:
 
 ```bash
 # Miyabi
-cd /work/gz00/z12345/hpc-prefect/algorithms/sbd/native
+cd /work/gz00/z12345/qcsc-prefect/algorithms/sbd/native
 bash ./build_sbd.sh
 realpath ./diag
 
 # Fugaku
-cd /work/gz00/z12345/hpc-prefect/algorithms/sbd/native
+cd /work/gz00/z12345/qcsc-prefect/algorithms/sbd/native
 bash ./build_sbd_fugaku.sh
 realpath ./diag
 ```
@@ -41,15 +41,15 @@ realpath ./diag
 From repository root:
 
 ```bash
-cd /work/gz00/z12345/hpc-prefect
+cd /work/gz00/z12345/qcsc-prefect
 source ~/venv/prefect/bin/activate
 
-# hpc-prefect local packages
+# qcsc-prefect local packages
 uv pip install --no-deps \
-  -e packages/hpc-prefect-core \
-  -e packages/hpc-prefect-adapters \
-  -e packages/hpc-prefect-blocks \
-  -e packages/hpc-prefect-executor
+  -e packages/qcsc-prefect-core \
+  -e packages/qcsc-prefect-adapters \
+  -e packages/qcsc-prefect-blocks \
+  -e packages/qcsc-prefect-executor
 
 # algorithm dependencies
 uv pip install -e algorithms/qcsc_workflow_utility
@@ -61,7 +61,7 @@ uv pip install -e algorithms/sbd
 Use config file:
 
 ```bash
-cd /work/gz00/z12345/hpc-prefect
+cd /work/gz00/z12345/qcsc-prefect
 cp algorithms/sbd/sbd_blocks.example.toml algorithms/sbd/sbd_blocks.toml
 vim algorithms/sbd/sbd_blocks.toml
 ```
@@ -83,7 +83,7 @@ python algorithms/sbd/create_blocks.py --config algorithms/sbd/sbd_blocks.toml -
 `sbd_executable` should point to your built binary, for example:
 
 ```toml
-sbd_executable = "/work/gz00/z12345/hpc-prefect/algorithms/sbd/native/diag"
+sbd_executable = "/work/gz00/z12345/qcsc-prefect/algorithms/sbd/native/diag"
 ```
 
 For memory stability on Miyabi, start from:
@@ -117,6 +117,10 @@ Local execution from JSON parameters:
 ```bash
 python algorithms/sbd/exec.py algorithms/sbd/default_params/test_n2.json
 ```
+
+Note:
+- The example JSON files use intentionally low `circ_params.sabre_layout_trials` values so Fugaku runs do not appear stuck in SABRE layout search before IBM Quantum submission.
+- These are conservative starting points only. Tune them for your own backend, qubit count, and circuit specification.
 
 Deploy entrypoint:
 

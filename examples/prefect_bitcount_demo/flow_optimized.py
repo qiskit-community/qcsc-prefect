@@ -14,7 +14,7 @@ from prefect_qiskit import QuantumRuntime
 from qiskit import QuantumCircuit
 from qiskit.transpiler import generate_preset_pass_manager
 
-from hpc_prefect_executor.from_blocks import run_job_from_blocks
+from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 
 try:
     from options_resolver import resolve_sampler_options_and_work_dir

@@ -5,10 +5,10 @@ from pathlib import Path
 
 from prefect import flow
 
-from hpc_prefect_adapters.miyabi.builder import MiyabiJobRequest
-from hpc_prefect_blocks.miyabi.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
-from hpc_prefect_core.models.execution_profile import ExecutionProfile
-from hpc_prefect_executor.miyabi.run import run_miyabi_job
+from qcsc_prefect_adapters.miyabi.builder import MiyabiJobRequest
+from qcsc_prefect_blocks.miyabi.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+from qcsc_prefect_core.models.execution_profile import ExecutionProfile
+from qcsc_prefect_executor.miyabi.run import run_miyabi_job
 
 
 async def _resolve_loaded_block(value):

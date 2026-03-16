@@ -118,14 +118,14 @@ Connect to the MDX workflow client using SSH. This is where we will develop the 
 ssh -A z12345@mdx-workflow.example.org
 ```
 
-## Step 2. Clone hpc-prefect repository
+## Step 2. Clone qcsc-prefect repository
 
-If you haven't clone hpc-prefect repository, please clone it.
+If you haven't clone qcsc-prefect repository, please clone it.
 
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345
-git clone git@github.com:hitomitak/hpc-prefect.git
+git clone git@github.com:hitomitak/qcsc-prefect.git
 ```
 
 Activate your virtual environment for Prefect:
@@ -139,13 +139,13 @@ Install necessary packages:
 
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
-cd /work/gz00/z12345/hpc-prefect
+cd /work/gz00/z12345/qcsc-prefect
 uv pip install prefect-qiskit
 uv pip install --no-deps \
-  -e packages/hpc-prefect-core \
-  -e packages/hpc-prefect-adapters \
-  -e packages/hpc-prefect-blocks \
-  -e packages/hpc-prefect-executor
+  -e packages/qcsc-prefect-core \
+  -e packages/qcsc-prefect-adapters \
+  -e packages/qcsc-prefect-blocks \
+  -e packages/qcsc-prefect-executor
 ```
 
 Check installations:
@@ -158,10 +158,10 @@ uv pip list | grep prefect
 You should see output like:
 
 ```text
-hpc-prefect-adapters      0.1.0
-hpc-prefect-blocks        0.1.0
-hpc-prefect-core          0.1.0
-hpc-prefect-executor      0.1.0
+qcsc-prefect-adapters      0.1.0
+qcsc-prefect-blocks        0.1.0
+qcsc-prefect-core          0.1.0
+qcsc-prefect-executor      0.1.0
 prefect                   3.6.17
 ```
 
@@ -179,7 +179,7 @@ Update your prefect token (Only On Prem) if your token is expired.
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect-auth login
-/work/gz00/z12345/hpc-prefect/scripts/prefect_sync_env_to_config.sh -p mdx
+/work/gz00/z12345/qcsc-prefect/scripts/prefect_sync_env_to_config.sh -p mdx
 ```
 
 
@@ -221,7 +221,7 @@ Create a directory:
 
 <img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
 ```bash
-cd /work/gz00/z12345/hpc-prefect
+cd /work/gz00/z12345/qcsc-prefect
 ./examples/prefect_bitcount_demo/build_on_miyabi.sh
 ```
 
@@ -445,7 +445,7 @@ Old:
 from get_counts_integration import BitCounter
 ```
 
-New (when running from `hpc-prefect` root):
+New (when running from `qcsc-prefect` root):
 
 ```python
 from examples.prefect_bitcount_demo.get_counts_integration import BitCounter

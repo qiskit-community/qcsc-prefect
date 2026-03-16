@@ -1,4 +1,4 @@
-"""SBD solver block backed by hpc-prefect block execution."""
+"""SBD solver block backed by qcsc-prefect block execution."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from prefect.blocks.core import Block
 from pydantic import Field
 from pyscf.tools import fcidump
 
-from hpc_prefect_executor.from_blocks import run_job_from_blocks
+from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 
 
 @dataclass(frozen=True)
@@ -150,7 +150,7 @@ def _read_files(
 
 
 class SBDSolverJob(Block):
-    """Prefect block facade for SBD execution through hpc-prefect blocks."""
+    """Prefect block facade for SBD execution through qcsc-prefect blocks."""
 
     _block_type_name = "SBD Solver Job"
     _block_type_slug = "sbd_solver_job"

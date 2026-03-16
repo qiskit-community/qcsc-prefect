@@ -7,34 +7,34 @@ This example provides two execution styles:
 
 ## Files
 
-- `/Users/hitomi/Project/hpc-prefect/examples/prefect_bitcount_demo/create_blocks.py`
-- `/Users/hitomi/Project/hpc-prefect/examples/prefect_bitcount_demo/bitcount_blocks.example.toml`
-- `/Users/hitomi/Project/hpc-prefect/examples/prefect_bitcount_demo/flow_optimized.py`
-- `/Users/hitomi/Project/hpc-prefect/examples/prefect_bitcount_demo/flow_tutorial_style.py`
-- `/Users/hitomi/Project/hpc-prefect/examples/prefect_bitcount_demo/get_counts_integration.py`
-- `/Users/hitomi/Project/hpc-prefect/examples/prefect_bitcount_demo/build_on_miyabi.sh`
-- `/Users/hitomi/Project/hpc-prefect/examples/prefect_bitcount_demo/build_on_fugaku.sh`
+- `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/create_blocks.py`
+- `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/bitcount_blocks.example.toml`
+- `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/flow_optimized.py`
+- `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/flow_tutorial_style.py`
+- `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/get_counts_integration.py`
+- `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/build_on_miyabi.sh`
+- `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/build_on_fugaku.sh`
 
 ## Build executable
 
 Miyabi:
 
 ```bash
-cd /Users/hitomi/Project/hpc-prefect
+cd /Users/hitomi/Project/qcsc-prefect
 ./examples/prefect_bitcount_demo/build_on_miyabi.sh
 ```
 
 Fugaku:
 
 ```bash
-cd /Users/hitomi/Project/hpc-prefect
+cd /Users/hitomi/Project/qcsc-prefect
 ./examples/prefect_bitcount_demo/build_on_fugaku.sh
 ```
 
 ## Create blocks
 
 ```bash
-cd /Users/hitomi/Project/hpc-prefect
+cd /Users/hitomi/Project/qcsc-prefect
 cp examples/prefect_bitcount_demo/bitcount_blocks.example.toml \
    examples/prefect_bitcount_demo/bitcount_blocks.toml
 ```

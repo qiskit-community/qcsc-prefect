@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hpc-prefect-workspace"
+name = "qcsc-prefect-workspace"
 version = "0.0.0"
 description = "Monorepo workspace for HPC + Prefect integration"
 readme = "docs/concept.md"
@@ -21,22 +21,22 @@ dynamic = []
 # --- uv ---
 [tool.uv.workspace]
 members = [
-    "packages/hpc-prefect-core",
-    "packages/hpc-prefect-adapters",
-    "packages/hpc-prefect-blocks",
-    "packages/hpc-prefect-executor",
+    "packages/qcsc-prefect-core",
+    "packages/qcsc-prefect-adapters",
+    "packages/qcsc-prefect-blocks",
+    "packages/qcsc-prefect-executor",
 ]
 
 
 [tool.uv.sources]
-hpc-prefect-core     = { workspace = true }
-hpc-prefect-adapters = { workspace = true }
-hpc-prefect-blocks   = { workspace = true }
-hpc-prefect-executor = { workspace = true }
+qcsc-prefect-core     = { workspace = true }
+qcsc-prefect-adapters = { workspace = true }
+qcsc-prefect-blocks   = { workspace = true }
+qcsc-prefect-executor = { workspace = true }
 
 # --- Poetry ---
 [tool.poetry]
-name = "hpc-prefect-workspace"
+name = "qcsc-prefect-workspace"
 version = "0.0.0"
 description = "Monorepo workspace for HPC + Prefect integration"
 authors = ["HPC Team"]
@@ -47,19 +47,19 @@ python = ">=3.10"
 
 [tool.poetry.workspace]
 members = [
-    "packages/hpc-prefect-core",
-    "packages/hpc-prefect-adapters",
-    "packages/hpc-prefect-blocks",
-    "packages/hpc-prefect-executor",
+    "packages/qcsc-prefect-core",
+    "packages/qcsc-prefect-adapters",
+    "packages/qcsc-prefect-blocks",
+    "packages/qcsc-prefect-executor",
 ]
 
 # --- Hatch ---
 [tool.hatch.workspace]
 members = [
-    "packages/hpc-prefect-core",
-    "packages/hpc-prefect-adapters",
-    "packages/hpc-prefect-blocks",
-    "packages/hpc-prefect-executor",
+    "packages/qcsc-prefect-core",
+    "packages/qcsc-prefect-adapters",
+    "packages/qcsc-prefect-blocks",
+    "packages/qcsc-prefect-executor",
 ]
 
 # -----------------------------
