@@ -213,3 +213,5 @@ __marimo__/
 algorithms/sbd/native/diag
 algorithms/sbd/native/*.o
 algorithms/sbd/native/sbd/
+.DS_Store
+.vscode/sftp.json

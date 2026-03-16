@@ -48,7 +48,7 @@ Each deepest directory that contains both files becomes one GB-SQD target.
 Copy and edit the example config:
 
 ```bash
-cd /Users/hitomi/Project/hpc-prefect/algorithms/gb_sqd
+cd /Users/hitomi/Project/qcsc-prefect/algorithms/gb_sqd
 cp gb_sqd_blocks.example.toml gb_sqd_blocks.toml
 ```
 
@@ -75,7 +75,7 @@ fugaku_pjm_resources = ["freq=2000,eco_state=2"]
 Create the blocks:
 
 ```bash
-cd /Users/hitomi/Project/hpc-prefect/algorithms/gb_sqd
+cd /Users/hitomi/Project/qcsc-prefect/algorithms/gb_sqd
 python create_blocks.py --config gb_sqd_blocks.toml
 ```
 
@@ -96,7 +96,7 @@ from gb_sqd.bulk import bulk_gb_sqd_flow
 
 result = bulk_gb_sqd_flow(
     mode="ext_sqd",
-    input_root_dir="/Users/hitomi/Project/hpc-prefect/algorithms/gb_sqd/data/ligand",
+    input_root_dir="/Users/hitomi/Project/qcsc-prefect/algorithms/gb_sqd/data/ligand",
     output_root_dir="/shared/gb_sqd_runs/ligand_ext",
     command_block_name="cmd-gb-sqd-ext",
     execution_profile_block_name="exec-gb-sqd-ext-fugaku",
@@ -132,7 +132,7 @@ from gb_sqd.bulk import bulk_gb_sqd_flow
 
 result = bulk_gb_sqd_flow(
     mode="trim_sqd",
-    input_root_dir="/Users/hitomi/Project/hpc-prefect/algorithms/gb_sqd/data/ligand",
+    input_root_dir="/Users/hitomi/Project/qcsc-prefect/algorithms/gb_sqd/data/ligand",
     output_root_dir="/shared/gb_sqd_runs/ligand_trim",
     command_block_name="cmd-gb-sqd-trim",
     execution_profile_block_name="exec-gb-sqd-trim-fugaku",
@@ -167,7 +167,7 @@ print(result)
 ### 4.3 Run from a one-shot command
 
 ```bash
-cd /Users/hitomi/Project/hpc-prefect/algorithms/gb_sqd
+cd /Users/hitomi/Project/qcsc-prefect/algorithms/gb_sqd
 uv run python -c "from gb_sqd.bulk import bulk_gb_sqd_flow; bulk_gb_sqd_flow(mode='ext_sqd', input_root_dir='./data/ligand', output_root_dir='/shared/gb_sqd_runs/ligand_ext', command_block_name='cmd-gb-sqd-ext', execution_profile_block_name='exec-gb-sqd-ext-fugaku', hpc_profile_block_name='hpc-fugaku-gb-sqd', max_jobs_in_queue=8, queue_limit_scope='user_queue', max_target_task_retries=1, max_prefect_concurrency=8, num_recovery=2, num_batches=2, num_samples_per_batch=1000, iteration=2, adet_comm_size=1, bdet_comm_size=1, task_comm_size=1, adet_comm_size_final=2, bdet_comm_size_final=1, task_comm_size_final=1, do_carryover_in_recovery=True, carryover_ratio=0.5, carryover_threshold=1e-5, max_time=300, with_hf=True, verbose=True)"
 ```
 
@@ -252,7 +252,7 @@ from gb_sqd.bulk import bulk_gb_sqd_flow
 
 result = bulk_gb_sqd_flow(
     mode="ext_sqd",
-    input_root_dir="/Users/hitomi/Project/hpc-prefect/algorithms/gb_sqd/data/ligand",
+    input_root_dir="/Users/hitomi/Project/qcsc-prefect/algorithms/gb_sqd/data/ligand",
     output_root_dir="/shared/gb_sqd_runs/ligand_ext",
     command_block_name="cmd-gb-sqd-ext",
     execution_profile_block_name="exec-gb-sqd-ext-fugaku",

@@ -49,7 +49,7 @@ Set the absolute path to this executable in the SBD block configuration file:
 
 ```toml
 # algorithms/sbd/sbd_blocks.toml
-sbd_executable = "/abs/path/to/hpc-prefect/algorithms/sbd/native/diag"
+sbd_executable = "/abs/path/to/qcsc-prefect/algorithms/sbd/native/diag"
 ```
 
 ### Optional environment overrides

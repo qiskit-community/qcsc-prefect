@@ -44,7 +44,7 @@ workspace and runs individual scenarios:
 - One-shot command sequence script: `manual_bulk_test_commands.sh`
 
 ```bash
-cd /Users/hitomi/Project/hpc-prefect/algorithms/gb_sqd
+cd /Users/hitomi/Project/qcsc-prefect/algorithms/gb_sqd
 
 # 1. Create the workspace from one known-good target directory
 python manual_bulk_test.py prepare \
@@ -318,7 +318,7 @@ Local automated tests currently cover:
 Run them with:
 
 ```bash
-cd /Users/hitomi/Project/hpc-prefect/algorithms/gb_sqd
+cd /Users/hitomi/Project/qcsc-prefect/algorithms/gb_sqd
 uv run --extra dev pytest \
   tests/test_target_overrides.py \
   tests/test_bulk_target_run.py \

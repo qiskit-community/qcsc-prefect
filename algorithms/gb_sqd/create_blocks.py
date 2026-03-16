@@ -10,13 +10,13 @@ from pathlib import Path
 
 
 def _import_block_classes():
-    """Import block classes from hpc-prefect packages."""
-    # Add hpc-prefect packages to path if running in development mode
+    """Import block classes from qcsc-prefect packages."""
+    # Add qcsc-prefect packages to path if running in development mode
     project_root = Path(__file__).resolve().parents[2]
     if (project_root / "packages").exists():
-        sys.path.insert(0, str(project_root / "packages" / "hpc-prefect-blocks" / "src"))
+        sys.path.insert(0, str(project_root / "packages" / "qcsc-prefect-blocks" / "src"))
     
-    from hpc_prefect_blocks.common.blocks import (
+    from qcsc_prefect_blocks.common.blocks import (
         CommandBlock,
         ExecutionProfileBlock,
         HPCProfileBlock,

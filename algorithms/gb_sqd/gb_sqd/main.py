@@ -9,14 +9,14 @@ from typing import Any
 
 from prefect import flow, get_run_logger
 
-# hpc-prefectパッケージのインポート
-# 開発時はローカルのhpc-prefectを参照
+# qcsc-prefectパッケージのインポート
+# 開発時はローカルのqcsc-prefectを参照
 _project_root = Path(__file__).resolve().parents[3]
 if (_project_root / "packages").exists():
-    sys.path.insert(0, str(_project_root / "packages" / "hpc-prefect-executor" / "src"))
-    sys.path.insert(0, str(_project_root / "packages" / "hpc-prefect-blocks" / "src"))
+    sys.path.insert(0, str(_project_root / "packages" / "qcsc-prefect-executor" / "src"))
+    sys.path.insert(0, str(_project_root / "packages" / "qcsc-prefect-blocks" / "src"))
 
-from hpc_prefect_executor.from_blocks import run_job_from_blocks
+from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 
 from .bulk import bulk_gb_sqd_flow
 from .cli_args import build_ext_sqd_user_args, build_trim_sqd_user_args

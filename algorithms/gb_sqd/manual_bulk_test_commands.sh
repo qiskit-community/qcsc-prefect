@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="/Users/hitomi/Project/hpc-prefect/algorithms/gb_sqd"
+PROJECT_DIR="/Users/hitomi/Project/qcsc-prefect/algorithms/gb_sqd"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
 SEED_DIR="/vol0002/mdt6/data/ra010014/u13450/gb_data/test_dat/13_18MO_Wat/atom_10012"

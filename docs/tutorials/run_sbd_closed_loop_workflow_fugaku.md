@@ -1,6 +1,6 @@
-# Run SBD Closed-loop Workflow on Fugaku (hpc-prefect)
+# Run SBD Closed-loop Workflow on Fugaku (qcsc-prefect)
 
-This tutorial walks us through reproducing a Sample-based Quantum Diagonalization (SQD) experiment using the `hpc-prefect` architecture.
+This tutorial walks us through reproducing a Sample-based Quantum Diagonalization (SQD) experiment using the `qcsc-prefect` architecture.
 We will run a hybrid quantum-classical workflow using the [SBD](https://github.com/r-ccs-cms/sbd) solver to diagonalize a sparse chemistry Hamiltonian on Fugaku, orchestrated via Prefect.
 
 <img src="./images/img-closed-loop-fugaku.png" alt="sbd" width="90%"/><br>
@@ -111,17 +111,17 @@ srun -p mem2 -n 1 --mem 8G --time=60 --pty bash -i
 ```bash
 cd /path/to/work
 
-git clone git@github.com:hitomitak/hpc-prefect.git
-cd hpc-prefect
+git clone git@github.com:hitomitak/qcsc-prefect.git
+cd qcsc-prefect
 
 source ~/venv/prefect/bin/activate
 export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
 uv pip install prefect-qiskit
 uv pip install --no-deps \
-  -e packages/hpc-prefect-core \
-  -e packages/hpc-prefect-adapters \
-  -e packages/hpc-prefect-blocks \
-  -e packages/hpc-prefect-executor
+  -e packages/qcsc-prefect-core \
+  -e packages/qcsc-prefect-adapters \
+  -e packages/qcsc-prefect-blocks \
+  -e packages/qcsc-prefect-executor
 
 uv pip install -e algorithms/qcsc_workflow_utility
 uv pip install -e algorithms/sbd
@@ -132,11 +132,11 @@ Check installation:
 
 <img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-uv pip list | grep -E "(hpc-prefect|sbd|qcsc)"
+uv pip list | grep -E "(qcsc-prefect|sbd|qcsc)"
 
-hpc-prefect-blocks                 0.1.0
-hpc-prefect-core                   0.1.0
-hpc-prefect-executor               0.1.0
+qcsc-prefect-blocks                 0.1.0
+qcsc-prefect-core                   0.1.0
+qcsc-prefect-executor               0.1.0
 prefect-sbd                        0.1.0
 qcsc-workflow-utility              0.1.0 
 sbd                                0.1.0
@@ -151,7 +151,7 @@ Navigate to native source and build:
 
 <img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
-cd /path/to/work/hpc-prefect/algorithms/sbd/native
+cd /path/to/work/qcsc-prefect/algorithms/sbd/native
 bash ./build_sbd_fugaku.sh
 ```
 
@@ -166,7 +166,7 @@ realpath ./diag
 Example output:
 
 ```text
-/path/to/work/hpc-prefect/algorithms/sbd/native/diag
+/path/to/work/qcsc-prefect/algorithms/sbd/native/diag
 ```
 
 We will use this path in the next step.
@@ -179,7 +179,7 @@ We will use this path in the next step.
 
 <img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-cd /path/to/work/hpc-prefect
+cd /path/to/work/qcsc-prefect
 mkdir -p /path/to/work/sbd_jobs
 ```
 <img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
@@ -217,7 +217,7 @@ Edit `algorithms/sbd/sbd_blocks.toml` and set at least:
 | `project` | `raXXXXXX` | Fugaku project |
 | `queue` | `small` | Fugaku resource group (`rscgrp`) |
 | `work_dir` | `/work/<group>/<user>/sbd_jobs` | Job working directory |
-| `sbd_executable` | `/work/<group>/<user>/hpc-prefect/algorithms/sbd/native/diag` | Absolute path to executable |
+| `sbd_executable` | `/work/<group>/<user>/qcsc-prefect/algorithms/sbd/native/diag` | Absolute path to executable |
 | `num_nodes` | `2` | Number of allocated nodes for this tutorial |
 | `launcher` | `mpiexec` | MPI launcher |
 | `mpiprocs` | `2` | Number of MPI processes |
@@ -279,10 +279,15 @@ In the Prefect console, click **Run** → **Custom run** and set at least:
 
 | Field | Value / Example |
 |---|---|
-| FCIDump File | `/path/to/work/hpc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
+| FCIDump File | `/path/to/work/qcsc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
 | SQD Subspace Dimension (Optional) | `1000000` |
 | Differential Evolution Iterations (Optional) | `1` (start small for testing) |
 | Solver Block Ref | `sbd_solver_job/davidson-solver` |
+
+> [!CAUTION]
+> The sample `circ_params.sabre_layout_trials` values used in this tutorial are intentionally kept low on Fugaku so the workflow does not spend a very long time in SABRE layout search before submitting to IBM Quantum.
+> Please treat them as safe starting points for this tutorial, not universal best values.
+> Adjust `sabre_layout_trials` according to your own backend, qubit count, and circuit specification.
 
 `Solver Block Ref` means: "which `SBDSolverJob` preset should this run use?"
 - It is a stable entry point for users.

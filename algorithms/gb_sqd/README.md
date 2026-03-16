@@ -20,7 +20,7 @@ Additional design and operations documents:
 ## Installation
 
 ```bash
-cd hpc-prefect/algorithms/gb_sqd
+cd qcsc-prefect/algorithms/gb_sqd
 uv pip install -e .
 ```
 

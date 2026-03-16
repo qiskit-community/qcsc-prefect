@@ -136,4 +136,4 @@ Not implemented yet:
   - `algorithms/gb_sqd/gb_sqd/tasks/final_diagonalization.py`
   - `algorithms/gb_sqd/gb_sqd/tasks/output_results.py`
 - Block creation: `algorithms/gb_sqd/create_blocks.py`
-- Executor API: `packages/hpc-prefect-executor/src/hpc_prefect_executor/from_blocks.py`
+- Executor API: `packages/qcsc-prefect-executor/src/qcsc_prefect_executor/from_blocks.py`

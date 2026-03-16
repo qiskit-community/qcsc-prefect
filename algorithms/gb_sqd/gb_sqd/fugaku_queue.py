@@ -11,9 +11,9 @@ from typing import Any
 
 _project_root = Path(__file__).resolve().parents[3]
 if (_project_root / "packages").exists():
-    sys.path.insert(0, str(_project_root / "packages" / "hpc-prefect-adapters" / "src"))
+    sys.path.insert(0, str(_project_root / "packages" / "qcsc-prefect-adapters" / "src"))
 
-from hpc_prefect_adapters.fugaku.runtime import FugakuPJMRuntime, run_command
+from qcsc_prefect_adapters.fugaku.runtime import FugakuPJMRuntime, run_command
 
 
 TERMINAL_STATES = {"EXT", "CCL"}

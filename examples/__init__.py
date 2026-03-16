@@ -1,2 +1,2 @@
-"""Examples for hpc-prefect workspace."""
+"""Examples for qcsc-prefect workspace."""
 

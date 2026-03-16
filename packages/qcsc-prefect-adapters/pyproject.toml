@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qcsc-prefect-adapters"
+version = "0.1.0"
+description = "HPC adapters (Miyabi, Fugaku, Slurm) for QCSC Prefect workflows"
+requires-python = ">=3.10"
+dependencies = [
+    "qcsc-prefect-core",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"qcsc_prefect_adapters" = ["**/*.j2"]
+

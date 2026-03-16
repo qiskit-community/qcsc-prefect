@@ -112,7 +112,7 @@ module load LLVM/llvmorg-21.1.0
 
 Check the HPCProfileBlock's `executable_map`:
 ```python
-from hpc_prefect_blocks.common.blocks import HPCProfileBlock
+from qcsc_prefect_blocks.common.blocks import HPCProfileBlock
 
 block = HPCProfileBlock.load("hpc-miyabi-gb-sqd")
 print(block.executable_map)

@@ -23,7 +23,7 @@ def _import_sbd_solver_block():
 
 
 def _register_block_types(*custom_block_classes) -> None:
-    from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+    from qcsc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
 
     block_types = [
         CommandBlock,
@@ -200,7 +200,7 @@ def main() -> None:
     config = _load_config_file(args.config)
     env = _env_values()
 
-    from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+    from qcsc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
 
     sbd_solver_cls = _import_sbd_solver_block()
     _register_block_types(sbd_solver_cls)

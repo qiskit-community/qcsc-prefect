@@ -11,9 +11,9 @@ from prefect import get_run_logger, task
 import sys
 _project_root = Path(__file__).resolve().parents[4]
 if (_project_root / "packages").exists():
-    sys.path.insert(0, str(_project_root / "packages" / "hpc-prefect-executor" / "src"))
+    sys.path.insert(0, str(_project_root / "packages" / "qcsc-prefect-executor" / "src"))
 
-from hpc_prefect_executor.from_blocks import run_job_from_blocks
+from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 
 
 @task(

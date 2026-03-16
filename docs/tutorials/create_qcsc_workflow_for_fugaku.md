@@ -100,17 +100,17 @@ mkdir fugaku_tutorial && cd fugaku_tutorial
 ```bash
 cd /path/to/work
 
-git clone git@github.com:hitomitak/hpc-prefect.git
-cd hpc-prefect
+git clone git@github.com:hitomitak/qcsc-prefect.git
+cd qcsc-prefect
 
 source ~/venv/prefect/bin/activate
 export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
 uv pip install prefect-qiskit
 uv pip install --no-deps \
-  -e packages/hpc-prefect-core \
-  -e packages/hpc-prefect-adapters \
-  -e packages/hpc-prefect-blocks \
-  -e packages/hpc-prefect-executor
+  -e packages/qcsc-prefect-core \
+  -e packages/qcsc-prefect-adapters \
+  -e packages/qcsc-prefect-blocks \
+  -e packages/qcsc-prefect-executor
 ```
 
 `SSL_CERT_FILE` is required on Fugaku for IBM Quantum access in this environment.
@@ -133,7 +133,7 @@ Open a new terminal and connect to the login node and execute the build script.
 
 <img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
-cd /path/to/work/hpc-prefect
+cd /path/to/work/qcsc-prefect
 ./examples/prefect_bitcount_demo/build_on_fugaku.sh
 ```
 
@@ -151,7 +151,7 @@ realpath ./examples/prefect_bitcount_demo/bin/get_counts_hist
 Example output:
 
 ```text
-/vol000x/mdt6/data/ra00000/u12345/hpc-prefect/examples/prefect_bitcount_demo/bin/get_counts_hist
+/vol000x/mdt6/data/ra00000/u12345/qcsc-prefect/examples/prefect_bitcount_demo/bin/get_counts_hist
 ```
 
 ### Step 4.1. What `get_counts_json` and `get_counts_hist` do
@@ -179,7 +179,7 @@ Differences:
 
 <img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-cd /path/to/work/hpc-prefect
+cd /path/to/work/qcsc-prefect
 cp examples/prefect_bitcount_demo/bitcount_blocks.example.toml \
    examples/prefect_bitcount_demo/bitcount_blocks.toml
 vim examples/prefect_bitcount_demo/bitcount_blocks.toml

@@ -5,10 +5,10 @@ from pathlib import Path
 
 from prefect import flow
 
-from hpc_prefect_adapters.fugaku.builder import FugakuJobRequest
-from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
-from hpc_prefect_core.models.execution_profile import ExecutionProfile
-from hpc_prefect_executor.fugaku.run import run_fugaku_job
+from qcsc_prefect_adapters.fugaku.builder import FugakuJobRequest
+from qcsc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+from qcsc_prefect_core.models.execution_profile import ExecutionProfile
+from qcsc_prefect_executor.fugaku.run import run_fugaku_job
 
 
 async def _resolve_loaded_block(value):

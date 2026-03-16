@@ -535,7 +535,7 @@ If `command_block_name` or `execution_profile_block_name` is omitted, the flow s
 
 ## 16.1 Current implementation gaps to close
 
-The current hpc-prefect Fugaku path does not yet fully represent the reference scripts.
+The current qcsc-prefect Fugaku path does not yet fully represent the reference scripts.
 
 Known gaps:
 

@@ -79,7 +79,7 @@ def _resolve_example_path() -> Path:
 
 
 def _register_block_types(*custom_block_classes) -> None:
-    from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+    from qcsc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
 
     block_types = [
         CommandBlock,
@@ -194,7 +194,7 @@ def _env_values() -> dict[str, Any]:
 
 def main() -> None:
     args = _parse_args()
-    from hpc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+    from qcsc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
 
     config = _load_config_file(args.config)
     env = _env_values()

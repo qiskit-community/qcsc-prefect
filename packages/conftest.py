@@ -10,6 +10,6 @@ def _add_src_path(path: Path) -> None:
 
 
 _ROOT = Path(__file__).resolve().parent
-_add_src_path(_ROOT / "hpc-prefect-core" / "src")
-_add_src_path(_ROOT / "hpc-prefect-adapters" / "src")
-_add_src_path(_ROOT / "hpc-prefect-executor" / "src")
+_add_src_path(_ROOT / "qcsc-prefect-core" / "src")
+_add_src_path(_ROOT / "qcsc-prefect-adapters" / "src")
+_add_src_path(_ROOT / "qcsc-prefect-executor" / "src")

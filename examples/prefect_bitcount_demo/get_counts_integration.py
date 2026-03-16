@@ -10,7 +10,7 @@ from prefect import task
 from prefect.blocks.core import Block
 from pydantic import Field
 
-from hpc_prefect_executor.from_blocks import run_job_from_blocks
+from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 
 BITLEN = 10
 

@@ -55,7 +55,7 @@ After this, you clone the tutorial repository:
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345
-git clone git@github.com:hitomitak/hpc-prefect.git
+git clone git@github.com:hitomitak/qcsc-prefect.git
 ```
 
 ### Step 3: Choose your Prefect backend
@@ -107,7 +107,7 @@ Create and use an on-prem profile:
 ```bash
 prefect profile create mdx
 prefect profile use mdx
-/work/gz00/z12345/hpc-prefect/scripts/prefect_sync_env_to_config.sh -p mdx
+/work/gz00/z12345/qcsc-prefect/scripts/prefect_sync_env_to_config.sh -p mdx
 ```
 
 Check current configuration:

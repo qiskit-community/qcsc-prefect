@@ -13,13 +13,13 @@ from prefect import get_run_logger, task
 
 _project_root = Path(__file__).resolve().parents[4]
 if (_project_root / "packages").exists():
-    sys.path.insert(0, str(_project_root / "packages" / "hpc-prefect-core" / "src"))
-    sys.path.insert(0, str(_project_root / "packages" / "hpc-prefect-adapters" / "src"))
-    sys.path.insert(0, str(_project_root / "packages" / "hpc-prefect-blocks" / "src"))
-    sys.path.insert(0, str(_project_root / "packages" / "hpc-prefect-executor" / "src"))
+    sys.path.insert(0, str(_project_root / "packages" / "qcsc-prefect-core" / "src"))
+    sys.path.insert(0, str(_project_root / "packages" / "qcsc-prefect-adapters" / "src"))
+    sys.path.insert(0, str(_project_root / "packages" / "qcsc-prefect-blocks" / "src"))
+    sys.path.insert(0, str(_project_root / "packages" / "qcsc-prefect-executor" / "src"))
 
-from hpc_prefect_blocks.common.blocks import HPCProfileBlock
-from hpc_prefect_executor.from_blocks import run_job_from_blocks
+from qcsc_prefect_blocks.common.blocks import HPCProfileBlock
+from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 
 from ..artifact_keys import bulk_metrics_artifact_key
 from ..cli_args import build_ext_sqd_user_args, build_trim_sqd_user_args
