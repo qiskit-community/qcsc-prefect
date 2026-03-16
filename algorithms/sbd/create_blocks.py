@@ -150,6 +150,12 @@ def _default_block_names(*, hpc_target: str, solver_mode: str) -> dict[str, str]
     }
 
 
+def _normalize_modules_for_target(*, is_miyabi: bool, solver_mode: str, modules: list[str] | None) -> list[str]:
+    if is_miyabi and solver_mode == "gpu":
+        return []
+    return list(modules or [])
+
+
 def _env_values() -> dict[str, Any]:
     def env_int(name: str) -> int | None:
         raw = os.getenv(name, "").strip()
@@ -308,6 +314,7 @@ def main() -> None:
         if "unset OMPI_MCA_mca_base_env_list" not in pre_commands:
             pre_commands.insert(0, "unset OMPI_MCA_mca_base_env_list")
         environments.setdefault("MIYABI", "G")
+    modules = _normalize_modules_for_target(is_miyabi=is_miyabi, solver_mode=solver_mode, modules=modules)
 
     default_names = _default_block_names(hpc_target=hpc_target, solver_mode=solver_mode)
 
