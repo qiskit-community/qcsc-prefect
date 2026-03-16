@@ -115,8 +115,8 @@ git clone git@github.com:hitomitak/qcsc-prefect.git
 cd qcsc-prefect
 
 source ~/venv/prefect/bin/activate
-export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
 uv pip install prefect-qiskit
+export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
 uv pip install --no-deps \
   -e packages/qcsc-prefect-core \
   -e packages/qcsc-prefect-adapters \
