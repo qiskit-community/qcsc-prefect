@@ -443,12 +443,15 @@ Edit `algorithms/sbd/sbd_blocks_gpu.toml` and change:
 | `sbd_executable` | `/work/gz00/z12345/qcsc-prefect/algorithms/sbd/native/diag-gpu` |
 | `launcher` | `mpirun` |
 | `mpiprocs` | `1` |
+| `modules` | Do not set |
 | `mpi_options` | `["-n", "1"]` |
 | `solver_mode` | `gpu` |
 
 > [!NOTE]
 > For GPU runs, use `diag-gpu` as the executable name. Do not point the GPU block to `diag`.
+> GPU runs on Miyabi do not need `module load intel/2023.2.0` or `module load impi/2021.10.0`.
 > Use dedicated GPU block names so that the existing CPU blocks remain available.
+> `create_blocks.py` will save the GPU execution profile without module loads.
 > If `solver_mode = "gpu"` and you omit these names, `create_blocks.py` now defaults to `exec-sbd-gpu`, `hpc-miyabi-sbd-gpu`, and `davidson-solver-gpu`.
 
 #### A.3 Create the GPU Block
