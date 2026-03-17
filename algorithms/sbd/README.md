@@ -116,7 +116,8 @@ Then increase only if your target case runs without OOM.
 
 For Fugaku, `algorithms/sbd/sbd_blocks.fugaku.example.toml` already matches the tutorial baseline
 (`num_nodes = 2`, `mpiprocs = 2`, `mpi_options = ["-n", "2"]`, `script_filename = "sbd_solver.pjm"`),
-so in most cases you only need to update `project`, `queue`, `work_dir`, and `sbd_executable`.
+so in most cases you only need to update `group`, `queue`, `work_dir`, and `sbd_executable`.
+For backward compatibility, `project` is still accepted as a legacy alias in Fugaku mode.
 
 This creates:
 

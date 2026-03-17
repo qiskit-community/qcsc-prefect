@@ -28,7 +28,7 @@ Note: The blocks are currently defined in `qcsc_prefect_blocks.miyabi.blocks` bu
 
 ```bash
 cd /Users/hitomi/Project/qcsc-prefect
-export FUGAKU_PROJECT=your_project_id
+export FUGAKU_GROUP=your_group_id
 export FUGAKU_RSCGRP=small
 export FUGAKU_GFSCACHE=/vol0002
 uv run python examples/fugaku_prefect_hello_demo/create_blocks.py
@@ -60,7 +60,8 @@ Example return value:
 
 ## Environment Variables
 
-- `FUGAKU_PROJECT`: Required. Your Fugaku project ID (e.g., `hp200999`)
+- `FUGAKU_GROUP`: Preferred. Your Fugaku Group ID (e.g., `ra000000`)
+- `FUGAKU_PROJECT`: Legacy alias still accepted for compatibility
 - `FUGAKU_RSCGRP`: Resource group (default: `small`). Options: `small`, `large`, `huge`, etc.
 - `FUGAKU_GFSCACHE`: GFS cache path (default: `/vol0002`). Used for `PJM_LLIO_GFSCACHE`
 - `FUGAKU_DEMO_EXECUTABLE`: Path to executable (default: `hello_demo.sh` in this directory)

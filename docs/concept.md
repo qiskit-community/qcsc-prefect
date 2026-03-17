@@ -52,7 +52,7 @@ Core data models and resolution logic. Defines [`ExecutionProfile`](../packages/
 Prefect Block definitions for the three-layer architecture:
 - [`CommandBlock`](../packages/qcsc-prefect-blocks/src/qcsc_prefect_blocks/common/blocks.py): Defines WHAT to execute (command name, executable key)
 - [`ExecutionProfileBlock`](../packages/qcsc-prefect-blocks/src/qcsc_prefect_blocks/common/blocks.py): Defines HOW to execute (nodes, MPI ranks, walltime, modules)
-- [`HPCProfileBlock`](../packages/qcsc-prefect-blocks/src/qcsc_prefect_blocks/common/blocks.py): Defines WHERE to execute (queue, project, system-specific settings)
+- [`HPCProfileBlock`](../packages/qcsc-prefect-blocks/src/qcsc_prefect_blocks/common/blocks.py): Defines WHERE to execute (queue, project/group, system-specific settings)
 
 #### [`qcsc-prefect-adapters`](../packages/qcsc-prefect-adapters/)
 HPC system-specific adapters that handle job script generation and submission:

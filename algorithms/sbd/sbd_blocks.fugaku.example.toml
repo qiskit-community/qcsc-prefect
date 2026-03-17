@@ -1,9 +1,9 @@
 # Example configuration for SBD Prefect blocks on Fugaku
-# Copy this file to algorithms/sbd/sbd_blocks.toml and adjust the required paths/project.
+# Copy this file to algorithms/sbd/sbd_blocks.toml and adjust the required paths/group.
 
 # Required for Fugaku
 hpc_target = "fugaku"
-project = "ra000000"
+group = "ra000000"
 queue = "small"
 work_dir = "/vol0000/mdt6/data/ra000000/u12345/sbd_jobs"
 sbd_executable = "/vol0000/mdt6/data/ra000000/u12345/qcsc-prefect/algorithms/sbd/native/diag"

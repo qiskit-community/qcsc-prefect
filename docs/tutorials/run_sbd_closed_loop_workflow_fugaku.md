@@ -15,7 +15,7 @@ Before starting, make sure:
 - You have completed [How to Set Up IBM Quantum Access Credentials for Prefect](../howto/howto_setup_prefect_qiskit_fugaku.md).
 
 > [!IMPORTANT]
-> - Replace account, group, and project placeholders with your actual values.
+> - Replace group, user, and path placeholders with your actual values.
 > - Run this tutorial in an environment where both Prefect CLI and Fugaku scheduler commands (`pjsub`, `pjstat`) are available.
 
 ## 0. What changes from BitCounts?
@@ -43,7 +43,7 @@ Important: this does **not** replace the 3-block architecture.
 
 - `CommandBlock` = WHAT executable to run
 - `ExecutionProfileBlock` = HOW to run (MPI/walltime/modules)
-- `HPCProfileBlock` = WHERE to run (queue/project/target)
+- `HPCProfileBlock` = WHERE to run (queue/group/target)
 - `SBDSolverJob` = SBD-specific wrapper that stores:
   - references to the three blocks above
   - SBD-specific runtime arguments (`task_comm_size`, `block`, `iteration`, etc.)
@@ -213,7 +213,7 @@ The copied example already contains the Fugaku tutorial baseline:
 
 Edit `algorithms/sbd/sbd_blocks.toml` and update at least:
 
-- `project`
+- `group`
 - `queue`
 - `work_dir`
 - `sbd_executable`
@@ -222,7 +222,7 @@ Edit `algorithms/sbd/sbd_blocks.toml` and update at least:
 | Parameter | Value / Example | Description |
 |---|---|---|
 | `hpc_target` | `fugaku` | Target scheduler backend |
-| `project` | `raXXXXXX` | Fugaku goup name |
+| `group` | `raXXXXXX` | Fugaku Group ID |
 | `queue` | `small` | Fugaku resource group (`rscgrp`) |
 | `work_dir` | `/volxxxxx/mdt6/data/raxxxxx/uxxxxx/sbd_jobs` | Job working directory |
 | `sbd_executable` | `/volxxxxx/mdt6/data/raxxxxx/uxxxxx/qcsc-prefect/algorithms/sbd/native/diag` | Absolute path to executable |

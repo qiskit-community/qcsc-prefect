@@ -14,9 +14,9 @@ def _resolve_demo_executable() -> str:
 
 
 def main() -> None:
-    project = os.getenv("FUGAKU_PROJECT", "").strip()
+    project = os.getenv("FUGAKU_GROUP", "").strip() or os.getenv("FUGAKU_PROJECT", "").strip()
     if not project:
-        raise RuntimeError("Set FUGAKU_PROJECT before running create_blocks.py.")
+        raise RuntimeError("Set FUGAKU_GROUP (preferred) or FUGAKU_PROJECT before running create_blocks.py.")
 
     rscgrp = os.getenv("FUGAKU_RSCGRP", "small").strip()
     gfscache = os.getenv("FUGAKU_GFSCACHE", "/vol0002").strip()
@@ -53,7 +53,7 @@ def main() -> None:
     ).save("hpc-fugaku", overwrite=True)
 
     print(f"Saved blocks: cmd-fugaku-hello-demo, exec-fugaku-hello-single, hpc-fugaku")
-    print(f"  FUGAKU_PROJECT={project}")
+    print(f"  FUGAKU_GROUP/FUGAKU_PROJECT={project}")
     print(f"  FUGAKU_RSCGRP={rscgrp}")
     print(f"  FUGAKU_GFSCACHE={gfscache}")
     print(f"  executable={executable}")

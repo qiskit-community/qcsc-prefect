@@ -50,6 +50,7 @@ def _parse_args() -> argparse.Namespace:
 
     parser.add_argument("--hpc-target", choices=["miyabi", "fugaku"])
     parser.add_argument("--project")
+    parser.add_argument("--group")
     parser.add_argument("--queue")
     parser.add_argument("--work-dir")
     parser.add_argument("--sbd-executable")
@@ -199,6 +200,7 @@ def _env_values() -> dict[str, Any]:
     return {
         "hpc_target": env_first_str("SBD_HPC_TARGET"),
         "project": env_first_str("SBD_PROJECT", "MIYABI_PBS_PROJECT", "FUGAKU_PROJECT"),
+        "group": env_first_str("SBD_GROUP", "FUGAKU_GROUP", "FUGAKU_PROJECT"),
         "queue": env_first_str("SBD_QUEUE", "MIYABI_PBS_QUEUE", "FUGAKU_RSCGRP"),
         "work_dir": env_first_str("SBD_WORK_DIR"),
         "sbd_executable": env_first_str("SBD_EXECUTABLE"),
@@ -248,9 +250,33 @@ def main() -> None:
         raise RuntimeError("'hpc_target' must be either 'miyabi' or 'fugaku'.")
     is_miyabi = hpc_target == "miyabi"
 
-    project = _pick_value(args.project, config.get("project"), env.get("project"))
+    if is_miyabi:
+        project = _pick_value(
+            args.project,
+            config.get("project"),
+            env.get("project"),
+            args.group,
+            config.get("group"),
+            env.get("group"),
+        )
+    else:
+        project = _pick_value(
+            args.group,
+            config.get("group"),
+            env.get("group"),
+            args.project,
+            config.get("project"),
+            env.get("project"),
+        )
     if not project:
-        raise RuntimeError("Set 'project' in --config/--project or SBD_PROJECT/MIYABI_PBS_PROJECT/FUGAKU_PROJECT.")
+        if is_miyabi:
+            raise RuntimeError(
+                "Set 'project' in --config/--project or SBD_PROJECT/MIYABI_PBS_PROJECT."
+            )
+        raise RuntimeError(
+            "Set 'group' in --config/--group (preferred) or 'project' for compatibility, "
+            "or use SBD_GROUP/FUGAKU_GROUP/FUGAKU_PROJECT."
+        )
 
     queue = _pick_value(args.queue, config.get("queue"), env.get("queue"))
     if not queue:
