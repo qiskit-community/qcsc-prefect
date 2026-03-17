@@ -219,6 +219,9 @@ prefect-auth login
 #### 4.2 Edit the configuration file
 
 Edit `algorithms/sbd/sbd_blocks.toml` and set the following parameters.
+```bash
+vim algorithms/sbd/sbd_blocks.toml
+```
 
 Set at least:
 - project
