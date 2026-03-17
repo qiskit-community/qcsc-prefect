@@ -11,12 +11,11 @@ The goal is to compute the ground state energy of N2-MO state.
 
 Before starting, make sure:
 
-- You have completed [Create Your QCSC Workflow with Prefect for Fugaku](./create_qcsc_workflow_for_fugaku.md).
-- You have completed [How to Set Up IBM Quantum Access Credentials for Prefect](../howto/howto_setup_prefect_qiskit_fugaku.md).
+- You have completed [Step1 : How to Set Up Python Environment on Fugaku Pre/Post Node](../howto/howto_setup_python_env_fugaku.md).
+- You have completed [Step2 : How to Set Up IBM Quantum Access Credentials for Prefect](../howto/howto_setup_prefect_qiskit_fugaku.md).
 
 > [!IMPORTANT]
-> - Replace group, user, and path placeholders with your actual values.
-> - Run this tutorial in an environment where both Prefect CLI and Fugaku scheduler commands (`pjsub`, `pjstat`) are available.
+> Replace `ra00000`, `u12345` and `vol0000x` with your actual group, account name and mount volume.
 
 ## 0. What changes from BitCounts?
 
