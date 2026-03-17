@@ -56,7 +56,7 @@ Recommended Fugaku settings:
 
 ```toml
 hpc_target = "fugaku"
-project = "ra010014"
+group = "ra010014"
 queue = "small"
 work_dir = "/shared/gb_sqd_runs"
 

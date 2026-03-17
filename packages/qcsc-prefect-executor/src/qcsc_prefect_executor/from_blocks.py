@@ -101,7 +101,7 @@ async def run_job_from_blocks(
 
     queue, project = _resolve_queue_and_project(hpc_block, execution_profile_block.resource_class)
     if not project:
-        raise ValueError("Project is empty. Update HPCProfileBlock project_cpu/project_gpu.")
+        raise ValueError("Project/Group is empty. Update HPCProfileBlock project_cpu/project_gpu.")
 
     exec_profile = _build_execution_profile(
         command_block=command_block,

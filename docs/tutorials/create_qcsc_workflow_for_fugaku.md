@@ -216,7 +216,7 @@ python examples/prefect_bitcount_demo/create_blocks.py \
 |---|---|---|
 | CommandBlock | `cmd-bitcount-hist` | Command definition (`executable_key=bitcount_hist`) |
 | ExecutionProfileBlock | `exec-bitcount-fugaku` | Nodes, MPI settings, walltime |
-| HPCProfileBlock | `hpc-fugaku-bitcount` | Fugaku rscgrp/project/executable/gfscache settings |
+| HPCProfileBlock | `hpc-fugaku-bitcount` | Fugaku rscgrp/group/executable/gfscache settings |
 | Prefect Variable | `fugaku-bitcount-options` | Sampler options (shots, etc.) |
 
 > Legacy `BitCounter` facade (`miyabi-tutorial`) is not created for Fugaku mode.

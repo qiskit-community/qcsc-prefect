@@ -4,8 +4,9 @@
 # HPC target: "miyabi" or "fugaku"
 hpc_target = "miyabi"
 
-# Project/group name
+# Miyabi uses project. Fugaku also accepts legacy project, but tutorials prefer `group = "ra000000"`.
 project = "gz00"
+# group = "ra000000"
 
 # Queue/resource group name
 queue = "regular-c"

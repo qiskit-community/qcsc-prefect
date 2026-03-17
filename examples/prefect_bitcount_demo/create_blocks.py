@@ -112,6 +112,7 @@ def _parse_args() -> argparse.Namespace:
 
     parser.add_argument("--hpc-target", choices=["miyabi", "fugaku"])
     parser.add_argument("--project")
+    parser.add_argument("--group")
     parser.add_argument("--queue")
     parser.add_argument("--work-dir")
     parser.add_argument("--launcher")
@@ -169,6 +170,7 @@ def _env_values() -> dict[str, Any]:
     return {
         "hpc_target": _env_str("BITCOUNT_HPC_TARGET"),
         "project": _env_str("BITCOUNT_PROJECT", "MIYABI_PBS_PROJECT", "FUGAKU_PROJECT"),
+        "group": _env_str("BITCOUNT_GROUP", "FUGAKU_GROUP", "FUGAKU_PROJECT"),
         "queue": _env_str("BITCOUNT_QUEUE", "MIYABI_PBS_QUEUE", "FUGAKU_RSCGRP"),
         "work_dir": _env_str("BITCOUNT_WORK_DIR", "MIYABI_BITCOUNT_WORK_DIR", "FUGAKU_BITCOUNT_WORK_DIR"),
         "launcher": _env_str("BITCOUNT_LAUNCHER", "MIYABI_LAUNCHER", "FUGAKU_LAUNCHER"),
@@ -213,10 +215,33 @@ def main() -> None:
     example_dir = _resolve_example_path()
     default_optimized_exec = str((example_dir / "bin/get_counts_hist").resolve())
 
-    project = _pick_value(args.project, config.get("project"), env.get("project"))
+    if is_miyabi:
+        project = _pick_value(
+            args.project,
+            config.get("project"),
+            env.get("project"),
+            args.group,
+            config.get("group"),
+            env.get("group"),
+        )
+    else:
+        project = _pick_value(
+            args.group,
+            config.get("group"),
+            env.get("group"),
+            args.project,
+            config.get("project"),
+            env.get("project"),
+        )
     if not project:
+        if is_miyabi:
+            raise RuntimeError(
+                "Set 'project' in --config/--project or environment "
+                "(BITCOUNT_PROJECT, MIYABI_PBS_PROJECT)."
+            )
         raise RuntimeError(
-            "Set 'project' in --config/--project or environment (BITCOUNT_PROJECT, MIYABI_PBS_PROJECT, FUGAKU_PROJECT)."
+            "Set 'group' in --config/--group (preferred) or 'project' for compatibility, "
+            "or use BITCOUNT_GROUP/FUGAKU_GROUP/FUGAKU_PROJECT."
         )
 
     queue = _pick_value(args.queue, config.get("queue"), env.get("queue"))

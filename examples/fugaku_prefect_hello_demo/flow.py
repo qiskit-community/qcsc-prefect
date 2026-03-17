@@ -50,7 +50,7 @@ async def fugaku_prefect_block_hello_flow(
 
     queue, project = _resolve_queue_and_project(hpc_block, profile_block.resource_class)
     if not project:
-        raise ValueError("Project is empty. Update HPCProfileBlock project_cpu/project_gpu.")
+        raise ValueError("Project/Group is empty. Update HPCProfileBlock project_cpu/project_gpu.")
 
     # Get gfscache from HPCProfileBlock (now a dedicated field)
     gfscache = hpc_block.gfscache or "/vol0002"

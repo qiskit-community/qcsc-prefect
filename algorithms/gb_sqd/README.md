@@ -43,7 +43,8 @@ vim gb_sqd_blocks.toml
 
 Edit the following required fields:
 - `hpc_target`: "miyabi" or "fugaku"
-- `project`: Your project/group name
+- `project`: Miyabi project name
+- `group`: Fugaku Group ID (preferred in Fugaku mode; `project` is kept as a legacy alias)
 - `queue`: Queue/resource group name
 - `work_dir`: Working directory for job outputs
 
