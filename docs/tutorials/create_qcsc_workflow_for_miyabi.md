@@ -120,13 +120,23 @@ ssh -A z12345@mdx-workflow.example.org
 
 ## Step 2. Clone qcsc-prefect repository
 
-If you haven't clone qcsc-prefect repository, please clone it.
+Prepare `qcsc-prefect` under `/work/gz00/z12345`.
+You can either clone the repository from GitHub, or copy the tutorial source tree already available on MDX at `/large/tutorial/qcsc-prefect`.
 
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345
 git clone git@github.com:hitomitak/qcsc-prefect.git
 ```
+
+Or:
+
+<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+```bash
+cp -r /large/tutorial/qcsc-prefect /work/gz00/z12345/
+```
+
+After either method, continue with `/work/gz00/z12345/qcsc-prefect`.
 
 Activate your virtual environment for Prefect:
 
