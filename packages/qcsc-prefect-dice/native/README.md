@@ -1,7 +1,7 @@
 # DICE Native Build Assets
 
-This directory stores the native build scripts and site-specific patch used to
-build the DICE executable for qcsc-prefect workflows.
+This directory stores the native build scripts and site-specific build settings
+used to build the DICE executable for qcsc-prefect workflows.
 
 The Python integration lives in:
 
@@ -44,7 +44,7 @@ bash ./build_dice_miyabi.sh
 The Miyabi-oriented build script:
 
 - loads the required compiler and MPI modules
-- applies `dice-miyabi.patch`
+- passes Miyabi-specific `CXX` and `CXXFLAGS` overrides to `make`
 - copies the final `Dice` binary and required shared libraries into `bin/`
 
 ## Configure The Block
