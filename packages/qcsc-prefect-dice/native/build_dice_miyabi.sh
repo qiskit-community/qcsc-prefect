@@ -34,8 +34,11 @@ echo 'using mpi : mpiicpc ;' >> user-config.jam
 
 # Build DICE
 cd "$DICE_ROOT"
-patch -p1 < ../../dice-miyabi.patch
-make -j"$(nproc)" Dice
+dice_make_args=(
+    'CXX=mpiicpc -cxx=icpx'
+    'CXXFLAGS=-I. -I$(HDF5)/include -I$(EIGEN) -I$(BOOST) -I$(ZLIB) -axSAPPHIRERAPIDS,CORE-AVX512 -diag-disable=10430 -g -Wall -march=native -Wno-sign-compare -Werror -O3 -funroll-loops -std=c++0x -fopenmp -DUSE_HDF5_SERIAL -Dserialize_hash'
+)
+make -j"$(nproc)" "${dice_make_args[@]}" Dice
 
 # Put the runtime libraries in the package
 mkdir -p "$DICE_BIN_PATH"

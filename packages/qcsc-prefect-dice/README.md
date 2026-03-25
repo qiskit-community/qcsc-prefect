@@ -16,7 +16,7 @@ Native build assets live under:
 packages/qcsc-prefect-dice/native
 ```
 
-See [native/README.md](/Users/hitomi/Project/qcsc-prefect/packages/qcsc-prefect-dice/native/README.md)
+See [native/README.md](./native/README.md)
 for build instructions and how to point `dice_executable` at the resulting
 binary.
 
