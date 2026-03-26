@@ -69,7 +69,7 @@ bash ./build_dice_miyabi.sh
 The Miyabi-oriented build script:
 
 - loads the required compiler and MPI modules
-- passes Miyabi-specific `CXX` and `CXXFLAGS` overrides to `make`
+- passes Miyabi-specific compile and link flag overrides to `make`
 - embeds `RUNPATH=$ORIGIN` into `Dice` so it can find bundled libraries in `bin/`
 - verifies the copied binary still exposes that runtime path when `readelf` is available
 - copies the final `Dice` binary and required shared libraries into `bin/`
