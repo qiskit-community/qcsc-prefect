@@ -80,6 +80,8 @@ def _resolve_max_prefect_concurrency(
     max_prefect_concurrency: int | None,
 ) -> int:
     if max_prefect_concurrency is not None:
+        if hpc_target == "miyabi":
+            return max(max_prefect_concurrency, max_jobs_in_queue)
         return max_prefect_concurrency
     if hpc_target == "miyabi":
         return DEFAULT_MIYABI_MAX_PREFECT_CONCURRENCY

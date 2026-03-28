@@ -205,6 +205,75 @@ def test_bulk_flow_uses_miyabi_default_queue_limits_when_omitted(tmp_path: Path,
     assert submitted[0]["max_jobs_in_queue"] == 256
 
 
+def test_bulk_flow_promotes_miyabi_prefect_concurrency_to_queue_limit(tmp_path: Path, monkeypatch):
+    input_root = tmp_path / "input"
+    output_root = tmp_path / "output"
+    _write_case(input_root / "case_a" / "atom_0001")
+    _write_case(input_root / "case_b" / "atom_0002")
+    _write_case(input_root / "case_c" / "atom_0003")
+    _write_case(input_root / "case_d" / "atom_0004")
+
+    event_log: list[str] = []
+    submitted_futures: dict[str, _FakeFuture] = {}
+
+    class _RollingTask:
+        def submit(self, **kwargs):
+            relative_path = kwargs["relative_path"]
+            event_log.append(f"submit:{relative_path}")
+            future = _FakeFuture(
+                {
+                    "status": "success",
+                    "relative_path": relative_path,
+                    "parameter_overrides": kwargs["parameter_overrides"],
+                }
+            )
+            submitted_futures[relative_path] = future
+            return future
+
+    completion_order = [
+        "case_a/atom_0001",
+        "case_b/atom_0002",
+        "case_c/atom_0003",
+        "case_d/atom_0004",
+    ]
+
+    def fake_as_completed(futures):
+        for relative_path in completion_order:
+            future = submitted_futures.get(relative_path)
+            if future in futures:
+                event_log.append(f"complete:{relative_path}")
+                yield future
+                return
+        raise AssertionError("No matching future available for completion")
+
+    monkeypatch.setattr(bulk, "_get_bulk_target_run_task", lambda: _RollingTask())
+    monkeypatch.setattr(bulk, "as_completed", fake_as_completed)
+
+    with prefect_test_harness():
+        summary = bulk.bulk_gb_sqd_flow(
+            mode="ext_sqd",
+            hpc_target="miyabi",
+            input_root_dir=str(input_root),
+            output_root_dir=str(output_root),
+            max_jobs_in_queue=4,
+            max_prefect_concurrency=2,
+            max_target_task_retries=0,
+            num_batches=2,
+            num_recovery=1,
+            num_samples_per_batch=1000,
+            max_time=300,
+        )
+
+    assert summary["max_jobs_in_queue"] == 4
+    assert summary["max_prefect_concurrency"] == 4
+    assert event_log[:4] == [
+        "submit:case_a/atom_0001",
+        "submit:case_b/atom_0002",
+        "submit:case_c/atom_0003",
+        "submit:case_d/atom_0004",
+    ]
+
+
 def test_bulk_flow_uses_miyabi_gpu_default_block_names_when_requested(tmp_path: Path, monkeypatch):
     input_root = tmp_path / "input"
     output_root = tmp_path / "output"

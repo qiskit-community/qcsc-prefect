@@ -190,6 +190,9 @@ result = bulk_gb_sqd_flow(
 
 When these limits are omitted for Miyabi bulk runs, the flow now defaults to
 `max_prefect_concurrency=128` and `max_jobs_in_queue=256`.
+If you explicitly set a smaller `max_prefect_concurrency` than
+`max_jobs_in_queue`, Miyabi bulk runs promote it to the queue limit so the
+queue can still be filled up to the requested cap.
 
 For a Miyabi GPU bulk run, create GPU-specific blocks and either pass them
 explicitly or set `resource_class="gpu"` to use the default `*-miyabi-gpu`
