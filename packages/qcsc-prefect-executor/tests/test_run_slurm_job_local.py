@@ -4,10 +4,10 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-from qcsc_prefect_adapters.miyabi.builder import MiyabiJobRequest
-from qcsc_prefect_adapters.miyabi.runtime import SubmitResult
+from qcsc_prefect_adapters.slurm.builder import SlurmJobRequest
+from qcsc_prefect_adapters.slurm.runtime import SubmitResult
 from qcsc_prefect_core.models.execution_profile import ExecutionProfile
-from qcsc_prefect_executor.miyabi import run as run_mod
+from qcsc_prefect_executor.slurm import run as run_mod
 
 
 class _LoggerStub:
@@ -29,7 +29,7 @@ class _RuntimeStub:
 
     async def submit(self, script_path: Path, *, cwd: Path | None = None) -> SubmitResult:
         self._calls.append(("submit", (script_path,), {"cwd": cwd}))
-        return SubmitResult(job_id="12345.miyabi", raw_output="12345.miyabi")
+        return SubmitResult(job_id="12345", raw_output="12345")
 
     async def wait_final_status(
         self,
@@ -42,28 +42,24 @@ class _RuntimeStub:
             (
                 "wait_final_status",
                 (job_id,),
-                {
-                    "watch_poll_interval": watch_poll_interval,
-                    "timeout_seconds": timeout_seconds,
-                },
+                {"watch_poll_interval": watch_poll_interval, "timeout_seconds": timeout_seconds},
             )
         )
         return self._final_status
 
 
-def test_run_miyabi_job_local_mock(tmp_path: Path, monkeypatch):
+def test_run_slurm_job_local_mock(tmp_path: Path, monkeypatch):
     stdout_path = tmp_path / "output.out"
     stderr_path = tmp_path / "output.err"
-    stdout_path.write_text("hello from stdout")
-    stderr_path.write_text("warning from stderr")
+    stdout_path.write_text("hello from slurm stdout")
+    stderr_path.write_text("hello from slurm stderr")
 
     final_status = {
-        "Exit_status": "0",
-        "Output_Path": f"login-node:{stdout_path}",
-        "Error_Path": f"login-node:{stderr_path}",
-        "Job_Name": "pytest-miyabi",
-        "queue": "normal",
-        "Resource_List.select": "1",
+        "State": "COMPLETED",
+        "ExitCode": "0:0",
+        "Elapsed": "00:00:12",
+        "AllocCPUS": "32",
+        "NodeList": "node001",
     }
     runtime_calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
     artifact_calls: list[dict[str, Any]] = []
@@ -75,7 +71,7 @@ def test_run_miyabi_job_local_mock(tmp_path: Path, monkeypatch):
     async def fake_create_table_artifact(*, table: list[list[Any]], key: str) -> None:
         artifact_calls.append({"table": table, "key": key})
 
-    monkeypatch.setattr(run_mod, "MiyabiPBSRuntime", runtime_factory)
+    monkeypatch.setattr(run_mod, "SlurmRuntime", runtime_factory)
     monkeypatch.setattr(run_mod, "get_run_logger", lambda: logger)
     monkeypatch.setattr(run_mod, "create_table_artifact", fake_create_table_artifact)
 
@@ -83,37 +79,37 @@ def test_run_miyabi_job_local_mock(tmp_path: Path, monkeypatch):
         command_key="hello",
         num_nodes=1,
         launcher="single",
+        walltime="00:05:00",
     )
-    req = MiyabiJobRequest(
-        queue_name="normal",
-        project="z99999",
+    req = SlurmJobRequest(
+        partition="compute",
+        account="proj01",
         executable="/bin/echo",
     )
 
     result = asyncio.run(
-        run_mod.run_miyabi_job(
+        run_mod.run_slurm_job(
             work_dir=tmp_path,
-            script_filename="job.pbs",
+            script_filename="job.slurm",
             exec_profile=profile,
             req=req,
             watch_poll_interval=0.01,
             timeout_seconds=5,
-            metrics_artifact_key="pytest-metrics",
+            metrics_artifact_key="slurm-metrics-test",
         )
     )
 
-    assert result.job_id == "12345.miyabi"
+    assert result.job_id == "12345"
     assert result.exit_status == 0
-    assert result.job_status["Exit_status"] == "0"
-    assert (tmp_path / "job.pbs").exists()
-    assert logger.info_lines[0] == f"Create Script file in {tmp_path / 'job.pbs'}"
-    assert logger.info_lines[1:] == ["hello from stdout"]
-    assert logger.error_lines == ["warning from stderr"]
+    assert result.state == "COMPLETED"
     assert runtime_calls[0][0] == "submit"
     assert runtime_calls[1] == (
         "wait_final_status",
-        ("12345.miyabi",),
+        ("12345",),
         {"watch_poll_interval": 0.01, "timeout_seconds": 5},
     )
+    assert logger.info_lines == ["hello from slurm stdout"]
+    assert logger.error_lines == ["hello from slurm stderr"]
     assert len(artifact_calls) == 1
-    assert artifact_calls[0]["key"] == "pytest-metrics"
+    assert artifact_calls[0]["key"] == "slurm-metrics-test"
+    assert "exit_code" in artifact_calls[0]["table"][0]

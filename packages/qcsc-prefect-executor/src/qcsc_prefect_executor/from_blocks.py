@@ -7,10 +7,12 @@ from typing import Any
 
 from qcsc_prefect_adapters.fugaku.builder import FugakuJobRequest
 from qcsc_prefect_adapters.miyabi.builder import MiyabiJobRequest
+from qcsc_prefect_adapters.slurm.builder import SlurmJobRequest
 from qcsc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
 from qcsc_prefect_core.models.execution_profile import ExecutionProfile
 from qcsc_prefect_executor.fugaku.run import run_fugaku_job
 from qcsc_prefect_executor.miyabi.run import run_miyabi_job
+from qcsc_prefect_executor.slurm.run import run_slurm_job
 
 _EXECUTION_PROFILE_OVERRIDE_KEYS = {
     "num_nodes",
@@ -132,7 +134,7 @@ async def run_job_from_blocks(
         )
 
     queue, project = _resolve_queue_and_project(hpc_block, execution_profile_block.resource_class)
-    if not project:
+    if hpc_block.hpc_target in {"miyabi", "fugaku"} and not project:
         raise ValueError("Project/Group is empty. Update HPCProfileBlock project_cpu/project_gpu.")
 
     exec_profile = _build_execution_profile(
@@ -171,6 +173,23 @@ async def run_job_from_blocks(
             pjm_resources=list(hpc_block.pjm_resources) if hpc_block.pjm_resources else [],
         )
         return await run_fugaku_job(
+            work_dir=resolved_work_dir,
+            script_filename=script_filename,
+            exec_profile=exec_profile,
+            req=req,
+            watch_poll_interval=watch_poll_interval,
+            timeout_seconds=timeout_seconds,
+            metrics_artifact_key=metrics_artifact_key,
+        )
+
+    if hpc_block.hpc_target == "slurm":
+        req = SlurmJobRequest(
+            partition=queue,
+            account=project or None,
+            executable=executable,
+            qpu=hpc_block.slurm_qpu,
+        )
+        return await run_slurm_job(
             work_dir=resolved_work_dir,
             script_filename=script_filename,
             exec_profile=exec_profile,

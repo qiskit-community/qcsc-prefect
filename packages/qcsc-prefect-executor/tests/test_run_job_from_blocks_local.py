@@ -58,6 +58,7 @@ class _HPCProfileBlockStub:
         spack_modules: list[str] | None = None,
         mpi_options_for_pjm: list[str] | None = None,
         pjm_resources: list[str] | None = None,
+        slurm_qpu: str | None = None,
     ) -> None:
         self.hpc_target = hpc_target
         self.executable_map = executable_map
@@ -69,6 +70,7 @@ class _HPCProfileBlockStub:
         self.spack_modules = spack_modules or []
         self.mpi_options_for_pjm = mpi_options_for_pjm or []
         self.pjm_resources = pjm_resources or []
+        self.slurm_qpu = slurm_qpu
 
 
 def _patch_block_loading(monkeypatch, command, profile, hpc):
@@ -267,6 +269,70 @@ def test_run_job_from_blocks_applies_execution_profile_overrides(monkeypatch, tm
     assert exec_profile.pre_commands == ["echo override"]
     assert exec_profile.environments == {"HELLO": "world"}
     assert exec_profile.arguments == ["--base", "--override"]
+
+
+def test_run_job_from_blocks_dispatches_to_slurm(monkeypatch, tmp_path: Path):
+    command = _CommandBlockStub("bitcount-hist", "bitcount_hist", ["--base"])
+    profile = _ExecutionProfileBlockStub(
+        profile_name="bitcount-slurm",
+        command_name="bitcount-hist",
+        launcher="srun",
+        mpi_options=["--cpu-bind=cores"],
+        pre_commands=["echo before-run"],
+    )
+    hpc = _HPCProfileBlockStub(
+        hpc_target="slurm",
+        executable_map={"bitcount_hist": "/work/proj01/bin/get_counts_hist"},
+        queue_cpu="compute",
+        project_cpu="proj01",
+        slurm_qpu="a100",
+    )
+    _patch_block_loading(monkeypatch, command, profile, hpc)
+
+    captured: dict[str, object] = {}
+
+    class _SlurmResult:
+        def __init__(self) -> None:
+            self.job_id = "12345"
+            self.exit_status = 0
+            self.state = "COMPLETED"
+
+    async def fake_run_miyabi_job(**kwargs):
+        raise AssertionError("run_miyabi_job should not be called in this test")
+
+    async def fake_run_fugaku_job(**kwargs):
+        raise AssertionError("run_fugaku_job should not be called in this test")
+
+    async def fake_run_slurm_job(**kwargs):
+        captured.update(kwargs)
+        return _SlurmResult()
+
+    monkeypatch.setattr(mod, "run_miyabi_job", fake_run_miyabi_job)
+    monkeypatch.setattr(mod, "run_fugaku_job", fake_run_fugaku_job)
+    monkeypatch.setattr(mod, "run_slurm_job", fake_run_slurm_job)
+
+    result = asyncio.run(
+        mod.run_job_from_blocks(
+            command_block_name="cmd",
+            execution_profile_block_name="exec",
+            hpc_profile_block_name="hpc",
+            work_dir=tmp_path,
+            script_filename="job.slurm",
+            user_args=["--override"],
+            metrics_artifact_key="slurm-metrics",
+        )
+    )
+
+    assert result.job_id == "12345"
+    assert captured["req"].partition == "compute"
+    assert captured["req"].account == "proj01"
+    assert captured["req"].executable == "/work/proj01/bin/get_counts_hist"
+    assert captured["req"].qpu == "a100"
+    assert captured["metrics_artifact_key"] == "slurm-metrics"
+    assert captured["exec_profile"].launcher == "srun"
+    assert captured["exec_profile"].mpi_options == ["--cpu-bind=cores"]
+    assert captured["exec_profile"].pre_commands == ["echo before-run"]
+    assert captured["exec_profile"].arguments == ["--base", "--override"]
 
 
 def test_run_job_from_blocks_rejects_unknown_execution_profile_override(monkeypatch, tmp_path: Path):
