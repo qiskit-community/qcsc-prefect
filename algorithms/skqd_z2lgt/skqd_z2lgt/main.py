@@ -3,19 +3,30 @@ import os
 from pathlib import Path
 import logging
 import asyncio
-import tempfile
 import json
 from concurrent.futures import ThreadPoolExecutor
+from uuid import uuid4
+
+import h5py
 from prefect import flow, task, get_run_logger
 from prefect.client.schemas.filters import (ArtifactFilter, ArtifactFilterKey,
                                             ArtifactFilterTaskRunId)
 from prefect.client.orchestration import get_client
 from prefect.variables import Variable
-from prefect.runtime import task_run
+from prefect.runtime import flow_run, task_run
 from prefect_qiskit.runtime import QuantumRuntime
 from prefect_qiskit.primitives import PrimitiveJobRun
-from prefect_miyabi import MiyabiJobBlock, PyFunctionJob
-from skqd_z2lgt.ising_dmrg import ising_dmrg, get_mps_probs
+from qcsc_prefect_executor.from_blocks import run_job_from_blocks
+
+from skqd_z2lgt.block_defaults import (
+    DEFAULT_COMMAND_BLOCK_NAMES,
+    DEFAULT_EXECUTION_PROFILE_BLOCK_NAMES,
+    DEFAULT_HPC_PROFILE_BLOCK_NAME,
+    DEFAULT_METRICS_ARTIFACT_KEYS,
+    DEFAULT_OPTIONS_VARIABLE_NAME,
+    DEFAULT_RUNTIME_NAME,
+    DEFAULT_SCRIPT_FILENAMES,
+)
 from skqd_z2lgt.parameters import Parameters
 from skqd_z2lgt.tasks.open_output import open_output
 from skqd_z2lgt.tasks.dmrg import dmrg_flow
@@ -23,55 +34,122 @@ from skqd_z2lgt.tasks.sample_quantum import sample_quantum_flow
 from skqd_z2lgt.tasks.preprocess import preprocess_flow
 from skqd_z2lgt.tasks.train_generator import train_generator_flow
 from skqd_z2lgt.tasks.diagonalize import check_saved_result
-from skqd_z2lgt.tasks.common import make_dual_lattice
 
-TASK_SCRIPT_DIR = Path(__file__).parents[0] / 'tasks'
+
+def _prepare_pkgpath(parameters: Parameters, root_dir: str | None) -> None:
+    if parameters.pkgpath:
+        parameters.pkgpath = str(Path(parameters.pkgpath).expanduser().resolve())
+        return
+
+    if not root_dir:
+        raise ValueError(
+            "parameters.pkgpath is empty. Pass a shared filesystem path via "
+            "'parameters.pkgpath' or the flow argument 'root_dir'."
+        )
+
+    try:
+        run_id = flow_run.id
+    except Exception:  # pragma: no cover - defensive only
+        run_id = None
+
+    if not run_id:
+        run_id = uuid4().hex
+
+    base_dir = Path(root_dir).expanduser().resolve()
+    base_dir.mkdir(parents=True, exist_ok=True)
+    parameters.pkgpath = str(base_dir / run_id)
+
+
+async def _run_hpc_script_job(
+    *,
+    command_block_name: str,
+    execution_profile_block_name: str,
+    hpc_profile_block_name: str,
+    user_args: list[str],
+    script_filename: str,
+    metrics_artifact_key: str,
+    task_label: str,
+    execution_profile_overrides: dict[str, object] | None = None,
+):
+    result = await run_job_from_blocks(
+        command_block_name=command_block_name,
+        execution_profile_block_name=execution_profile_block_name,
+        hpc_profile_block_name=hpc_profile_block_name,
+        work_dir=Path(user_args[0]).expanduser().resolve().parent
+        if user_args and user_args[0].endswith("parameters.json")
+        else Path(user_args[0]).expanduser().resolve(),
+        script_filename=script_filename,
+        user_args=user_args,
+        watch_poll_interval=5.0,
+        metrics_artifact_key=metrics_artifact_key,
+        execution_profile_overrides=execution_profile_overrides,
+    )
+    if result.exit_status != 0:
+        raise RuntimeError(f"HPC job for {task_label} failed with exit_status={result.exit_status}.")
+    return result
 
 
 @flow
 async def skqd_z2lgt(
     parameters: Parameters,
-    runtime_name: str = 'ibm-runner',
-    cpu_pyfuncjob_name: str = 'cpu-pyfunc',
-    cpu_scriptjob_name: str = 'cpu-script',
-    cuda_scriptjob_name: str = 'cuda-script'
+    runtime_name: str = DEFAULT_RUNTIME_NAME,
+    option_name: str = DEFAULT_OPTIONS_VARIABLE_NAME,
+    root_dir: str | None = None,
+    hpc_profile_block_name: str = DEFAULT_HPC_PROFILE_BLOCK_NAME,
+    dmrg_command_block_name: str = DEFAULT_COMMAND_BLOCK_NAMES["dmrg"],
+    dmrg_execution_profile_block_name: str = DEFAULT_EXECUTION_PROFILE_BLOCK_NAMES["dmrg"],
+    preprocess_command_block_name: str = DEFAULT_COMMAND_BLOCK_NAMES["preprocess"],
+    preprocess_execution_profile_block_name: str = DEFAULT_EXECUTION_PROFILE_BLOCK_NAMES["preprocess"],
+    train_command_block_name: str = DEFAULT_COMMAND_BLOCK_NAMES["train"],
+    train_execution_profile_block_name: str = DEFAULT_EXECUTION_PROFILE_BLOCK_NAMES["train"],
+    diagonalize_command_block_name: str = DEFAULT_COMMAND_BLOCK_NAMES["diagonalize"],
+    diagonalize_execution_profile_block_name: str = DEFAULT_EXECUTION_PROFILE_BLOCK_NAMES["diagonalize"],
 ) -> float:
     """Calculation of ground-state energy of Z2 LGT using SKQD.
 
     Args:
         parameters: Configuration parameters.
-        runtime_name: Name of QuantumRunner block.
-        cpu_pyfuncjob_name: Name of the PyFunctionJob block that runs a python function in an
-            interpreter in the current environment.
-        cpu_scriptjob_name: Name of the MiyabiJobBlock that executes a python script.
-        cuda_scriptjob_name: Name of the MiyabiJobBlock that executes a python script in a CUDA
-            environment.
+        runtime_name: Name of the QuantumRuntime block.
+        option_name: Name of the Prefect Variable storing sampler primitive options.
+        root_dir: Shared filesystem root used when ``parameters.pkgpath`` is empty.
+        hpc_profile_block_name: Name of the shared HPCProfileBlock.
     """
     logger = get_run_logger()
     logger.setLevel(logging.INFO)
 
-    tmpdir = None
-    if not parameters.pkgpath:
-        tmpdir = tempfile.TemporaryDirectory()
-        parameters.pkgpath = tmpdir.name
-
+    _prepare_pkgpath(parameters, root_dir)
+    if not parameters.runtime.options_name:
+        parameters.runtime.options_name = option_name
     open_output(parameters, logger)
+
     if parameters.dmrg:
-        dmrg_future = dmrg.submit(parameters, cpu_pyfuncjob_name=cpu_pyfuncjob_name)
+        dmrg_future = dmrg.submit(
+            parameters,
+            command_block_name=dmrg_command_block_name,
+            execution_profile_block_name=dmrg_execution_profile_block_name,
+            hpc_profile_block_name=hpc_profile_block_name,
+        )
     sample_quantum_future = sample_quantum.submit(parameters,
-                                                  runtime_name=runtime_name)
+                                                  runtime_name=runtime_name,
+                                                  option_name=option_name)
     preprocess_future = preprocess.submit(parameters,
-                                          cpu_scriptjob_name=cpu_scriptjob_name,
+                                          command_block_name=preprocess_command_block_name,
+                                          execution_profile_block_name=preprocess_execution_profile_block_name,
+                                          hpc_profile_block_name=hpc_profile_block_name,
                                           wait_for=[sample_quantum_future])
     train_generator_future = train_generator.submit(parameters,
-                                                    cuda_scriptjob_name=cuda_scriptjob_name,
+                                                    command_block_name=train_command_block_name,
+                                                    execution_profile_block_name=train_execution_profile_block_name,
+                                                    hpc_profile_block_name=hpc_profile_block_name,
                                                     wait_for=[preprocess_future])
-    diagonalize_future = diagonalize.submit(parameters, cuda_scriptjob_name=cuda_scriptjob_name,
-                                            wait_for=[train_generator_future])
+    diagonalize_future = diagonalize.submit(
+        parameters,
+        command_block_name=diagonalize_command_block_name,
+        execution_profile_block_name=diagonalize_execution_profile_block_name,
+        hpc_profile_block_name=hpc_profile_block_name,
+        wait_for=[train_generator_future],
+    )
     energy_cr, energy_rn = diagonalize_future.result()
-
-    if tmpdir:
-        tmpdir.cleanup()
 
     if parameters.dmrg:
         dmrg_energy = dmrg_future.result()
@@ -85,37 +163,37 @@ async def skqd_z2lgt(
 @task
 async def dmrg(
     parameters: Parameters,
-    cpu_pyfuncjob_name: str
+    command_block_name: str,
+    execution_profile_block_name: str,
+    hpc_profile_block_name: str,
 ) -> float:
     """Run DMRG and MPS sampling."""
     logger = get_run_logger()
     logger.info('Estimating ground-state energy via DMRG')
 
-    def run_dmrg_and_sampling(_parameters):
-        with tempfile.NamedTemporaryFile() as tfile:
-            filename = tfile.name
-
-        dual_lattice = make_dual_lattice(_parameters)
-        hamiltonian = dual_lattice.make_hamiltonian(_parameters.lgt.plaquette_energy)
-        dp = _parameters.dmrg
-        julia_bin = 'julia'
-        if dp.julia_sysimage:
-            julia_bin = ['julia', '--sysimage', dp.julia_sysimage]
-
-        energy = ising_dmrg(hamiltonian, filename=filename, nsweeps=dp.nsweeps, maxdim=dp.maxdim,
-                            cutoff=dp.cutoff, julia_bin=julia_bin)
-        states, probs = get_mps_probs(filename, num_samples=dp.num_samples,
-                                      num_threads=os.cpu_count(), julia_bin=julia_bin)
-        os.unlink(filename)
-        return energy, states, probs
-
-    job_block = await PyFunctionJob.load(cpu_pyfuncjob_name)
+    parameters_path = Path(parameters.pkgpath) / "parameters.json"
 
     def dmrg_fn():
+        async def run_dmrg_job():
+            await _run_hpc_script_job(
+                command_block_name=command_block_name,
+                execution_profile_block_name=execution_profile_block_name,
+                hpc_profile_block_name=hpc_profile_block_name,
+                user_args=[str(parameters_path)],
+                script_filename=DEFAULT_SCRIPT_FILENAMES["dmrg"],
+                metrics_artifact_key=DEFAULT_METRICS_ARTIFACT_KEYS["dmrg"],
+                task_label="skqd_z2lgt dmrg",
+            )
+            dmrg_path = Path(parameters.pkgpath) / "dmrg.h5"
+            with h5py.File(dmrg_path, "r", libver="latest") as source:
+                return (
+                    source["energy"][()],
+                    source["mps_states"][()],
+                    source["mps_probs"][()],
+                )
+
         with ThreadPoolExecutor(1) as executor:
-            return executor.submit(
-                lambda: asyncio.run(job_block.run(run_dmrg_and_sampling, parameters))
-            ).result()
+            return executor.submit(lambda: asyncio.run(run_dmrg_job())).result()
 
     return dmrg_flow(parameters, dmrg_fn, logger)
 
@@ -123,24 +201,32 @@ async def dmrg(
 @task
 async def sample_quantum(
     parameters: Parameters,
-    runtime_name: str = 'ibm-runner'
+    runtime_name: str = DEFAULT_RUNTIME_NAME,
+    option_name: str = DEFAULT_OPTIONS_VARIABLE_NAME,
 ):
     """Run the circuits on a backend and return the sampler results.
 
     Args:
         parameters: Workflow parameters.
-        runner_name: Name of QuantumRunner block.
+        runtime_name: Name of QuantumRuntime block.
         option_name: Name of the Variable storing sampler primitive options.
     """
     logger = get_run_logger()
     logger.info('Sampling Trotter circuit final state bitstrings')
 
+    resolved_option_name = parameters.runtime.options_name or option_name
+
     async with asyncio.TaskGroup() as tg:
         runtime_task = tg.create_task(QuantumRuntime.load(runtime_name))
-        options_task = tg.create_task(Variable.get(parameters.runtime.options_name))
+        if resolved_option_name:
+            options_task = tg.create_task(Variable.get(resolved_option_name))
+        else:
+            options_task = None
 
     runtime = runtime_task.result()
-    options = options_task.result()
+    options = (
+        options_task.result() if options_task is not None else None
+    ) or dict(parameters.runtime.options)
     task_id = task_run.id
 
     def fetch_result_fn():
@@ -190,42 +276,45 @@ async def sample_quantum(
 @task
 async def preprocess(
     parameters: Parameters,
-    cpu_scriptjob_name: str
+    command_block_name: str,
+    execution_profile_block_name: str,
+    hpc_profile_block_name: str,
 ):
     """Correct the link-state bitstrings with MWPM and convert to plaquette-state bitstrings.
 
     Args:
         parameters: Configuration parameters.
-        cpu_scriptjob_name: Name of the MiyabiJobBlock that executes a python script.
+        command_block_name: Name of the CommandBlock that executes preprocess.py.
     """
     logger = get_run_logger()
     logger.info('Correcting and converting link states to plaquette states')
 
-    async def convert_miyabi(task_specs):
-        job_block = await MiyabiJobBlock.load(cpu_scriptjob_name)
-        job_block.num_nodes = len(task_specs)
-        job_block.mpiprocs = 1
-        job_block.walltime = '00:10:00'
-
-        with job_block.get_executor() as executor:
-            arguments = [
-                TASK_SCRIPT_DIR / 'preprocess.py',
+    async def run_preprocess_job(task_specs):
+        arguments = [
                 parameters.pkgpath,
                 '--mpi',
                 '--etype', ','.join(task[0] for task in task_specs),
                 '--idt', ','.join(str(task[1]) for task in task_specs),
                 '--ikrylov', ','.join(str(task[2]) for task in task_specs)
             ]
-            exit_status = await executor.execute_job(
-                arguments=arguments,
-                **job_block.get_job_variables()
-            )
-        if exit_status != 0:
-            raise RuntimeError('PBS job preprocess.py failed')
+        await _run_hpc_script_job(
+            command_block_name=command_block_name,
+            execution_profile_block_name=execution_profile_block_name,
+            hpc_profile_block_name=hpc_profile_block_name,
+            user_args=arguments,
+            script_filename=DEFAULT_SCRIPT_FILENAMES["preprocess"],
+            metrics_artifact_key=DEFAULT_METRICS_ARTIFACT_KEYS["preprocess"],
+            task_label="skqd_z2lgt preprocess",
+            execution_profile_overrides={
+                "num_nodes": len(task_specs),
+                "mpiprocs": 1,
+                "walltime": "00:10:00",
+            },
+        )
 
     def convert_fn(task_specs):
         with ThreadPoolExecutor(1) as executor:
-            executor.submit(lambda: asyncio.run(convert_miyabi(task_specs))).result()
+            executor.submit(lambda: asyncio.run(run_preprocess_job(task_specs))).result()
 
     preprocess_flow(parameters, convert_fn, logger=logger)
 
@@ -233,40 +322,40 @@ async def preprocess(
 @task
 async def train_generator(
     parameters: Parameters,
-    cuda_scriptjob_name: str
+    command_block_name: str,
+    execution_profile_block_name: str,
+    hpc_profile_block_name: str,
 ):
     """Train a CRBM per Trotter step.
 
     Args:
         parameters: Configuration parameters.
-        cuda_scriptjob_name: Name of the MiyabiJobBlock that executes the python interpreter in a
-            CUDA environment.
-        pkgpath: Name of the HDF5 file where intermediate and final output of the workflow
-            are written.
+        command_block_name: Name of the CommandBlock that executes train_generator.py.
     """
     logger = get_run_logger()
     logger.info('Training conditional restricted Boltzmann machines')
 
     async def run_train_job(task_specs):
-        job_block = await MiyabiJobBlock.load(cuda_scriptjob_name)
-        job_block.mpiprocs = 1
-        job_block.num_nodes = len(task_specs)
-        job_block.walltime = '01:00:00'
-
-        with job_block.get_executor() as executor:
-            arguments = [
-                TASK_SCRIPT_DIR / 'train_generator.py',
+        arguments = [
                 parameters.pkgpath,
                 '--mpi',
                 '--idt', ','.join(str(task[0]) for task in task_specs),
                 '--ikrylov', ','.join(str(task[1]) for task in task_specs)
             ]
-            exit_status = await executor.execute_job(
-                arguments=arguments,
-                **job_block.get_job_variables()
-            )
-        if exit_status != 0:
-            raise RuntimeError('PBS job train_generator.py failed')
+        await _run_hpc_script_job(
+            command_block_name=command_block_name,
+            execution_profile_block_name=execution_profile_block_name,
+            hpc_profile_block_name=hpc_profile_block_name,
+            user_args=arguments,
+            script_filename=DEFAULT_SCRIPT_FILENAMES["train"],
+            metrics_artifact_key=DEFAULT_METRICS_ARTIFACT_KEYS["train"],
+            task_label="skqd_z2lgt train_generator",
+            execution_profile_overrides={
+                "num_nodes": len(task_specs),
+                "mpiprocs": 1,
+                "walltime": "01:00:00",
+            },
+        )
 
     def train_fn(task_specs):
         with ThreadPoolExecutor(1) as executor:
@@ -278,14 +367,15 @@ async def train_generator(
 @task
 async def diagonalize(
     parameters: Parameters,
-    cuda_scriptjob_name: str
-) -> float:
+    command_block_name: str,
+    execution_profile_block_name: str,
+    hpc_profile_block_name: str,
+) -> tuple[float, float]:
     """Perform SQD with iterative configuration recovery.
 
     Args:
         parameters: Configuration parameters.
-        cuda_scriptjob_name: Name of the MiyabiJobBlock that executes the python interpreter in a
-            CUDA environment.
+        command_block_name: Name of the CommandBlock that executes diagonalize.py.
     """
     logger = get_run_logger()
 
@@ -295,29 +385,30 @@ async def diagonalize(
         if (res := check_saved_result(parameters, f'skqd_{gen_mode}')) is None:
             gen_modes.append(gen_mode)
         else:
-            energies.append(res[0])
+            energies.append(res[1])
 
     if not gen_modes:
         logger.info('All SQD results found on disk.')
         return tuple(energies)
 
-    job_block = await MiyabiJobBlock.load(cuda_scriptjob_name)
-    job_block.mpiprocs = 1
-    job_block.num_nodes = len(gen_modes)
-    job_block.walltime = '02:00:00'
-    with job_block.get_executor() as executor:
-        arguments = [
-            TASK_SCRIPT_DIR / 'diagonalize.py',
+    await _run_hpc_script_job(
+        command_block_name=command_block_name,
+        execution_profile_block_name=execution_profile_block_name,
+        hpc_profile_block_name=hpc_profile_block_name,
+        user_args=[
             parameters.pkgpath,
             '--mpi',
             '--mode', ','.join(gen_modes)
-        ]
-        exit_status = await executor.execute_job(
-            arguments=arguments,
-            **job_block.get_job_variables()
-        )
-    if exit_status != 0:
-        raise RuntimeError('PBS job diagonalize.py failed')
+        ],
+        script_filename=DEFAULT_SCRIPT_FILENAMES["diagonalize"],
+        metrics_artifact_key=DEFAULT_METRICS_ARTIFACT_KEYS["diagonalize"],
+        task_label="skqd_z2lgt diagonalize",
+        execution_profile_overrides={
+            "num_nodes": len(gen_modes),
+            "mpiprocs": 1,
+            "walltime": "02:00:00",
+        },
+    )
 
     energies = []
     for gen_mode in ['cr', 'rn']:
@@ -346,6 +437,12 @@ if __name__ == '__main__':
     parser = ArgumentParser(prog='skqd_z2lgt')
     parser.add_argument('parameters', metavar='PATH',
                         help='Path to a yaml file containing the workflow parameters.')
+    parser.add_argument('--runtime-name', default=DEFAULT_RUNTIME_NAME,
+                        help='Prefect QuantumRuntime block name.')
+    parser.add_argument('--option-name', default=DEFAULT_OPTIONS_VARIABLE_NAME,
+                        help='Prefect Variable name for runtime sampler options.')
+    parser.add_argument('--root-dir',
+                        help='Shared filesystem root directory used when parameters.pkgpath is empty.')
     parser.add_argument('--log-level', metavar='LEVEL', default='INFO', help='Logging level.')
     args = parser.parse_args()
 
@@ -359,4 +456,11 @@ if __name__ == '__main__':
         with open(args.parameters, 'r', encoding='utf-8') as src:
             params = Parameters(**yaml.load(src, yaml.Loader))
 
-    asyncio.run(skqd_z2lgt(params))
+    asyncio.run(
+        skqd_z2lgt(
+            params,
+            runtime_name=args.runtime_name,
+            option_name=args.option_name,
+            root_dir=args.root_dir,
+        )
+    )

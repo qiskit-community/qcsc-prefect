@@ -1,48 +1,76 @@
-# Sample-based Krylov quantum diagonalization of two-dimensional Z2 lattice gauge theory
+# Sample-based Krylov Quantum Diagonalization of Two-Dimensional Z2 Lattice Gauge Theory
 
 This package provides an implementation of sample-based Krylov quantum diagonalization (SKQD)
 applied to pure two-dimensional Z2 lattice gauge theory (LGT) problems. Samples are drawn from
 Trotterized time evolution of the LGT model, and its Hamiltonian is projected and diagonalized onto
-the sub-Hilbert space spanned by the sample bitstrings.
+the sub-Hilbert space spanned by the sampled bitstrings.
 
-## 🚀 Getting Started
+## Getting Started
 
 Before starting, make sure:
 
 - You have completed [How to Set Up IBM Quantum Access Credentials for Prefect](../../docs/howto/howto_setup_prefect_qiskit.md).
 - You have completed [How to Set Up the MDX Workflow Server for QCSC Execution](../../docs/howto/howto_setup_mdx_server.md).
 
-The workflow for SKQD utilizes both Miyabi-C and Miyabi-G resources (in principle we only need the
-latter, but using Miyabi-C is more economical if GPU is not required). You would therefore need to
-set up a python environment for each architecture separately:
+`skqd_z2lgt` uses Prefect for orchestration and submits CPU/GPU Python script jobs through the
+current `qcsc-prefect` block/executor stack. In a typical Miyabi setup you will prepare two Python
+environments:
+
+- a CPU-side environment for DMRG and preprocessing
+- a GPU-side environment for CRBM training and diagonalization
+
+Both environments must have `algorithms/skqd_z2lgt` installed, because the batch jobs execute
+`python -m skqd_z2lgt.tasks.*`.
+
+From the repository root, install the local qcsc-prefect packages and the workflow package:
 
 ```bash
-ssh miyabi-g.jcahpc.jp
-uv venv ~/venv/skqd_z2lgt_aarch64 -p 3.12
-source ~/venv/skqd_z2lgt_aarch64/bin/activate
-uv pip install -e ./qii-miyabi-kawasaki/algorithms/skqd_z2lgt
+cd /path/to/qcsc-prefect
+
+uv pip install --no-deps \
+  -e packages/qcsc-prefect-core \
+  -e packages/qcsc-prefect-adapters \
+  -e packages/qcsc-prefect-blocks \
+  -e packages/qcsc-prefect-executor
+
+uv pip install -e algorithms/skqd_z2lgt
 ```
+
+## Create Blocks
+
+Create the HPC blocks and the Prefect variable that stores runtime options:
 
 ```bash
-ssh hpc-login.example.org
-uv venv ~/venv/skqd_z2lgt_x86_64 -p 3.12
-source ~/venv/skqd_z2lgt_x86_64/bin/activate
-uv pip install -e ./qii-miyabi-kawasaki/algorithms/skqd_z2lgt
-uv pip install -e ./qii-miyabi-kawasaki/framework/prefect-miyabi
+cp algorithms/skqd_z2lgt/skqd_z2lgt_blocks.example.toml \
+  algorithms/skqd_z2lgt/skqd_z2lgt_blocks.toml
+
+python algorithms/skqd_z2lgt/create_blocks.py \
+  --config algorithms/skqd_z2lgt/skqd_z2lgt_blocks.toml
 ```
 
-Prefect-miyabi is required only in the architecture where the Prefect flow is deployed. Presumably
-this would be x86_64, as both the MDX Workflow Server and Miyabi prepost nodes are x86_64.
+The example TOML expects:
 
-You can deploy the workflow in a Prefect server with
+- `python_cpu`: absolute path to the CPU-side Python executable
+- `python_gpu`: absolute path to the GPU-side Python executable
+- `project`, `queue_cpu`, `queue_gpu`: Miyabi project/queue settings
+
+If you want to override the sampler options variable directly, set `runtime_options` in the TOML
+file or pass `--runtime-options-json`.
+
+## Deploy
+
+Deploy the workflow in a Prefect server with:
 
 ```bash
 skqd-z2lgt-deploy
 ```
 
-Check [Run Hybrid Workflow](../../docs/tutorials/run_sqd_workflow.md) to learn how to submit Prefect
-flow runs.
+## Run Notes
 
-## 🧑‍💻 Contribution Guidelines
+When running the flow, either:
 
-This package is still under active development. Contributions are welcome.
+- set `parameters.pkgpath` to a shared filesystem directory, or
+- pass the flow argument `root_dir` so the workflow can create a per-run output directory
+
+The sub-jobs read and write intermediate files under `parameters.pkgpath`, so this path must be
+visible from the nodes that execute the CPU/GPU batch jobs.

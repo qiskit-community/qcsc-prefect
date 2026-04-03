@@ -197,3 +197,108 @@ def test_run_job_from_blocks_dispatches_to_fugaku(monkeypatch, tmp_path: Path):
     assert captured["req"].mpi_options_for_pjm == ["max-proc-per-node=48"]
     assert captured["req"].pjm_resources == ["freq=2000,eco_state=2"]
     assert captured["metrics_artifact_key"] == "fugaku-metrics"
+
+
+def test_run_job_from_blocks_applies_execution_profile_overrides(monkeypatch, tmp_path: Path):
+    command = _CommandBlockStub("bitcount-hist", "bitcount_hist", ["--base"])
+    profile = _ExecutionProfileBlockStub(
+        profile_name="bitcount-mpi",
+        command_name="bitcount-hist",
+        num_nodes=2,
+        mpiprocs=5,
+        walltime="00:10:00",
+        launcher="mpiexec.hydra",
+        mpi_options=["-np", "10"],
+        modules=["intel"],
+        pre_commands=["echo before"],
+        environments={"FOO": "bar"},
+    )
+    hpc = _HPCProfileBlockStub(
+        hpc_target="miyabi",
+        executable_map={"bitcount_hist": "/work/gz00/z99999/get_counts_hist"},
+    )
+    _patch_block_loading(monkeypatch, command, profile, hpc)
+
+    captured: dict[str, object] = {}
+
+    class _MiyabiResult:
+        def __init__(self) -> None:
+            self.job_id = "12345.miyabi"
+            self.exit_status = 0
+
+    async def fake_run_miyabi_job(**kwargs):
+        captured.update(kwargs)
+        return _MiyabiResult()
+
+    async def fake_run_fugaku_job(**kwargs):
+        raise AssertionError("run_fugaku_job should not be called in this test")
+
+    monkeypatch.setattr(mod, "run_miyabi_job", fake_run_miyabi_job)
+    monkeypatch.setattr(mod, "run_fugaku_job", fake_run_fugaku_job)
+
+    asyncio.run(
+        mod.run_job_from_blocks(
+            command_block_name="cmd",
+            execution_profile_block_name="exec",
+            hpc_profile_block_name="hpc",
+            work_dir=tmp_path,
+            script_filename="job.pbs",
+            user_args=["--override"],
+            execution_profile_overrides={
+                "num_nodes": 4,
+                "mpiprocs": 1,
+                "walltime": "00:20:00",
+                "launcher": "single",
+                "mpi_options": [],
+                "modules": ["python"],
+                "pre_commands": ["echo override"],
+                "environments": {"HELLO": "world"},
+            },
+        )
+    )
+
+    exec_profile = captured["exec_profile"]
+    assert exec_profile.num_nodes == 4
+    assert exec_profile.mpiprocs == 1
+    assert exec_profile.walltime == "00:20:00"
+    assert exec_profile.launcher == "single"
+    assert exec_profile.mpi_options == []
+    assert exec_profile.modules == ["python"]
+    assert exec_profile.pre_commands == ["echo override"]
+    assert exec_profile.environments == {"HELLO": "world"}
+    assert exec_profile.arguments == ["--base", "--override"]
+
+
+def test_run_job_from_blocks_rejects_unknown_execution_profile_override(monkeypatch, tmp_path: Path):
+    command = _CommandBlockStub("bitcount-hist", "bitcount_hist", [])
+    profile = _ExecutionProfileBlockStub(profile_name="bitcount-mpi", command_name="bitcount-hist")
+    hpc = _HPCProfileBlockStub(
+        hpc_target="miyabi",
+        executable_map={"bitcount_hist": "/work/gz00/z99999/get_counts_hist"},
+    )
+    _patch_block_loading(monkeypatch, command, profile, hpc)
+
+    async def fake_run_miyabi_job(**kwargs):
+        raise AssertionError("run_miyabi_job should not be called in this test")
+
+    async def fake_run_fugaku_job(**kwargs):
+        raise AssertionError("run_fugaku_job should not be called in this test")
+
+    monkeypatch.setattr(mod, "run_miyabi_job", fake_run_miyabi_job)
+    monkeypatch.setattr(mod, "run_fugaku_job", fake_run_fugaku_job)
+
+    try:
+        asyncio.run(
+            mod.run_job_from_blocks(
+                command_block_name="cmd",
+                execution_profile_block_name="exec",
+                hpc_profile_block_name="hpc",
+                work_dir=tmp_path,
+                script_filename="job.pbs",
+                execution_profile_overrides={"resource_class": "gpu"},
+            )
+        )
+    except ValueError as exc:
+        assert "Unsupported execution_profile_overrides keys" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for unknown execution_profile_overrides key")
