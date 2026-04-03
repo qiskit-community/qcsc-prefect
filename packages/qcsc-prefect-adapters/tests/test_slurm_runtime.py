@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+from qcsc_prefect_adapters.slurm import runtime as runtime_mod
+
+
+def test_submit_parses_job_id(tmp_path: Path, monkeypatch):
+    calls: list[tuple[tuple[str, ...], Path | None]] = []
+
+    async def fake_run_command(*args: str, cwd: Path | None = None) -> str:
+        calls.append((args, cwd))
+        return "12345;cluster-a\n"
+
+    monkeypatch.setattr(runtime_mod, "run_command", fake_run_command)
+    rt = runtime_mod.SlurmRuntime()
+
+    result = asyncio.run(rt.submit(tmp_path / "job.slurm", cwd=tmp_path))
+
+    assert result.job_id == "12345"
+    assert result.raw_output == "12345;cluster-a"
+    assert calls == [(("sbatch", "--parsable", str(tmp_path / "job.slurm")), tmp_path)]
+
+
+def test_wait_final_status_parses_sacct_output(monkeypatch):
+    async def fake_run_command(*args: str, cwd: Path | None = None) -> str:
+        return (
+            "12345|COMPLETED|0:0|00:00:12|32|node001\n"
+            "12345.batch|COMPLETED|0:0|00:00:12|32|node001\n"
+        )
+
+    monkeypatch.setattr(runtime_mod, "run_command", fake_run_command)
+    rt = runtime_mod.SlurmRuntime()
+
+    status = asyncio.run(rt.wait_final_status("12345", watch_poll_interval=0.01, timeout_seconds=3))
+
+    assert status["JobID"] == "12345"
+    assert status["State"] == "COMPLETED"
+    assert status["ExitCode"] == "0:0"
+    assert status["Elapsed"] == "00:00:12"
+    assert status["AllocCPUS"] == "32"
+    assert status["NodeList"] == "node001"
+
+
+def test_cancel_invokes_scancel(monkeypatch):
+    calls: list[tuple[str, ...]] = []
+
+    async def fake_run_command(*args: str, cwd: Path | None = None) -> str:
+        calls.append(args)
+        return ""
+
+    monkeypatch.setattr(runtime_mod, "run_command", fake_run_command)
+    rt = runtime_mod.SlurmRuntime()
+
+    asyncio.run(rt.cancel("12345"))
+
+    assert calls == [("scancel", "12345")]

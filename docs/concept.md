@@ -1,6 +1,6 @@
 # HPC-Prefect: Portable HPC Workflow Orchestration
 
-**HPC-Prefect** is a Python framework that enables portable workflow orchestration across multiple HPC systems (Fugaku, Miyabi, and future Slurm support) using [Prefect](https://www.prefect.io/). Write your workflow once and run it on any supported HPC system without modification.
+**HPC-Prefect** is a Python framework that enables portable workflow orchestration across multiple HPC systems (Fugaku, Miyabi, and Slurm) using [Prefect](https://www.prefect.io/). Write your workflow once and run it on any supported HPC system without modification.
 
 ## Core Concept
 
@@ -58,8 +58,12 @@ Prefect Block definitions for the three-layer architecture:
 HPC system-specific adapters that handle job script generation and submission:
 - [`miyabi`](../packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/miyabi/): PBS/Torque adapter for Miyabi
 - [`fugaku`](../packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/fugaku/): PJM adapter for Fugaku
+- [`slurm`](../packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/slurm/): Slurm adapter for generic clusters
 - Job script templates using Jinja2
 - Runtime classes for job submission, monitoring, and cancellation
+
+For local Slurm testing with Docker, see
+[`docs/howto/howto_test_slurm_with_docker_cluster.md`](./howto/howto_test_slurm_with_docker_cluster.md).
 
 #### [`qcsc-prefect-executor`](../packages/qcsc-prefect-executor/)
 High-level execution API that orchestrates the entire workflow:

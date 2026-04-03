@@ -32,7 +32,10 @@ class ExecutionProfileBlock(Block):
     mpiprocs: int = Field(default=1, gt=0, title="MPI Procs per Node")
     ompthreads: int | None = Field(default=None, gt=0, title="OMP Threads")
     walltime: str = Field(default="00:05:00", title="Walltime (HH:MM:SS)")
-    launcher: Literal["single", "mpirun", "mpiexec", "mpiexec.hydra"] = Field(default="single", title="Launcher")
+    launcher: Literal["single", "srun", "mpirun", "mpiexec", "mpiexec.hydra"] = Field(
+        default="single",
+        title="Launcher",
+    )
     mpi_options: list[str] = Field(default_factory=list, title="MPI Options")
     modules: list[str] = Field(default_factory=list, title="Modules")
     pre_commands: list[str] = Field(default_factory=list, title="Pre Commands")
@@ -47,16 +50,19 @@ class HPCProfileBlock(Block):
 
     hpc_target: Literal["miyabi", "fugaku", "slurm"] = Field(default="miyabi", title="HPC Target")
     
-    # Queue/Resource group names (terminology differs by system)
-    queue_cpu: str = Field(default="regular-c", title="CPU Queue/Resource Group")
-    queue_gpu: str = Field(default="regular-g", title="GPU Queue/Resource Group")
+    # Queue/partition/resource-group names (terminology differs by system)
+    queue_cpu: str = Field(default="regular-c", title="CPU Queue/Partition/Resource Group")
+    queue_gpu: str = Field(default="regular-g", title="GPU Queue/Partition/Resource Group")
     
-    # Project/Group
-    project_cpu: str = Field(title="CPU Project/Group")
-    project_gpu: str = Field(default="", title="GPU Project/Group")
+    # Project/group/account
+    project_cpu: str = Field(default="", title="CPU Project/Group/Account")
+    project_gpu: str = Field(default="", title="GPU Project/Group/Account")
     
     # Executable mapping
     executable_map: dict[str, str] = Field(default_factory=dict, title="Executable Map")
+
+    # Slurm-specific options (ignored for other systems)
+    slurm_qpu: str | None = Field(default=None, title="Slurm: QPU")
     
     # Fugaku-specific options (ignored for other systems)
     gfscache: str | None = Field(default=None, title="Fugaku: GFS Cache Path (PJM_LLIO_GFSCACHE)")
