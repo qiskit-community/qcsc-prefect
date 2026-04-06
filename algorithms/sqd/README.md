@@ -43,11 +43,18 @@ python algorithms/sqd/create_blocks.py --config algorithms/sqd/sqd_blocks.toml -
 For Fugaku, start from `algorithms/sqd/sqd_blocks.fugaku.example.toml` and pass
 `--hpc-target fugaku` instead.
 
+For a Fugaku build, use `packages/qcsc-prefect-dice/native/build_dice_fugaku.sh`
+as the starting point and make sure the same runtime libraries are reflected in
+`fugaku_spack_modules`, `modules`, or `environments` in the TOML when needed.
+
 Set `dice_executable` in the TOML file to the built binary, for example:
 
 ```toml
 dice_executable = "/path/to/qcsc-prefect/packages/qcsc-prefect-dice/native/bin/Dice"
 ```
+
+On Fugaku, `work_dir` and `dice_executable` should point to a shared path that
+compute nodes can read, for example a `/vol...` location.
 
 See the [Run Hybrid Workflow](../../docs/tutorials/run_sqd_workflow.md) tutorial for the end-to-end steps.
 

@@ -1,8 +1,8 @@
 hpc_target = "fugaku"
 group = "your-group"
 queue = "your-queue"
-work_dir = "/work/your-group/your-user/sqd-work"
-dice_executable = "/work/your-group/your-user/qcsc-prefect/packages/qcsc-prefect-dice/native/bin/Dice"
+work_dir = "/vol0004/your-group/your-user/sqd-work"
+dice_executable = "/vol0004/your-group/your-user/qcsc-prefect/packages/qcsc-prefect-dice/native/bin/Dice"
 
 launcher = "mpiexec"
 walltime = "01:00:00"
@@ -11,10 +11,11 @@ mpiprocs = 2
 mpi_options = ["-n", "2"]
 pre_commands = []
 
-fugaku_gfscache = ""
+fugaku_gfscache = "/vol0004:/vol0002"
+# Load the same runtime packages that were used when building Dice if needed.
 fugaku_spack_modules = []
-fugaku_mpi_options_for_pjm = []
-fugaku_pjm_resources = []
+fugaku_mpi_options_for_pjm = ["max-proc-per-node=1"]
+fugaku_pjm_resources = ["freq=2000,eco_state=2"]
 
 command_block_name = "cmd-sqd-dice-solver"
 execution_profile_block_name = "exec-sqd-dice-fugaku"
