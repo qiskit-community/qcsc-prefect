@@ -80,6 +80,11 @@ def create_dice_blocks(
     resolved_metrics_key = metrics_artifact_key or (
         "miyabi-dice-metrics" if hpc_target == "miyabi" else "fugaku-dice-metrics"
     )
+    resolved_dice_executable = str(Path(dice_executable).expanduser().resolve())
+    resolved_environments = dict(environments or {})
+    if hpc_target == "fugaku" and "LD_LIBRARY_PATH" not in resolved_environments:
+        dice_bin_dir = str(Path(resolved_dice_executable).parent)
+        resolved_environments["LD_LIBRARY_PATH"] = f"{dice_bin_dir}:$LD_LIBRARY_PATH"
 
     CommandBlock(
         command_name=command_name,
@@ -100,7 +105,7 @@ def create_dice_blocks(
         mpi_options=list(mpi_options or []),
         modules=list(modules or []),
         pre_commands=list(pre_commands or []),
-        environments=dict(environments or {}),
+        environments=resolved_environments,
     ).save(resolved_exec_block_name, overwrite=True)
 
     HPCProfileBlock(
@@ -109,7 +114,7 @@ def create_dice_blocks(
         queue_gpu=queue,
         project_cpu=project,
         project_gpu=project,
-        executable_map={executable_key: str(Path(dice_executable).expanduser().resolve())},
+        executable_map={executable_key: resolved_dice_executable},
         gfscache=gfscache,
         spack_modules=list(spack_modules or []),
         mpi_options_for_pjm=list(mpi_options_for_pjm or []),
