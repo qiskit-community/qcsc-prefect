@@ -81,6 +81,45 @@ readelf -d "$REL/native/bin/Dice" | grep -E 'RPATH|RUNPATH'
 ldd "$REL/native/bin/Dice" | grep 'not found'
 ```
 
+## Build On Fugaku
+
+Fugaku support uses the same Python integration and block model, but the DICE
+binary itself still needs to be built on Fugaku. A starting-point build script
+is provided:
+
+```bash
+cd packages/qcsc-prefect-dice/native
+bash ./build_dice_fugaku.sh
+```
+
+The Fugaku script assumes:
+
+- the Fugaku compiler/MPI wrapper is already available in `PATH`
+- `BOOST_ROOT` and `HDF5_ROOT`/`HDF5_DIR` are either exported already or can be
+  resolved from `spack location -i ...`
+- the resulting binary may still rely on the same runtime modules or Spack
+  packages that were used at build time
+
+Useful environment overrides:
+
+```bash
+export CXX=mpiFCCpx
+export BOOST_ROOT="$(spack location -i boost)"
+export HDF5_ROOT="$(spack location -i hdf5)"
+bash ./build_dice_fugaku.sh
+```
+
+If you need to pin a DICE revision:
+
+```bash
+export DICE_REF=<git-ref>
+bash ./build_dice_fugaku.sh
+```
+
+If the built binary links against non-system libraries, keep the same runtime
+environment in your Fugaku block configuration through
+`fugaku_spack_modules`, `modules`, or `environments`.
+
 ## Configure The Block
 
 Point your DICE block configuration at the built executable:

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import tomllib
 from pathlib import Path
 from typing import Any
 
+from prefect.variables import Variable
 from qcsc_prefect_dice import create_dice_blocks
 
 
@@ -140,10 +140,7 @@ def _default_mpi_options(*, hpc_target: str, mpiprocs: int) -> list[str]:
 
 
 def _set_variable(variable_name: str, value: Any) -> None:
-    subprocess.run(
-        ["prefect", "variable", "set", variable_name, json.dumps(value), "--overwrite"],
-        check=True,
-    )
+    Variable.set(variable_name, value, overwrite=True)
 
 
 def main() -> None:
