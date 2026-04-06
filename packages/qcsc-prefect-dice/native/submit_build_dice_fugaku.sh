@@ -2,6 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+chmod +x \
+  "$SCRIPT_DIR/build_dice_fugaku.sh" \
+  "$SCRIPT_DIR/build_dice_fugaku_job.sh"
 
 GROUP="${FUGAKU_GROUP:-${PROJECT:-}}"
 if [ -z "${GROUP:-}" ]; then
