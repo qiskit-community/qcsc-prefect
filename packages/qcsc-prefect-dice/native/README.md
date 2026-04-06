@@ -84,29 +84,48 @@ ldd "$REL/native/bin/Dice" | grep 'not found'
 ## Build On Fugaku
 
 Fugaku support uses the same Python integration and block model, but the DICE
-binary itself still needs to be built on Fugaku. A starting-point build script
-is provided:
+binary itself still needs to be built on Fugaku. The build script here is now
+aligned with the working interactive recipe:
 
 ```bash
 cd packages/qcsc-prefect-dice/native
 bash ./build_dice_fugaku.sh
 ```
 
-The Fugaku script assumes:
+This script:
 
-- the Fugaku compiler/MPI wrapper is already available in `PATH`
-- `BOOST_ROOT` and `HDF5_ROOT`/`HDF5_DIR` are either exported already or can be
-  resolved from `spack location -i ...`
-- the resulting binary may still rely on the same runtime modules or Spack
-  packages that were used at build time
+- loads Spack and `fujitsu-mpi@head-gcc8`
+- downloads Boost 1.85.0
+- clones `caleb-johnson/Dice`
+- disables `HAS_AVX2`
+- copies `Dice` and bundled Boost `.so` files into `native/bin/`
 
-Useful environment overrides:
+If you prefer a normal batch submission instead of an interactive session:
 
 ```bash
-export CXX=mpiFCCpx
-export BOOST_ROOT="$(spack location -i boost)"
-export HDF5_ROOT="$(spack location -i hdf5)"
-bash ./build_dice_fugaku.sh
+cd packages/qcsc-prefect-dice/native
+export FUGAKU_GROUP=ra000000
+bash ./submit_build_dice_fugaku.sh
+```
+
+This submits `build_dice_fugaku_job.sh` with defaults equivalent to the
+interactive recipe:
+
+- `node=1`
+- `rscgrp=int`
+- `elapse=3:00:00`
+- `PJM_LLIO_GFSCACHE=/vol0004`
+- `--llio cn-read-cache=off`
+- `--mpi "max-proc-per-node=1"`
+
+You can override them with:
+
+```bash
+export FUGAKU_BUILD_RSCGRP=int
+export FUGAKU_BUILD_NODE_COUNT=1
+export FUGAKU_BUILD_ELAPSE=3:00:00
+export FUGAKU_BUILD_GFSCACHE=/vol0004
+export FUGAKU_BUILD_MPI_OPTION=max-proc-per-node=1
 ```
 
 If you need to pin a DICE revision:
@@ -116,9 +135,15 @@ export DICE_REF=<git-ref>
 bash ./build_dice_fugaku.sh
 ```
 
-If the built binary links against non-system libraries, keep the same runtime
-environment in your Fugaku block configuration through
-`fugaku_spack_modules`, `modules`, or `environments`.
+At runtime, Fugaku previously required:
+
+```bash
+export LD_LIBRARY_PATH=/path/to/.../bin:$LD_LIBRARY_PATH
+```
+
+`qcsc-prefect-dice.create_dice_blocks(...)` now injects that automatically for
+Fugaku by prepending the directory that contains `dice_executable` to
+`LD_LIBRARY_PATH` unless you explicitly override `environments["LD_LIBRARY_PATH"]`.
 
 ## Configure The Block
 
@@ -133,3 +158,7 @@ Or, if you built in shared storage:
 ```toml
 dice_executable = "/work/<group>/share/qcsc-prefect-dice/releases/<release>/native/bin/Dice"
 ```
+
+For Fugaku, the runtime library path is derived automatically from the parent
+directory of `dice_executable`, so the current package can be operated like the
+Miyabi setup without manually exporting `LD_LIBRARY_PATH` before every run.

@@ -92,9 +92,42 @@ def test_create_dice_blocks_fugaku(monkeypatch, tmp_path):
     solver_block = next(model for kind, _, _, model in saved if kind == "solver")
 
     assert execution_block.launcher == "mpiexec"
+    assert execution_block.environments["LD_LIBRARY_PATH"] == f"{tmp_path / 'bin'}:$LD_LIBRARY_PATH"
     assert hpc_block.hpc_target == "fugaku"
     assert hpc_block.spack_modules == ["fjmpi"]
     assert hpc_block.mpi_options_for_pjm == ["max-proc-per-node=2"]
     assert hpc_block.pjm_resources == ["freq=2200"]
     assert solver_block.script_filename == "dice_solver.pjm"
     assert solver_block.metrics_artifact_key == "fugaku-dice-metrics"
+
+
+def test_create_dice_blocks_fugaku_preserves_explicit_ld_library_path(monkeypatch, tmp_path):
+    saved: list[tuple[str, str, bool, object]] = []
+
+    def fake_register():
+        return None
+
+    def fake_save(kind):
+        def _save(self, name, overwrite=False):
+            saved.append((kind, name, overwrite, self))
+            return self
+
+        return _save
+
+    monkeypatch.setattr(mod, "register_dice_block_types", fake_register)
+    monkeypatch.setattr(mod.CommandBlock, "save", fake_save("command"), raising=False)
+    monkeypatch.setattr(mod.ExecutionProfileBlock, "save", fake_save("execution"), raising=False)
+    monkeypatch.setattr(mod.HPCProfileBlock, "save", fake_save("hpc"), raising=False)
+    monkeypatch.setattr(mod.DiceSHCISolverJob, "save", fake_save("solver"), raising=False)
+
+    mod.create_dice_blocks(
+        hpc_target="fugaku",
+        project="ra000000",
+        queue="small",
+        root_dir=str(tmp_path / "jobs"),
+        dice_executable=str(tmp_path / "bin" / "Dice"),
+        environments={"LD_LIBRARY_PATH": "/custom/lib:$LD_LIBRARY_PATH"},
+    )
+
+    execution_block = next(model for kind, _, _, model in saved if kind == "execution")
+    assert execution_block.environments["LD_LIBRARY_PATH"] == "/custom/lib:$LD_LIBRARY_PATH"
