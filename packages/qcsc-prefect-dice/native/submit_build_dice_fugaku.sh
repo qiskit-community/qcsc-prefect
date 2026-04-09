@@ -12,23 +12,15 @@ if [ -z "${GROUP:-}" ]; then
     exit 1
 fi
 
-RSCGRP="${FUGAKU_BUILD_RSCGRP:-int}"
+RSCGRP="${FUGAKU_BUILD_RSCGRP:-small}"
 NODE_COUNT="${FUGAKU_BUILD_NODE_COUNT:-1}"
 ELAPSE="${FUGAKU_BUILD_ELAPSE:-3:00:00}"
 GFSCACHE="${FUGAKU_BUILD_GFSCACHE:-/vol0004}"
 MPI_OPTION="${FUGAKU_BUILD_MPI_OPTION:-max-proc-per-node=1}"
 JOB_NAME="${FUGAKU_BUILD_JOB_NAME:-dice-build}"
 WAIT_TIME="${FUGAKU_BUILD_WAIT_TIME:-600}"
-SUBMIT_MODE="${FUGAKU_BUILD_SUBMIT_MODE:-auto}"
+SUBMIT_MODE="${FUGAKU_BUILD_SUBMIT_MODE:-batch}"
 GENERATED_JOB_SCRIPT="$SCRIPT_DIR/.build_dice_fugaku_job.generated.sh"
-
-if [ "$SUBMIT_MODE" = "auto" ]; then
-    if [ "$RSCGRP" = "int" ]; then
-        SUBMIT_MODE="interact"
-    else
-        SUBMIT_MODE="batch"
-    fi
-fi
 
 if [ "$SUBMIT_MODE" = "interact" ]; then
     pjsub --interact \
