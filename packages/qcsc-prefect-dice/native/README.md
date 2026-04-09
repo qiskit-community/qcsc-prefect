@@ -100,7 +100,7 @@ This script:
 - disables `HAS_AVX2`
 - copies `Dice` and bundled Boost `.so` files into `native/bin/`
 
-If you prefer a normal batch submission instead of an interactive session:
+If you want a one-command submission from the login node:
 
 ```bash
 cd packages/qcsc-prefect-dice/native
@@ -108,8 +108,27 @@ export FUGAKU_GROUP=ra000000
 bash ./submit_build_dice_fugaku.sh
 ```
 
-This submits `build_dice_fugaku_job.sh` with defaults equivalent to the
-interactive recipe:
+`submit_build_dice_fugaku.sh` supports two modes:
+
+- `FUGAKU_BUILD_SUBMIT_MODE=interact`
+  Runs `pjsub --interact ...` and then executes `build_dice_fugaku.sh`
+  automatically on the compute node
+- `FUGAKU_BUILD_SUBMIT_MODE=batch`
+  Generates a job script with `#PJM` directives and submits it with `pjsub`
+
+Default is `auto`:
+
+- if `FUGAKU_BUILD_RSCGRP=int`, it uses `interact`
+- otherwise it uses `batch`
+
+This is important because some Fugaku ACL settings reject normal batch
+submission to `rscgrp=int` with:
+
+```text
+[ERR.] PJM 0070 pjsub No execute permission: pjsub batch.
+```
+
+The defaults match the working recipe:
 
 - `node=1`
 - `rscgrp=int`
@@ -117,6 +136,14 @@ interactive recipe:
 - `PJM_LLIO_GFSCACHE=/vol0004`
 - `--llio cn-read-cache=off`
 - `--mpi "max-proc-per-node=1"`
+- `--name dice-build`
+
+For `batch` mode, these values are written into the generated job script as
+`#PJM` directives.
+
+For `interact` mode, `pjsub --interact` does not use a batch script, so the
+same values still have to be passed on the `pjsub` command line. `wait-time=600`
+is only used in `interact` mode.
 
 You can override them with:
 
@@ -126,6 +153,8 @@ export FUGAKU_BUILD_NODE_COUNT=1
 export FUGAKU_BUILD_ELAPSE=3:00:00
 export FUGAKU_BUILD_GFSCACHE=/vol0004
 export FUGAKU_BUILD_MPI_OPTION=max-proc-per-node=1
+export FUGAKU_BUILD_WAIT_TIME=600
+export FUGAKU_BUILD_SUBMIT_MODE=interact
 ```
 
 If you need to pin a DICE revision:
