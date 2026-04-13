@@ -5,7 +5,7 @@ On the Prefect workflow, we also use [Prefect Qiskit](https://github.com/qiskit-
 
 Our objective is to compute a count dictionary of sampler bitstrings using MPI programming on the QCSC architecture.
 
-![Count BitStrings Flow](./images/img-counts-flow-fugaku.png)
+![Count BitStrings Flow](../images/img-counts-flow-fugaku.png)
 
 Key principles in this tutorial:
 
@@ -44,7 +44,7 @@ You will see these terms:
 
 The whole process image is : 
 
-![Prerequisites Flow](./images/img-prerequisites-fugaku.png)
+![Prerequisites Flow](../images/img-prerequisites-fugaku.png)
 
 Before starting, make sure:
 
@@ -70,18 +70,18 @@ All steps below use these files as-is.
 ---
 
 ## Create BitCounts Workflow on Fugaku
-![BitCounts Setup Flow](./images/img-counts-setup-flow-fugaku.png)
+![BitCounts Setup Flow](../images/img-counts-setup-flow-fugaku.png)
 
 ## Step 1: Log in to Fugaku and execute the interact session for Pre/Post Node
 
-<img src="./images/icon-pc.png" alt="login" width="70"/><br>
+<img src="../images/icon-pc.png" alt="login" width="70"/><br>
 ```bash
 ssh -A <your_account>@<fugaku_login_host>
 ```
 
 Execute the interact session for Pre/Post Node in the login node.
 
-<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
+<img src="../images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
 srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 ```
@@ -89,18 +89,18 @@ srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 
 Create a project directory:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 mkdir fugaku_tutorial && cd fugaku_tutorial
 ```
 
 ## Step 3. Prepare Prefect and Quantum runtime (Pre/Post Node)
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 cd /path/to/work
 
-git clone git@github.com:hitomitak/qcsc-prefect.git
+git clone git@github.com:qiskit-community/qcsc-prefect.git
 cd qcsc-prefect
 
 source ~/venv/prefect/bin/activate
@@ -117,21 +117,21 @@ uv pip install --no-deps \
 
 Use Fugaku cloud profile
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 prefect profile use cloud-fugaku
 ```
 
 ## Step 4. Build MPI program on Fugaku (Login Node)
 
-<img src="./images/icon-pc.png" alt="login" width="70"/><br>
+<img src="../images/icon-pc.png" alt="login" width="70"/><br>
 ```bash
 ssh -A <your_account>@<fugaku_login_host>
 ```
 
 Open a new terminal and connect to the login node and execute the build script.
 
-<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
+<img src="../images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
 cd /path/to/work/qcsc-prefect
 ./examples/prefect_bitcount_demo/build_on_fugaku.sh
@@ -144,7 +144,7 @@ Generated binaries:
 
 Get the absolute path to the `get_counts` executable:
 
-<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
+<img src="../images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
 realpath ./examples/prefect_bitcount_demo/bin/get_counts_hist
 ```
@@ -177,7 +177,7 @@ Differences:
 
 ## Step 5. Prepare block configuration file (Pre/Post Node)
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 cd /path/to/work/qcsc-prefect
 cp examples/prefect_bitcount_demo/bitcount_blocks.example.toml \
@@ -203,7 +203,7 @@ Optional Fugaku keys:
 
 ## Step 6. Generate blocks by script (Pre/Post Node)
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 python examples/prefect_bitcount_demo/create_blocks.py \
   --config examples/prefect_bitcount_demo/bitcount_blocks.toml \
@@ -227,7 +227,7 @@ python examples/prefect_bitcount_demo/create_blocks.py \
 
 Use `flow_optimized.py` with Fugaku block names:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 python examples/prefect_bitcount_demo/flow_optimized.py \
   --runtime-block ibm-runner \
@@ -241,7 +241,7 @@ python examples/prefect_bitcount_demo/flow_optimized.py \
 In this mode, the main user inputs are block names.
 We can also monitor the progress on the Prefect console:
 
-![Get Counts Flow Run](./images/img-get-counts-fugaku.png)
+![Get Counts Flow Run](../images/img-get-counts-fugaku.png)
 
 ### Step 7.1. What `flow_optimized.py` does
 

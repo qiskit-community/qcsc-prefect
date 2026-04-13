@@ -27,14 +27,14 @@ Before you begin, ensure the following:
 
 Connect to the MDX workflow client:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A z12345@mdx-workflow.example.org
 ```
 
 Activate your virtual environment:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
 ```
@@ -43,7 +43,7 @@ source ~/venv/prefect/bin/activate
 The home directory size on the MDX workflow client may be limited.
 You can place Prefect local files on `/large`:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 mkdir -p /large/z12345/.prefect
 mv ~/.prefect ~/.prefect.bak.$(date +%Y%m%d%H%M%S) 2>/dev/null || true
@@ -52,10 +52,10 @@ ln -sfn /large/z12345/.prefect ~/.prefect
 
 After this, you clone the tutorial repository:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345
-git clone git@github.com:hitomitak/qcsc-prefect.git
+git clone git@github.com:qiskit-community/qcsc-prefect.git
 ```
 
 ### Step 3: Choose your Prefect backend
@@ -75,12 +75,12 @@ https://prefect-portal.example.org/z12345/
 You will be redirected to the SSO login page.
 Use the same email address that was registered by the administrator.
 
-![Prefect login](./images/img-mdx-prefect-login.png)
-![Prefect dashboard](./images/img-mdx-prefect-dashboard.png)
+![Prefect login](../images/img-mdx-prefect-login.png)
+![Prefect dashboard](../images/img-mdx-prefect-dashboard.png)
 
 From the MDX shell, run:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect-auth login
 ```
@@ -99,11 +99,11 @@ After login, copy the URL you were redirected to and paste the 'code' parameter 
 Authorization code: 
 ```
 
-![Authorization Code](./images/img-mdx-prefect-cli-token.png)
+![Authorization Code](../images/img-mdx-prefect-cli-token.png)
 
 Create and use an on-prem profile:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect profile create mdx
 /work/gz00/z12345/qcsc-prefect/scripts/prefect_sync_env_to_config.sh -p mdx
@@ -111,7 +111,7 @@ prefect profile create mdx
 
 Check current configuration:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect config view
 ```
@@ -136,11 +136,11 @@ https://app.prefect.cloud
 
 Create an API key from **Profile Settings -> API Keys**.
 
-![Prefect API key](./images/img-prefect-api.png)
+![Prefect API key](../images/img-prefect-api.png)
 
 On the MDX shell, create and use a cloud profile:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect profile create mdx
 prefect profile use mdx
@@ -149,7 +149,7 @@ prefect cloud login --key "<PREFECT_API_KEY>"
 
 Check current configuration:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect config view
 ```
@@ -171,7 +171,7 @@ PREFECT_API_URL='https://api.prefect.cloud/api/accounts/.../workspaces/...'
 
 Run a simple flow to verify your selected backend is reachable:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect shell watch 'echo Hello World'
 ```

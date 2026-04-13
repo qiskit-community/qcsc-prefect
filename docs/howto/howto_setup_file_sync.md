@@ -19,7 +19,7 @@ Before you begin, ensure the following:
 
 Connect to the MDX workflow Client:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A z12345@mdx-workflow.example.org
 ```
@@ -28,7 +28,7 @@ ssh -A z12345@mdx-workflow.example.org
 
 Open your SSH config file of the MDX workflow server:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 vi ~/.ssh/config
 ```
@@ -45,7 +45,7 @@ Host *
 
 Set appropriate file permissions:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 chmod 600 ~/.ssh/config
 ```
@@ -54,7 +54,7 @@ chmod 600 ~/.ssh/config
 
 Create a directory to mount Miyabi shared storage:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 mkdir /work/gz00/z12345
 ```
@@ -63,7 +63,7 @@ mkdir /work/gz00/z12345
 
 Launch a new `screen` session:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 screen -S sshfs
 ```
@@ -72,7 +72,7 @@ screen -S sshfs
 
 Mount the remote storage using `sshfs`:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 sshfs miyabi-c.example.org:/work/gz00/z12345 /work/gz00/z12345
 ```
@@ -97,7 +97,7 @@ Your Miyabi shared storage is now mounted and accessible from the MDX workflow s
 
 **Success check:** 
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 df -h | grep "/work/<group>/<account>"
 ls -la /work/<group>/<account>
@@ -105,7 +105,7 @@ ls -la /work/<group>/<account>
 
 **Common `sshfs` failure and recovery** 
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 # If you see: "Transport endpoint is not connected"
 fusermount -u /work/<group>/<account>
@@ -131,14 +131,14 @@ To test HPC job execution from the workflow server, follow these steps.
 
 Create and move to a workflow directory:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 mkdir /work/gz00/z12345/test-mdx && cd /work/gz00/z12345/test-mdx
 ```
 
 Open a job script file:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 vi test.pbs
 ```
@@ -162,7 +162,7 @@ echo "Hello I'm $(hostname)"
 
 Submit the job using `qsub`:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 qsub test.pbs
 ```
@@ -175,7 +175,7 @@ Example output:
 It may take some time to complete the job on a Miyabi compute node.
 
 After successful execution, check the output files:
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 ls .
 ```
@@ -188,7 +188,7 @@ test.pbs  test.pbs.e871213  test.pbs.o871213
 
 View the stdout file:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cat test.pbs.o871213
 ```

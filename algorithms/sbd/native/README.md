@@ -35,10 +35,10 @@ For Miyabi-G, you can build `diag-gpu` with the dedicated shell script:
 ```
 
 This script compiles `main.cc` directly, so a separate `CMakeLists.txt` is not required.
-It defaults to the SBD headers vendored in this repository:
+It defaults to a local checkout under:
 
 ```text
-algorithms/gb_sqd/gb_demo_2026/deps/sbd
+algorithms/sbd/native/sbd
 ```
 
 and produces:
@@ -49,7 +49,8 @@ algorithms/sbd/native/diag-gpu
 
 > [!NOTE]
 > The default compiler is `mpic++`, assuming it is backed by the Miyabi-G NVHPC toolchain.
-> If your site uses a different wrapper or BLAS/LAPACK link flags, override them via `CCCOM`, `CCFLAGS`, `SYSLIB`, or `SBD_DIR`.
+> If the local `sbd` checkout does not exist yet, the script clones `https://github.com/r-ccs-cms/sbd.git`.
+> If your site uses a different wrapper, source tree, or BLAS/LAPACK link flags, override them via `CCCOM`, `CCFLAGS`, `SYSLIB`, `SBD_DIR`, or `SBD_REPO_URL`.
 
 ## Building the Executable on Fugaku
 
@@ -99,6 +100,8 @@ bash ./build_sbd_fugaku.sh
 For Miyabi-G build settings:
 
 ```bash
+SBD_REPO_URL="https://github.com/r-ccs-cms/sbd.git" \
+SBD_DIR="/path/to/local/sbd" \
 CCCOM="mpic++" \
 CCFLAGS="-std=c++17 -mp -cuda -fast -gpu=mem:unified -DSBD_THRUST" \
 SYSLIB="-lblas -llapack" \

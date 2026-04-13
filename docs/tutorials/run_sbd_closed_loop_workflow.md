@@ -5,7 +5,7 @@ We will run a hybrid quantum-classical workflow using the [SBD](https://github.c
 
 For Fugaku, see [Run SBD Closed-loop Workflow on Fugaku](./run_sbd_closed_loop_workflow_fugaku.md).
 
-<img src="./images/img-closed-loop.png" alt="sbd" width="90%"/><br>
+<img src="../images/img-closed-loop.png" alt="sbd" width="90%"/><br>
 
 The goal is to compute the ground state energy of N2-Mo State.
 
@@ -89,26 +89,26 @@ Deployment is the "launch entry" that tells Prefect:
 
 ---
 ## 2. Tutorial steps
-![SBD Setup Flow](./images/img-sbd-setup-flow.png)
+![SBD Setup Flow](../images/img-sbd-setup-flow.png)
 ### Step 1. SSH to the MDX workflow client (where the Flow is executed)
 
 Connect to the MDX workflow client using SSH. This is where we will install the workflow.
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A z12345@mdx-workflow.example.org
 ```
 
 Activate the environment:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
 ```
 
 ### Step 2. Install required packages (bring the Flow definition into your environment)
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345/qcsc-prefect
 
@@ -124,7 +124,7 @@ uv pip install -e algorithms/sbd
 
 Check that the packages are installed correctly:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 uv pip list | grep -E "(qcsc-prefect|sbd|qcsc)"
 
@@ -146,14 +146,14 @@ sbd                                0.1.0
 
 Open a new terminal and connect to the Miyabi-C login node:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A z12345@miyabi-c.example.org
 ```
 
 Navigate to the directory and build:
 
-<img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
+<img src="../images/icon-miyabi.png" alt="miyabi" width="50"/><br>
 ```bash
 cd /work/gz00/z12345/qcsc-prefect/algorithms/sbd/native
 bash ./build_sbd.sh
@@ -161,7 +161,7 @@ bash ./build_sbd.sh
 
 This process may take several minutes. After completion, a directory named `diag` in the `native` directory:
 
-<img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
+<img src="../images/icon-miyabi.png" alt="miyabi" width="50"/><br>
 ```bash
 ls -l | grep diag
 ```
@@ -177,7 +177,7 @@ Great! You have completed building SBD on Miyabi-C!
 #### 3.2 Record the absolute path of `diag` (you will paste it into the solver Block)
 Get the absolute path to the SBD executable:
 
-<img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
+<img src="../images/icon-miyabi.png" alt="miyabi" width="50"/><br>
 ```bash
 realpath ./diag
 ```
@@ -201,7 +201,7 @@ This approach uses automated block creation via script instead of manual UI edit
 
 #### 4.1 Create a job working directory and copy config template
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345/qcsc-prefect
 mkdir -p /work/gz00/z12345/sbd_jobs
@@ -210,7 +210,7 @@ cp algorithms/sbd/sbd_blocks.example.toml algorithms/sbd/sbd_blocks.toml
 
 Update your prefect token (Only On Prem) if your token is expired.
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect-auth login
 /work/gz00/z12345/qcsc-prefect/scripts/prefect_sync_env_to_config.sh -p mdx
@@ -252,7 +252,7 @@ Set at least:
 
 #### 4.3 Run block creation script
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 python algorithms/sbd/create_blocks.py --config algorithms/sbd/sbd_blocks.toml
 ```
@@ -271,7 +271,7 @@ Internally, this block points to:
 - `exec-sbd-mpi`
 - `hpc-miyabi-sbd`
 
-<img src="./images/img-closed-blocks.img" alt="blocks" width="90%"/><br>
+<img src="../images/img-closed-blocks.img" alt="blocks" width="90%"/><br>
 
 ---
 
@@ -283,14 +283,14 @@ Having Python code on disk is not enough for stable UI-driven execution. Deploym
 
 Start a screen session:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 screen -S sbd-workflow
 ```
 
 Activate environment and deploy:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345/qcsc-prefect
 source ~/venv/prefect/bin/activate
@@ -330,17 +330,17 @@ In the Prefect console, click **Run** → **Custom run** and set as following. A
 > For this tutorial, the number of iterations is set to 1 for a quick test, but feel free to increase it as needed.
 
 
-![Setup SBD Workflow Parameters](./images/img-sbd-workflow-paramaters-small.png)
+![Setup SBD Workflow Parameters](../images/img-sbd-workflow-paramaters-small.png)
 
 ### Step 7. Execute the Workflow
 
 Click **Start Now** → **Submit**.
 
-![SBD Flow Run](./images/img-sbd-flow-run.png)
+![SBD Flow Run](../images/img-sbd-flow-run.png)
 
 After the run completes, check the `sqd-telemetry` artifact. It should contain intermediate energies. The final energy should converge around -134.94 Hartree for N2.
 
-![SQD Telemetry](./images/img-sqd-telemetry.png)
+![SQD Telemetry](../images/img-sqd-telemetry.png)
 
 ### Step 8. Cleanup
 Follow [How to shutdown the workflow](../howto/howto_shutdown_workflow.md).
@@ -416,7 +416,7 @@ For the GPU version, place the binary under:
 
 On the MDX workflow client, copy the prebuilt GPU binary with:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 
 ```bash
 cd /work/gz00/z12345/qcsc-prefect
@@ -429,7 +429,7 @@ This tutorial assumes the GPU solver runs with the binary name `diag-gpu`.
 
 Copy and edit the configuration file:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cp algorithms/sbd/sbd_blocks.toml algorithms/sbd/sbd_blocks_gpu.toml
 vim algorithms/sbd/sbd_blocks_gpu.toml

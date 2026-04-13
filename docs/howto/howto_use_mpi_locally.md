@@ -13,7 +13,7 @@ This guide walks you through building and running MPI programs written in C or C
 
 Install the necessary compilers and MPI libraries:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 dnf install gcc
 dnf install gcc-c++
@@ -22,14 +22,14 @@ dnf install openmpi openmpi-devel
 
 Initialize the environment module system:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 source /etc/profile.d/modules.sh 
 ```
 
 Load the OpenMPI module:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 module load mpi/openmpi-x86_64 
 ```
@@ -38,7 +38,7 @@ module load mpi/openmpi-x86_64
 
 Use the OpenMPI compiler wrapper to compile your source code:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 mpicxx my-program.cpp -o my-program
 ```
@@ -50,7 +50,7 @@ Refer to its documentation for details.
 
 Launch your program using `mpirun` with the desired number of processes:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 mpirun -np 4 ./my-program
 ```
@@ -68,7 +68,7 @@ terminate called after throwing an instance of 'std::out_of_range'
 
 This is likely caused by a race condition. If you're using the `prefect-miyabi` integration, limit concurrency to avoid conflicts:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 prefect concurrency-limit create "res: local" 1
 ```
@@ -79,7 +79,7 @@ In shared-memory environments, UCX (Unified Communication X) may cause segmentat
 To avoid this, switch to TCP-based communication.
 Export the following environment variables to the shell:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 OMPI_MCA_pml="ob1"
 OMPI_MCA_btl="tcp,self"
