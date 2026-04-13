@@ -1,0 +1,60 @@
+site_name: QCSC Prefect Docs
+site_description: Portable HPC workflow orchestration with Prefect
+site_url: https://qiskit-community.github.io/qcsc-prefect/
+repo_url: https://github.com/qiskit-community/qcsc-prefect
+repo_name: qiskit-community/qcsc-prefect
+docs_dir: docs
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+  - javascripts/mermaid.js
+
+nav:
+  - Overview:
+      - Home: index.md
+      - Architecture: concept.md
+  - Tutorials:
+      - Miyabi Workflow: tutorials/create_qcsc_workflow_for_miyabi.md
+      - Fugaku Workflow: tutorials/create_qcsc_workflow_for_fugaku.md
+      - Closed Loop Workflow: tutorials/run_sbd_closed_loop_workflow.md
+      - Closed Loop Workflow (Fugaku): tutorials/run_sbd_closed_loop_workflow_fugaku.md
+  - How-to:
+      - Prefect Qiskit Setup: howto/howto_setup_prefect_qiskit.md
+      - Prefect Qiskit Setup (Fugaku): howto/howto_setup_prefect_qiskit_fugaku.md
+      - Connect to Prefect on MDX: howto/howto_connect_to_prefect_on_mdx.md
+      - Python Environment: howto/howto_setup_python_env.md
+      - Python Environment (Fugaku): howto/howto_setup_python_env_fugaku.md
+      - SSH Keys for MDX and Miyabi: howto/howto_setup_ssh_keys_for_mdx_and_miyabi.md
+      - File Sync: howto/howto_setup_file_sync.md
+      - Shutdown Workflow: howto/howto_shutdown_workflow.md
+      - MPI Locally: howto/howto_use_mpi_locally.md
+      - Slurm Docker Cluster: howto/howto_test_slurm_with_docker_cluster.md

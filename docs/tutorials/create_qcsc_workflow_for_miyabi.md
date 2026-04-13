@@ -126,7 +126,7 @@ You can either clone the repository from GitHub, or copy the tutorial source tre
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345
-git clone git@github.com:hitomitak/qcsc-prefect.git
+git clone git@github.com:qiskit-community/qcsc-prefect.git
 ```
 
 Or:
