@@ -55,7 +55,7 @@ After this, you clone the tutorial repository:
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345
-git clone git@github.com:hitomitak/qcsc-prefect.git
+git clone git@github.com:qiskit-community/qcsc-prefect.git
 ```
 
 ### Step 3: Choose your Prefect backend

@@ -110,7 +110,7 @@ srun -p mem2 -n 1 --mem 8G --time=60 --pty bash -i
 ```bash
 cd /path/to/work
 
-git clone git@github.com:hitomitak/qcsc-prefect.git
+git clone git@github.com:qiskit-community/qcsc-prefect.git
 cd qcsc-prefect
 
 source ~/venv/prefect/bin/activate
