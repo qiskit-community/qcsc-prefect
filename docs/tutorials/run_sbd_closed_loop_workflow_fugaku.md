@@ -3,7 +3,7 @@
 This tutorial walks us through reproducing a Sample-based Quantum Diagonalization (SQD) experiment using the `qcsc-prefect` architecture.
 We will run a hybrid quantum-classical workflow using the [SBD](https://github.com/r-ccs-cms/sbd) solver to diagonalize a sparse chemistry Hamiltonian on Fugaku, orchestrated via Prefect.
 
-<img src="./images/img-closed-loop-fugaku.png" alt="sbd" width="90%"/><br>
+<img src="../images/img-closed-loop-fugaku.png" alt="sbd" width="90%"/><br>
 
 The goal is to compute the ground state energy of N2-MO state.
 
@@ -86,31 +86,31 @@ Deployment is the launch entry that tells Prefect:
 
 ---
 ## 2. Tutorial steps
-<img src="./images/img-sbd-setup-flow-fugaku.png" alt="sbd setup" width="90%"/><br>
+<img src="../images/img-sbd-setup-flow-fugaku.png" alt="sbd setup" width="90%"/><br>
 
 ### Step 1. Enter your workflow environment
 
 Connect to the environment where Prefect CLI is configured and Fugaku scheduler commands are available.
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A <your_account>@<fugaku_login_host>
 ```
 
 Execute the interact session for Pre/Post Node in the login node.
 
-<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
+<img src="../images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
 srun -p mem2 -n 1 --mem 8G --time=60 --pty bash -i
 ```
 
 ## Step 2. Prepare Prefect and Quantum runtime (Pre/Post Node)
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 cd /path/to/work
 
-git clone git@github.com:hitomitak/qcsc-prefect.git
+git clone git@github.com:qiskit-community/qcsc-prefect.git
 cd qcsc-prefect
 
 source ~/venv/prefect/bin/activate
@@ -129,7 +129,7 @@ uv pip install -e algorithms/sbd
 
 Check installation:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 uv pip list | grep -E "(qcsc-prefect|sbd|qcsc)"
 
@@ -148,7 +148,7 @@ sbd                                0.1.0
 Create a new terminal and login to Fugaku Login Node. 
 Navigate to native source and build:
 
-<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
+<img src="../images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
 cd /path/to/work/qcsc-prefect/algorithms/sbd/native
 bash ./build_sbd_fugaku.sh
@@ -156,7 +156,7 @@ bash ./build_sbd_fugaku.sh
 
 Confirm executable:
 
-<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
+<img src="../images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
 ls -l | grep diag
 realpath ./diag
@@ -176,12 +176,12 @@ We will use this path in the next step.
 
 #### 4.1 Create a job working directory and copy config template
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 cd /path/to/work/qcsc-prefect
 mkdir -p /path/to/work/sbd_jobs
 ```
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 realpath /path/to/work/sbd_jobs
 ```
@@ -192,7 +192,7 @@ Example output:
 ```
 We will use this path in the next step.
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```
 cp algorithms/sbd/sbd_blocks.fugaku.example.toml algorithms/sbd/sbd_blocks.toml
 vim algorithms/sbd/sbd_blocks.toml
@@ -235,7 +235,7 @@ Edit `algorithms/sbd/sbd_blocks.toml` and update at least:
 
 #### 4.3 Run block creation script
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 python algorithms/sbd/create_blocks.py \
   --config algorithms/sbd/sbd_blocks.toml \
@@ -264,7 +264,7 @@ Internally, this block points to:
 
 Set Ray runtime parameter before deploy:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 export PREFECT_RAY_NUM_CPUS=2
 ```
@@ -275,7 +275,7 @@ export PREFECT_RAY_NUM_CPUS=2
 
 Deploy:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 sbd-deploy
 ```
@@ -300,17 +300,17 @@ In the Prefect console, click **Run** → **Custom run** and set at least:
 - It is a stable entry point for users.
 - HPC details are still resolved through the underlying 3 blocks.
 
-<img src="./images/img-sbd-workflow-paramaters-small.png" alt="params" width="90%"/><br>
+<img src="../images/img-sbd-workflow-paramaters-small.png" alt="params" width="90%"/><br>
 
 ### Step 7. Execute the workflow
 
 Click **Start Now** → **Submit**.
 
-<img src="./images/img-sbd-flow-run.png" alt="flow run" width="90%"/><br>
+<img src="../images/img-sbd-flow-run.png" alt="flow run" width="90%"/><br>
 
 After the run completes, check the `sqd-telemetry` artifact. It should contain intermediate energies.
 
-<img src="./images/img-sqd-telemetry.png" alt="telemetry" width="90%"/><br>
+<img src="../images/img-sqd-telemetry.png" alt="telemetry" width="90%"/><br>
 
 ---
 
@@ -330,7 +330,7 @@ The process started by `sbd-deploy` is the **serving process**. It:
 
 1) List deployments
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 
 ```bash
 prefect deployment ls
@@ -338,7 +338,7 @@ prefect deployment ls
 
 2) Inspect deployment
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 
 ```bash
 prefect deployment inspect 'riken-sqd-de/riken_sqd_de'

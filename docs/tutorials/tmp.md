@@ -5,7 +5,7 @@ On the Prefect workflow, we also use [Prefect Qiskit](https://github.com/qiskit-
 
 Our objective is to compute a count dictionary of sampler bitstrings using MPI programming on the QCSC architecture.
 
-![Count BitStrings Flow](./images/img-counts-flow-fugaku.png)
+![Count BitStrings Flow](../images/img-counts-flow-fugaku.png)
 
 ## Prefect Core Concepts (quick mapping with [Introduction to Prefect](./Prefect_tutorial_miyabi.pdf))
 
@@ -28,7 +28,7 @@ You will see these terms:
 
 The whole process image is : 
 
-![Prerequisites Flow](./images/img-prerequisites-fugaku.png)
+![Prerequisites Flow](../images/img-prerequisites-fugaku.png)
 
 Before starting, make sure:
 
@@ -39,13 +39,13 @@ Before starting, make sure:
 > Replace `ra00000`, `u12345` and `vol0000x` with your actual group, account name and mount volume.
 ---
 ## Create BitCounts Workflow
-![BitCounts Setup Flow](./images/img-counts-setup-flow-fugaku.png)
+![BitCounts Setup Flow](../images/img-counts-setup-flow-fugaku.png)
 
 ## Step 1: Log in to Fugaku and execute the interact session for Pre/Post Node
 
 Execute the interact session for Pre/Post Node in the login node.
 
-<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
+<img src="../images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
 srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 ```
@@ -54,28 +54,28 @@ srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 
 Create a project directory:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 mkdir fugaku_tutorial && cd fugaku_tutorial
 ```
 
 Activate a virtual environment and activate for prefect:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
 ```
 
 Install necessary packages:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 uv pip install git+ssh://git@github.com/hitomitak/prefect-fugaku.git@main#subdirectory=framework/prefect-fugaku
 ```
 
 Check installations:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 uv pip list | grep prefect
 ```
@@ -92,7 +92,7 @@ prefect-qiskit            0.2.0
 
 Open a new terminal and connect to the login node and execute the interactive session for Compute node.
 
-<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
+<img src="../images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
 pjsub --interact -g ra00000 -L "node=1" -L "rscgrp=int" -L "elapse=0:15:00" --sparam "wait-time=600" -x PJM_LLIO_GFSCACHE=/vol0004:/vol000x --no-check-directory --llio cn-read-cache=off --mpi "max-proc-per-node=1"
 ```
@@ -100,7 +100,7 @@ pjsub --interact -g ra00000 -L "node=1" -L "rscgrp=int" -L "elapse=0:15:00" --sp
 ## Step 4. Create MPI Program (Compute Node)
 Change directory and open a C++ source code file:
 
-<img src="./images/icon-fugaku.png" alt="fugaku" width="70"/><br>
+<img src="../images/icon-fugaku.png" alt="fugaku" width="70"/><br>
 ```bash
 cd fugaku_tutorial
 vi get_counts.cpp
@@ -185,7 +185,7 @@ int main(int argc, char** argv) {
 
 Load Fujutsu MPI library in your shell:
 
-<img src="./images/icon-fugaku.png" alt="fugaku" width="70"/><br>
+<img src="../images/icon-fugaku.png" alt="fugaku" width="70"/><br>
 ```bash
 . /vol0004/apps/oss/spack/share/spack/setup-env.sh
 spack load fujitsu-mpi@head-gcc8
@@ -193,14 +193,14 @@ spack load fujitsu-mpi@head-gcc8
 
 Compile the program. 
 
-<img src="./images/icon-fugaku.png" alt="fugaku" width="70"/><br>
+<img src="../images/icon-fugaku.png" alt="fugaku" width="70"/><br>
 ```bash
 mpiFCC get_counts.cpp -o get_counts
 ```
 
 Check the output file:
 
-<img src="./images/icon-fugaku.png" alt="fugaku" width="70"/><br>
+<img src="../images/icon-fugaku.png" alt="fugaku" width="70"/><br>
 ```bash
 ls -l
 ```
@@ -214,7 +214,7 @@ Example output:
 
 Get the absolute path to the `get_counts` executable:
 
-<img src="./images/icon-fugaku.png" alt="fugaku" width="70"/><br>
+<img src="../images/icon-fugaku.png" alt="fugaku" width="70"/><br>
 ```bash
 realpath ./get_counts
 ```
@@ -238,7 +238,7 @@ This is the template/schema that tells Prefect what fields the block has and how
 Back to the shell for the Pre/Post Node.
 In the project directory (`~/fugaku_tutorial`), open a new Python file:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 vi get_counts_integration.py
 ```
@@ -284,7 +284,7 @@ async def get_inner(
     return {format(int(k), f"0{BITLEN}b"): v for k, v in int_counts.items()}
 ```
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 prefect block register -f get_counts_integration.py
 ```
@@ -296,7 +296,7 @@ Create a new configuration for the Bit Counter block:
 
 Create a new configuration for the Bit Counter block:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 prefect block create bit-counter
 ```
@@ -329,7 +329,7 @@ Unified Bloc) with it, and run the sampler primitive. Then, postprocess the resu
 (in this case, we use the Prefect server storage). You might not even realize it’s using HPC just by looking at the
 workflow code.
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 vi sampler_workflow.py
 ```
@@ -385,14 +385,14 @@ if __name__ == "__main__":
 
 To execute the workflow, run the following Python script:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 python sampler_workflow.py
 ```
 
 We can also monitor the progress on the Prefect console:
 
-![Get Counts Flow Run](./images/img-get-counts-fugaku.png)
+![Get Counts Flow Run](../images/img-get-counts-fugaku.png)
 
 Upon successful completion of the workflow, Prefect will generate the following artifacts:
 

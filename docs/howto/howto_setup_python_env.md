@@ -20,7 +20,7 @@ Before you begin, ensure the following:
 
 Connect to MDX workflow client:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A z12345@mdx-workflow.example.org
 ```
@@ -29,7 +29,7 @@ ssh -A z12345@mdx-workflow.example.org
 
 Run the following command to install `uv`:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
@@ -38,7 +38,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 Use `uv` to create a virtual environment with Python 3.12:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 uv venv ~/venv/prefect -p 3.12
 ```
@@ -49,7 +49,7 @@ This will install Python 3.12 and set up a new environment named `prefect`.
 
 Activate the virtual environment:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
 uv pip install prefect
@@ -61,7 +61,7 @@ Your Python environment is now ready for workflow development.
 
 If this is the first time to connect with `github.com` on this machine, make sure you added GitHub's SSH host key:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 ssh -T git@github.com
 ```

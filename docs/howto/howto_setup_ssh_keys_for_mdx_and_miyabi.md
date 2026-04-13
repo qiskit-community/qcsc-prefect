@@ -51,7 +51,7 @@ Please make sure you have the following ready:
 
 Create a new SSH key pair on your local PC.
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh-keygen -t ed25519 -C "your_email@example.com" -f ~/.ssh/id_ed25519_mdx
 ```
@@ -66,7 +66,7 @@ Generated files:
 
 Display the public key content:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 cat ~/.ssh/id_ed25519_mdx.pub
 ```
@@ -83,7 +83,7 @@ Use the contact address provided in the invitation email or by your organizer.
 
 Edit the `~/.ssh/config` file on your local PC:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 nano ~/.ssh/config
 # or use your preferred editor, for example: vim ~/.ssh/config
@@ -105,14 +105,14 @@ Host mdx
 
 Once configured, connect to MDX:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh mdx
 ```
 
 Or:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A z12345@mdx-workflow.example.org
 ```
@@ -129,7 +129,7 @@ If the tutorial uses a private GitHub repository, this part is required before y
 
 While logged into the MDX server, create a key for Git:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 ssh-keygen -t ed25519 -C "your_email@example.com" -f ~/.ssh/id_ed25519_github
 ```
@@ -142,7 +142,7 @@ Generated files:
 
 Display the public key content:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cat ~/.ssh/id_ed25519_github.pub
 ```
@@ -159,7 +159,7 @@ Copy the output and register it on GitHub:
 
 Edit `~/.ssh/config` on the MDX server:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 nano ~/.ssh/config
 # or use your preferred editor, for example: vim ~/.ssh/config
@@ -179,7 +179,7 @@ Host github.com
 
 Test the connection to GitHub:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 ssh -T git@github.com
 ```
@@ -196,7 +196,7 @@ Hi username! You've successfully authenticated, but GitHub does not provide shel
 
 You can now clone private repositories:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345
 git clone git@github.com:your-org/your-private-repo.git
@@ -217,7 +217,7 @@ Replace `your-org` and `your-private-repo` with the actual GitHub organization/u
 While logged into the MDX server, create a key for Miyabi-C:
 This key must be generated on the MDX workflow client, not on your local PC.
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 ssh-keygen -t ed25519 -C "your_email@example.com" -f ~/.ssh/id_ed25519_miyabi
 ```
@@ -230,7 +230,7 @@ Generated files:
 
 Display the public key content:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cat ~/.ssh/id_ed25519_miyabi.pub
 ```
@@ -241,7 +241,7 @@ Register this public key on the [Miyabi User Portal](https://miyabi-www.jcahpc.j
 
 Edit `~/.ssh/config` on the MDX server:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 nano ~/.ssh/config
 # or use your preferred editor, for example: vim ~/.ssh/config
@@ -260,14 +260,14 @@ Host miyabi-c
 
 Connect to Miyabi-C:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 ssh miyabi-c
 ```
 
 Or:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 ssh z12345@miyabi-c.example.org
 ```
@@ -276,7 +276,7 @@ On first connection, you will be prompted to enter an OTP (one-time password). E
 
 If successful, you will be connected to the Miyabi-C login node:
 
-<img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
+<img src="../images/icon-miyabi.png" alt="miyabi" width="50"/><br>
 ```bash
 # Successfully logged in to Miyabi-C
 ```
@@ -318,14 +318,14 @@ Host miyabi-c
 
 Display detailed debug information when attempting to connect:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -v mdx
 ```
 
 Or:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 ssh -v miyabi-c
 ```
@@ -344,7 +344,7 @@ chmod 644 ~/.ssh/id_ed25519_*.pub
 
 If you have issues connecting to GitHub:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 ssh -vT git@github.com
 ```
