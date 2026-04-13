@@ -36,6 +36,12 @@ jobs:
       - name: Build site
         run: mkdocs build
 
+      - name: Add image aliases for nested pages
+        run: |
+          mkdir -p site/howto/images site/tutorials/images
+          cp -R docs/images/. site/howto/images/
+          cp -R docs/images/. site/tutorials/images/
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
