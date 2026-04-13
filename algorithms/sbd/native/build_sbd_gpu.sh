@@ -5,8 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-DEFAULT_SBD_DIR="${SCRIPT_DIR}/../../gb_sqd/gb_demo_2026/deps/sbd"
-SBD_DIR="${SBD_DIR:-$DEFAULT_SBD_DIR}"
+REPO_URL="${SBD_REPO_URL:-https://github.com/r-ccs-cms/sbd.git}"
+SBD_DIR="${SBD_DIR:-${SCRIPT_DIR}/sbd}"
 CCCOM="${CCCOM:-mpic++}"
 CCFLAGS="${CCFLAGS:--std=c++17 -mp -cuda -fast -gpu=mem:unified -DSBD_THRUST}"
 SYSLIB="${SYSLIB:--lblas -llapack}"
@@ -17,9 +17,10 @@ if ! command -v "$CCCOM" >/dev/null 2>&1; then
 fi
 
 if [ ! -d "$SBD_DIR" ]; then
-    echo "SBD include directory not found: $SBD_DIR" >&2
-    echo "Set SBD_DIR to the SBD source tree you want to use." >&2
-    exit 1
+    echo "Cloning SBD repo..."
+    git clone "$REPO_URL" "$SBD_DIR"
+else
+    echo "SBD repo already exists: $SBD_DIR"
 fi
 
 # Clean previous build

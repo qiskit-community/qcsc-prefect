@@ -20,7 +20,7 @@ If you use Prefect Cloud for workflow management, also ensure:
 
 Execute the interact session for Pre/Post Node.
 
-<img src="./images/icon-login-fugaku.png" alt="login" width="70"/><br>
+<img src="../images/icon-login-fugaku.png" alt="login" width="70"/><br>
 ```bash
 srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 ```
@@ -29,13 +29,13 @@ srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 
 Activate your virtual environment:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
 ```
 Install the Prefect Qiskit integration:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 uv pip install prefect-qiskit
 export SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')
@@ -48,18 +48,18 @@ If `SSL_CERT_FILE` is not set, IBM Quantum access may fail with
 
 Create API Key in Prefect Cloud. Settings -> API Keys
 
-![Create API Keys](./images/img-prefect-api.png)
+![Create API Keys](../images/img-prefect-api.png)
 
 Create and switch to a new Prefect profile:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 prefect profile create cloud-fugaku && prefect profile use cloud-fugaku
 ```
 
 Log in to your Prefect Cloud workspace using your API key:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 prefect cloud login -k '<my-api-key>'
 ```
@@ -68,7 +68,7 @@ prefect cloud login -k '<my-api-key>'
 
 Register the block schemas for Qiskit integration:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 prefect block register -m prefect_qiskit
 prefect block register -m prefect_qiskit.vendors
@@ -76,7 +76,7 @@ prefect block register -m prefect_qiskit.vendors
 
 Create the IBM Quantum Credentials block:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 prefect block create ibm-quantum-credentials
 ```
@@ -84,12 +84,12 @@ prefect block create ibm-quantum-credentials
 This command will display a URL to the Prefect console.
 Open it in your browser and enter your IBM Quantum instance's CRN and API Key to create the block.
 
-![Setup IBM Quantum Credentials](./images/img-ibm-cred-block.png)
+![Setup IBM Quantum Credentials](../images/img-ibm-cred-block.png)
 
 
 Then, enter the following:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 prefect block create quantum-runtime
 ```
@@ -98,7 +98,7 @@ Follow the URL shown to configure the runtime block.
 Specify the IBM Quantum backend name and link the credentials block you created above.
 You can also configure preferences for Qiskit primitive execution.
 
-![Setup Quantum Runtime](./images/img-quantum-runtime-block.png)
+![Setup Quantum Runtime](../images/img-quantum-runtime-block.png)
 
 > [!NOTE]
 > If a real IBM Quantum backend such as `ibm_kobe` is not available, you can configure Qiskit Aer as an alternative backend.
@@ -111,7 +111,7 @@ You can also configure preferences for Qiskit primitive execution.
 
 Confirm you have access to the blocks you created:
 
-<img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 prefect block ls
 ```

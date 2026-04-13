@@ -1,17 +1,15 @@
 # QCSC Prefect
 
 QCSC Prefect is a monorepo for portable HPC workflow orchestration with
-[Prefect](https://www.prefect.io/). It is designed so the same workflow code can
-run across multiple HPC systems by switching reusable execution blocks.
+[Prefect](https://www.prefect.io/). The same workflow code can run across
+multiple HPC systems by switching reusable execution blocks.
 
 ## What You Can Find Here
 
-- The core architecture and execution model in
-  [Architecture](./concept.md)
+- The core architecture and execution model in [Architecture](./concept.md)
 - Step-by-step tutorials for Miyabi and Fugaku in
   [Tutorials](./tutorials/create_qcsc_workflow_for_miyabi.md)
-- Operational setup guides under
-  [How-to](./howto/howto_setup_prefect_qiskit.md)
+- Operational setup guides in [How-to](./howto/howto_setup_prefect_qiskit.md)
 
 ## Repository Layout
 
@@ -41,6 +39,3 @@ To preview this documentation locally:
 ```bash
 uv run --with mkdocs-material mkdocs serve
 ```
-
-For a deeper explanation of the three-layer block model, start with
-[Architecture](./concept.md).

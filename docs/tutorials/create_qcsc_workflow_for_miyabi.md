@@ -5,7 +5,7 @@ On the Prefect workflow, we also use [Prefect Qiskit](https://github.com/qiskit-
 
 Our objective is to compute a count dictionary of sampler bitstrings using MPI programming on the QCSC architecture.
 
-![Count BitStrings Flow](./images/img-counts-flow.png)
+![Count BitStrings Flow](../images/img-counts-flow.png)
 
 Key principles in this tutorial:
 
@@ -78,7 +78,7 @@ Before the hands-on, confirm the identity mapping below. Mismatched emails are a
 This section prepares stable access from your laptop to MDX and from MDX to Miyabi-C. 
 The whole process image is : 
 
-![Prerequisites Flow](./images/img-prerequisites.png)
+![Prerequisites Flow](../images/img-prerequisites.png)
 
 Before starting, make sure:
 
@@ -108,12 +108,12 @@ All steps below use these files as-is.
 ---
 
 ## Create BitCounts Workflow
-![BitCounts Setup Flow](./images/img-counts-setup-flow-new.png)
+![BitCounts Setup Flow](../images/img-counts-setup-flow-new.png)
 ## Step 1. Log in to the MDX Workflow Client
 
 Connect to the MDX workflow client using SSH. This is where we will develop the workflow.
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A z12345@mdx-workflow.example.org
 ```
@@ -123,7 +123,7 @@ ssh -A z12345@mdx-workflow.example.org
 Prepare `qcsc-prefect` under `/work/gz00/z12345`.
 You can either clone the repository from GitHub, or copy the tutorial source tree already available on MDX at `/large/tutorial/qcsc-prefect`.
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345
 git clone git@github.com:qiskit-community/qcsc-prefect.git
@@ -131,7 +131,7 @@ git clone git@github.com:qiskit-community/qcsc-prefect.git
 
 Or:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cp -r /large/tutorial/qcsc-prefect /work/gz00/z12345/
 ```
@@ -140,14 +140,14 @@ After either method, continue with `/work/gz00/z12345/qcsc-prefect`.
 
 Activate your virtual environment for Prefect:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
 ```
 
 Install necessary packages:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 cd /work/gz00/z12345/qcsc-prefect
 uv pip install prefect-qiskit
@@ -160,7 +160,7 @@ uv pip install --no-deps \
 
 Check installations:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 uv pip list | grep prefect
 ```
@@ -179,14 +179,14 @@ prefect                   3.6.17
 
 Switch the prefect profile to `mdx`:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect profile use mdx
 ```
 
 Update your prefect token (Only On Prem) if your token is expired.
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect-auth login
 /work/gz00/z12345/qcsc-prefect/scripts/prefect_sync_env_to_config.sh -p mdx
@@ -195,7 +195,7 @@ prefect-auth login
 
 Make sure the Quantum Runtime block exist:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect block inspect quantum-runtime/ibm-runner
 ```
@@ -220,7 +220,7 @@ The output may look like:
 
 Open a new terminal and connect to the Miyabi-C login node:
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A z12345@miyabi-c.example.org
 ```
@@ -229,7 +229,7 @@ You will be prompted to enter a verification code. Open your authenticator app a
 
 Create a directory:
 
-<img src="./images/icon-miyabi.png" alt="miyabi" width="50"/><br>
+<img src="../images/icon-miyabi.png" alt="miyabi" width="50"/><br>
 ```bash
 cd /work/gz00/z12345/qcsc-prefect
 ./examples/prefect_bitcount_demo/build_on_miyabi.sh
@@ -271,7 +271,7 @@ Differences:
 
 Back to MDX termial, 
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 mkdir -p /work/gz00/z12345/miyabi_tutorial
 cp examples/prefect_bitcount_demo/bitcount_blocks.example.toml \
@@ -290,7 +290,7 @@ Set at least the following keys in `bitcount_blocks.toml`:
 
 ## Step 6. Generate all blocks by script
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 python examples/prefect_bitcount_demo/create_blocks.py \
   --config examples/prefect_bitcount_demo/bitcount_blocks.toml \
@@ -299,7 +299,7 @@ python examples/prefect_bitcount_demo/create_blocks.py \
 
 Optional CLI overrides:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 python examples/prefect_bitcount_demo/create_blocks.py \
   --config examples/prefect_bitcount_demo/bitcount_blocks.toml \
@@ -322,7 +322,7 @@ python examples/prefect_bitcount_demo/create_blocks.py \
 
 At this stage, users do not need to define block classes manually.
 
-![Blocks](./images/img-prefect-bitcount-block.png)
+![Blocks](../images/img-prefect-bitcount-block.png)
 
 ---
 
@@ -330,7 +330,7 @@ At this stage, users do not need to define block classes manually.
 
 Use `flow_optimized.py` with block names as runtime parameters:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 python examples/prefect_bitcount_demo/flow_optimized.py \
   --runtime-block ibm-runner \
@@ -349,7 +349,7 @@ In this mode, the main user inputs are block names.
 
 We can also monitor the progress on the Prefect console:
 
-![Get Counts Flow Run](./images/img-get-counts-new.png)
+![Get Counts Flow Run](../images/img-get-counts-new.png)
 
 ### Step 7A.1. What `flow_optimized.py` does
 
@@ -387,7 +387,7 @@ Why this flow is recommended:
 
 You can run `flow_tutorial_style.py` directly:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 python examples/prefect_bitcount_demo/flow_tutorial_style.py
 ```
@@ -430,7 +430,7 @@ execution is delegated to the current block-based architecture.
 
 You can inspect the facade block and referenced blocks:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect block inspect bit-counter/miyabi-tutorial
 prefect block inspect hpc_command/cmd-bitcount-hist
