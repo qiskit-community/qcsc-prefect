@@ -289,6 +289,8 @@ In the Prefect console, click **Run** → **Custom run** and set at least:
 | FCIDump File | `/path/to/work/qcsc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
 | SQD Subspace Dimension (Optional) | `1000000` |
 | Differential Evolution Iterations (Optional) | `1` (start small for testing) |
+| Quantum Source (Optional) | `real-device` or `random` |
+| Random Seed (Optional) | `24` |
 | Solver Block Ref | `sbd_solver_job/davidson-solver` |
 
 > [!CAUTION]

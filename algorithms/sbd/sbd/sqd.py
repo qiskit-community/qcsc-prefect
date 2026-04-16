@@ -49,6 +49,8 @@ def walker_sqd(
     carryover: NpStrict2DArrayBool,
     sqd_dim: int,
     solver_block_name: str,
+    quantum_source: str,
+    random_seed: int,
 ) -> tuple[tuple[float, NpStrict2DArrayBool], dict[str, Any]]:
     logger = get_run_logger()
     davidson_solver = SBDSolverJob.load(solver_block_name)
@@ -58,14 +60,18 @@ def walker_sqd(
         "walker_index": walker_index,
     }
 
-    try:
-        runtime = QuantumRuntime.load("ibm-runner")
-    except ValueError:
-        logger.warning(
-            "Quantum Runtime block is not defined. Using random uniform sampling."
-        )
-        runtime = None
-    options = Variable.get("sqd_options")
+    options = Variable.get("sqd_options", default={"params": {"shots": 100_000}})
+    runtime = None
+
+    if quantum_source == "real-device":
+        try:
+            runtime = QuantumRuntime.load("ibm-runner")
+        except ValueError as exc:
+            raise RuntimeError(
+                "Quantum source 'real-device' requested but QuantumRuntime block "
+                "'ibm-runner' is not defined. Set quantum_source='random' to use "
+                "deterministic random sampling instead."
+            ) from exc
 
     if runtime is not None:
         logger.info("Preparing quantum sampling on backend %s.", runtime.resource_name)
@@ -152,10 +158,13 @@ def walker_sqd(
         # Random sampling
         # Isolate bitstring seed from the module seed for equivalent control with real device path.
         seed = int(
+            random_seed
+            + (
             (trial_index + walker_index) * (trial_index + walker_index + 1) // 2
             + walker_index
+            )
         )
-        logger.info(f"Sampling bitstrings with RNG seed {seed}")
+        logger.info("Sampling bitstrings with RNG seed %s", seed)
         bit_array = generate_bit_array_uniform(
             num_samples=options.get("params", {}).get("shots", 100_000),
             num_bits=elec_props.num_orbitals * 2,
