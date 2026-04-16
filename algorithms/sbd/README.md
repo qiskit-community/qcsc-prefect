@@ -138,6 +138,7 @@ python algorithms/sbd/exec.py algorithms/sbd/default_params/test_n2.json
 Note:
 - The example JSON files use intentionally low `circ_params.sabre_layout_trials` values so Fugaku runs do not appear stuck in SABRE layout search before IBM Quantum submission.
 - These are conservative starting points only. Tune them for your own backend, qubit count, and circuit specification.
+- Set `"quantum_source": "random"` in the JSON if you want to skip IBM Quantum Runtime and use deterministic pseudo-random bitstrings instead. `"random_seed"` controls reproducibility in that mode.
 
 Deploy entrypoint:
 

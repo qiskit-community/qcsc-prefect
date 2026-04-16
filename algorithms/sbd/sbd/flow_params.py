@@ -2,6 +2,8 @@
 #
 # Author: Naoki Kanazawa (knzwnao@jp.ibm.com)
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -111,6 +113,22 @@ class FlowParameters(BaseModel):
         description="Dimension of subsampled bitstrings for diagonalization.",
         title="SQD Subspace Dimension",
         ge=1,
+    )
+
+    quantum_source: Literal["real-device", "random"] = Field(
+        default="real-device",
+        description=(
+            "Select whether SQD sampling uses IBM Quantum Runtime "
+            "or deterministic random bitstrings."
+        ),
+        title="Quantum Source",
+    )
+
+    random_seed: int = Field(
+        default=24,
+        description="Base RNG seed used when Quantum Source is 'random'.",
+        title="Random Seed",
+        ge=0,
     )
     
     circ_params: CircuitParameters = Field(

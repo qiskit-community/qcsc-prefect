@@ -342,6 +342,7 @@ Use `flow_optimized.py` with block names as runtime parameters:
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 python examples/prefect_bitcount_demo/flow_optimized.py \
+  --quantum-source real-device \
   --runtime-block ibm-runner \
   --command-block cmd-bitcount-hist \
   --execution-profile-block exec-bitcount-mpi \
@@ -350,6 +351,7 @@ python examples/prefect_bitcount_demo/flow_optimized.py \
 ```
 
 In this mode, the main user inputs are block names.
+If you want to skip IBM Quantum for a tutorial/demo run, add `--quantum-source random --random-seed 24`.
 
 `flow_optimized.py` resolves the base work directory in this order:
 1. `--work-dir` (if provided)
@@ -374,15 +376,16 @@ Execution sequence:
 1. **Task: `quantum-sampling-task`**
 2. Load the Prefect `QuantumRuntime` block (default: `ibm-runner`).
 3. Load sampler options (and optional `work_dir`) from a Prefect Variable (default: `miyabi-bitcount-options`).
-4. Build a 10-qubit GHZ circuit, transpile it, and run `runtime.sampler(...)`.
-5. Convert sampled bitstrings to `uint32` values and write `input.bin` in a per-run job directory.
-6. **Task: `hpc-bitcount-task`**
-7. Submit the HPC job via `run_job_from_blocks(...)` using:
+4. If `--quantum-source real-device`, build a 10-qubit GHZ circuit, transpile it, and run `runtime.sampler(...)`.
+5. If `--quantum-source random`, generate deterministic pseudo-random bitstrings instead.
+6. Convert sampled bitstrings to `uint32` values and write `input.bin` in a per-run job directory.
+7. **Task: `hpc-bitcount-task`**
+8. Submit the HPC job via `run_job_from_blocks(...)` using:
    - `CommandBlock` (default: `cmd-bitcount-hist`)
    - `ExecutionProfileBlock` (default: `exec-bitcount-mpi`)
    - `HPCProfileBlock` (default: `hpc-miyabi-bitcount`)
-8. Read `hist_u64.bin`, reconstruct the count dictionary, and publish a Prefect table artifact (`sampler-count-dict-optimized`).
-9. Return a summary payload (`job_id`, total `shots`, `num_unique_bitstrings`, and `work_dir`).
+9. Read `hist_u64.bin`, reconstruct the count dictionary, and publish a Prefect table artifact (`sampler-count-dict-optimized`).
+10. Return a summary payload (`job_id`, total `shots`, `num_unique_bitstrings`, and `work_dir`).
 
 Why this flow is recommended:
 
@@ -407,6 +410,7 @@ Example runtime commands:
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 python examples/prefect_bitcount_demo/flow_optimized.py \
+  --quantum-source real-device \
   --runtime-block ibm-runner \
   --command-block cmd-bitcount-hist \
   --execution-profile-block exec-bitcount-miyabi \
@@ -415,6 +419,7 @@ python examples/prefect_bitcount_demo/flow_optimized.py \
   --work-dir /work/gz00/z12345/bitcount_demo
 
 python examples/prefect_bitcount_demo/flow_optimized.py \
+  --quantum-source real-device \
   --runtime-block ibm-runner \
   --command-block cmd-bitcount-hist \
   --execution-profile-block exec-bitcount-fugaku \
@@ -443,7 +448,8 @@ You can run `flow_tutorial_style.py` directly:
 
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
-python examples/prefect_bitcount_demo/flow_tutorial_style.py
+python examples/prefect_bitcount_demo/flow_tutorial_style.py \
+  --quantum-source real-device
 ```
 
 This flow uses `BitCounter.load("miyabi-tutorial")`.

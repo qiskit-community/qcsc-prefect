@@ -232,6 +232,7 @@ Use `flow_optimized.py` with Fugaku block names:
 <img src="./images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
 python examples/prefect_bitcount_demo/flow_optimized.py \
+  --quantum-source real-device \
   --runtime-block ibm-runner \
   --command-block cmd-bitcount-hist \
   --execution-profile-block exec-bitcount-fugaku \
@@ -241,6 +242,7 @@ python examples/prefect_bitcount_demo/flow_optimized.py \
 ```
 
 In this mode, the main user inputs are block names.
+If you want to skip IBM Quantum for a tutorial/demo run, add `--quantum-source random --random-seed 24`.
 We can also monitor the progress on the Prefect console:
 
 ![Get Counts Flow Run](./images/img-get-counts-fugaku.png)
@@ -256,7 +258,7 @@ Execution sequence:
 1. `quantum-sampling-task`
 2. Load `QuantumRuntime` block (`ibm-runner`)
 3. Load sampler options variable (`fugaku-bitcount-options`)
-4. Build and run GHZ sampling
+4. Build and run GHZ sampling, or generate deterministic pseudo-random bitstrings when `--quantum-source random` is selected
 5. Write `input.bin` into a run-specific job directory
 6. `hpc-bitcount-task`
 7. Submit HPC job via `run_job_from_blocks(...)` using `CommandBlock`, `ExecutionProfileBlock`, and `HPCProfileBlock`
