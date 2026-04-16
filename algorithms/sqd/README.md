@@ -36,6 +36,7 @@ In the Prefect UI, the flow parameters now include:
 
 - `quantum_source`: choose `real-device` or `random`
 - `random_seed`: base seed used when `quantum_source = "random"`
+- `runner_name`: defaults to the `QuantumRuntime` block `ibm-runner`
 
 Set `quantum_source = "random"` when you want to skip IBM Quantum Runtime and use deterministic pseudo-random bitstrings instead.
 
