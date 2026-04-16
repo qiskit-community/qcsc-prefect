@@ -14,10 +14,10 @@ maintainers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "ffsim==0.0.57",
-    "qiskit-addon-sqd==0.11.0",
-    "prefect-qiskit==0.2.0",
-    "prefect[aws,ray]==3.4.24",
+    "ffsim",
+    "qiskit-addon-sqd",
+    "prefect-qiskit",
+    "prefect[aws,ray]",
     "pydantic_numpy",
     "qcsc_workflow_utility",
 ]

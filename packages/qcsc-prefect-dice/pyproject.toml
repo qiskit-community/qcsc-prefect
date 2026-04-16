@@ -13,7 +13,7 @@ dependencies = [
     "numpy",
     "prefect>=2.19",
     "pyscf",
-    "qiskit-addon-sqd==0.11.0",
+    "qiskit-addon-sqd",
     "qcsc-prefect-core",
     "qcsc-prefect-blocks",
     "qcsc-prefect-executor",
