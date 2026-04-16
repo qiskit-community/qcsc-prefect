@@ -133,12 +133,13 @@ def test_run_job_from_blocks_dispatches_to_miyabi(monkeypatch, tmp_path: Path):
             execution_profile_block_name="exec",
             hpc_profile_block_name="hpc",
             work_dir=tmp_path,
-            script_filename="job.pbs",
+            script_filename="job",
             metrics_artifact_key="miyabi-metrics",
         )
     )
 
     assert result.job_id == "12345.miyabi"
+    assert captured["script_filename"] == "job.pbs"
     assert captured["req"].queue_name == "regular-c"
     assert captured["req"].project == "gz00"
     assert captured["req"].executable == "/work/gz00/z99999/get_counts_hist"
@@ -185,12 +186,13 @@ def test_run_job_from_blocks_dispatches_to_fugaku(monkeypatch, tmp_path: Path):
             execution_profile_block_name="exec",
             hpc_profile_block_name="hpc",
             work_dir=tmp_path,
-            script_filename="job.pjm",
+            script_filename="job.pbs",
             metrics_artifact_key="fugaku-metrics",
         )
     )
 
     assert result.job_id == "900001"
+    assert captured["script_filename"] == "job.pjm"
     assert captured["req"].queue_name == "small"
     assert captured["req"].project == "hp200999"
     assert captured["req"].executable == "/vol0001/home/z99999/get_counts_hist"

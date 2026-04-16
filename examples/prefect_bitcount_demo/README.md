@@ -3,7 +3,7 @@
 This example provides two execution styles:
 
 - `flow_optimized.py`: block-driven execution (works on Miyabi and Fugaku)
-- `flow_tutorial_style.py`: legacy `counter.get(bitstrings)` style (Miyabi only)
+- `flow_tutorial_style.py`: legacy `counter.get(bitstrings)` style with optional HPC profile override
 
 ## Files
 
@@ -46,6 +46,13 @@ python examples/prefect_bitcount_demo/create_blocks.py \
   --config examples/prefect_bitcount_demo/bitcount_blocks.toml
 ```
 
+This default setup creates the optimized-flow assets only:
+
+- `cmd-bitcount-hist`
+- `exec-bitcount-mpi`
+- `hpc-miyabi-bitcount`
+- `miyabi-bitcount-options`
+
 Fugaku:
 
 ```bash
@@ -75,8 +82,7 @@ python examples/prefect_bitcount_demo/flow_optimized.py \
   --command-block cmd-bitcount-hist \
   --execution-profile-block exec-bitcount-fugaku \
   --hpc-profile-block hpc-fugaku-bitcount \
-  --options-variable fugaku-bitcount-options \
-  --script-filename bitcount_optimized.pjm
+  --options-variable fugaku-bitcount-options
 ```
 
 `flow_optimized.py` resolves the base work directory in this order:
@@ -84,10 +90,92 @@ python examples/prefect_bitcount_demo/flow_optimized.py \
 2. `work_dir` in the options variable (`miyabi-bitcount-options` / `fugaku-bitcount-options`)
 3. fallback: `./work/prefect_bitcount_optimized`
 
-## Run legacy tutorial-style flow (Miyabi only)
+The scheduler script suffix is resolved from the selected `HPCProfileBlock`, so the same flow can use `.pbs` on Miyabi and `.pjm` on Fugaku without changing the flow code.
+
+## Run legacy tutorial-style flow
+
+The legacy tutorial assets are opt-in. Create them first on Miyabi:
+
+```bash
+python examples/prefect_bitcount_demo/create_blocks.py \
+  --config examples/prefect_bitcount_demo/bitcount_blocks.toml \
+  --hpc-target miyabi \
+  --create-legacy-tutorial-assets
+```
 
 ```bash
 python examples/prefect_bitcount_demo/flow_tutorial_style.py
 ```
 
-`flow_tutorial_style.py` expects `miyabi-tutorial` block/variable and is intentionally Miyabi-only.
+That creates these backward-compatible names:
+
+- BitCounter block: `miyabi-tutorial`
+- Prefect Variable: `miyabi-tutorial`
+
+In the legacy flow, you can also override only the `HPCProfileBlock` at runtime
+when the stored execution profile is already compatible with the target:
+
+```bash
+python examples/prefect_bitcount_demo/flow_tutorial_style.py \
+  --bitcounter-block miyabi-tutorial \
+  --options-variable miyabi-tutorial \
+  --hpc-profile-block-override hpc-fugaku-bitcount
+```
+
+## Merged Demo with `flow_optimized.py`
+
+If you want to show Miyabi/Fugaku switching on the recommended path, use `flow_optimized.py`.
+`flow_tutorial_style.py` is the legacy-compatible path, so it is not the recommended demo route for backend switching.
+
+Use target-specific `ExecutionProfileBlock` and `HPCProfileBlock` names, while keeping the command block shared.
+You can also keep `options_variable_name` shared when sampler options and `work_dir` are compatible across both targets.
+
+Example config naming:
+
+```toml
+# Miyabi config
+execution_profile_block_name = "exec-bitcount-miyabi"
+hpc_profile_block_name = "hpc-miyabi-bitcount"
+options_variable_name = "bitcount-options"
+
+# Fugaku config
+execution_profile_block_name = "exec-bitcount-fugaku"
+hpc_profile_block_name = "hpc-fugaku-bitcount"
+options_variable_name = "bitcount-options"
+```
+
+Then create the target-specific execution/HPC profile pairs:
+
+```bash
+python examples/prefect_bitcount_demo/create_blocks.py \
+  --config examples/prefect_bitcount_demo/bitcount_blocks.miyabi.toml \
+  --hpc-target miyabi
+
+python examples/prefect_bitcount_demo/create_blocks.py \
+  --config examples/prefect_bitcount_demo/bitcount_blocks.fugaku.toml \
+  --hpc-target fugaku
+```
+
+If `bitcount-options` stores different `work_dir` values per target, pin a common demo directory with `--work-dir`.
+
+After that, the optimized flow demo switches by changing the execution/HPC profile pair at runtime:
+
+```bash
+python examples/prefect_bitcount_demo/flow_optimized.py \
+  --runtime-block ibm-runner \
+  --command-block cmd-bitcount-hist \
+  --execution-profile-block exec-bitcount-miyabi \
+  --hpc-profile-block hpc-miyabi-bitcount \
+  --options-variable bitcount-options \
+  --work-dir /path/to/shared/bitcount_demo
+
+python examples/prefect_bitcount_demo/flow_optimized.py \
+  --runtime-block ibm-runner \
+  --command-block cmd-bitcount-hist \
+  --execution-profile-block exec-bitcount-fugaku \
+  --hpc-profile-block hpc-fugaku-bitcount \
+  --options-variable bitcount-options \
+  --work-dir /path/to/shared/bitcount_demo
+```
+
+In these two commands, the changing runtime parameters are `--execution-profile-block` and `--hpc-profile-block`.

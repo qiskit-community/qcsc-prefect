@@ -115,7 +115,8 @@ The following image is the screenshot for the runtime block.
 >
 > In the Aer setup, create a `Qiskit Aer Credentials` block and configure the `QuantumRuntime` block with `Resource Name = aer_simulator`.
 > If you already created the tutorial Variables for the Miyabi workflow, delete them from Prefect before switching to Aer because they cannot be used in this setup:
-> `miyabi-bitcount-options`, `miyabi-tutorial`
+> `miyabi-bitcount-options`
+> If you also opted into the legacy tutorial assets, delete `miyabi-tutorial` as well.
 
 Confirm you have access to the blocks you created:
 <img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
