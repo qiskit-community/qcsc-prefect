@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from qcsc_prefect_blocks.common.blocks import ExecutionProfileBlock
 from qcsc_prefect_dice import DiceSHCISolverJob
 
-from sqd_dice.main import Parameters, sqd_2405_05068
+from sqd_dice.main import DEFAULT_RUNTIME_BLOCK_NAME, Parameters, sqd_2405_05068
 
 
 async def _maybe_await(value):
@@ -53,7 +53,7 @@ class DICESetup(BaseModel):
 async def main(
     base_parameters: Parameters,
     experiments: list[DICESetup],
-    runner_name: str = "sqd-runner",
+    runner_name: str = DEFAULT_RUNTIME_BLOCK_NAME,
     solver_name: str = "sqd-solver",
     option_name: str = "sampler_options",
 ) -> int:
@@ -66,7 +66,7 @@ async def main(
     Args:
         base_parameters: Base parameter of the SQD experiment.
         experiments: Parameters to overwrite.
-        runner_name: Name of QuantumRunner block to load.
+        runner_name: Name of QuantumRuntime block to load.
         solver_name: Name of DiceSHCISolverJob block to load.
         option_name: Name of Variable storing sampler primitive options to load.
     """
