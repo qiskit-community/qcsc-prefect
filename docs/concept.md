@@ -45,31 +45,31 @@ qcsc-prefect/
 
 ### Package Overview
 
-#### [`qcsc-prefect-core`](../packages/qcsc-prefect-core/)
-Core data models and resolution logic. Defines [`ExecutionProfile`](../packages/qcsc-prefect-core/src/qcsc_prefect_core/models/execution_profile.py) which represents execution intent independent of any specific HPC system.
+#### [`qcsc-prefect-core`](https://github.com/qiskit-community/qcsc-prefect/tree/main/packages/qcsc-prefect-core)
+Core data models and resolution logic. Defines [`ExecutionProfile`](https://github.com/qiskit-community/qcsc-prefect/blob/main/packages/qcsc-prefect-core/src/qcsc_prefect_core/models/execution_profile.py) which represents execution intent independent of any specific HPC system.
 
-#### [`qcsc-prefect-blocks`](../packages/qcsc-prefect-blocks/)
+#### [`qcsc-prefect-blocks`](https://github.com/qiskit-community/qcsc-prefect/tree/main/packages/qcsc-prefect-blocks)
 Prefect Block definitions for the three-layer architecture:
-- [`CommandBlock`](../packages/qcsc-prefect-blocks/src/qcsc_prefect_blocks/common/blocks.py): Defines WHAT to execute (command name, executable key)
-- [`ExecutionProfileBlock`](../packages/qcsc-prefect-blocks/src/qcsc_prefect_blocks/common/blocks.py): Defines HOW to execute (nodes, MPI ranks, walltime, modules)
-- [`HPCProfileBlock`](../packages/qcsc-prefect-blocks/src/qcsc_prefect_blocks/common/blocks.py): Defines WHERE to execute (queue, project/group, system-specific settings)
+- [`CommandBlock`](https://github.com/qiskit-community/qcsc-prefect/blob/main/packages/qcsc-prefect-blocks/src/qcsc_prefect_blocks/common/blocks.py): Defines WHAT to execute (command name, executable key)
+- [`ExecutionProfileBlock`](https://github.com/qiskit-community/qcsc-prefect/blob/main/packages/qcsc-prefect-blocks/src/qcsc_prefect_blocks/common/blocks.py): Defines HOW to execute (nodes, MPI ranks, walltime, modules)
+- [`HPCProfileBlock`](https://github.com/qiskit-community/qcsc-prefect/blob/main/packages/qcsc-prefect-blocks/src/qcsc_prefect_blocks/common/blocks.py): Defines WHERE to execute (queue, project/group, system-specific settings)
 
-#### [`qcsc-prefect-adapters`](../packages/qcsc-prefect-adapters/)
+#### [`qcsc-prefect-adapters`](https://github.com/qiskit-community/qcsc-prefect/tree/main/packages/qcsc-prefect-adapters)
 HPC system-specific adapters that handle job script generation and submission:
-- [`miyabi`](../packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/miyabi/): PBS/Torque adapter for Miyabi
-- [`fugaku`](../packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/fugaku/): PJM adapter for Fugaku
-- [`slurm`](../packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/slurm/): Slurm adapter for generic clusters
+- [`miyabi`](https://github.com/qiskit-community/qcsc-prefect/tree/main/packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/miyabi): PBS/Torque adapter for Miyabi
+- [`fugaku`](https://github.com/qiskit-community/qcsc-prefect/tree/main/packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/fugaku): PJM adapter for Fugaku
+- [`slurm`](https://github.com/qiskit-community/qcsc-prefect/tree/main/packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/slurm): Slurm adapter for generic clusters
 - Job script templates using Jinja2
 - Runtime classes for job submission, monitoring, and cancellation
 
 For local Slurm testing with Docker, see
 [`docs/howto/howto_test_slurm_with_docker_cluster.md`](./howto/howto_test_slurm_with_docker_cluster.md).
 
-#### [`qcsc-prefect-executor`](../packages/qcsc-prefect-executor/)
+#### [`qcsc-prefect-executor`](https://github.com/qiskit-community/qcsc-prefect/tree/main/packages/qcsc-prefect-executor)
 High-level execution API that orchestrates the entire workflow:
-- [`run_job_from_blocks()`](../packages/qcsc-prefect-executor/src/qcsc_prefect_executor/from_blocks.py): Main entry point for block-based execution
+- [`run_job_from_blocks()`](https://github.com/qiskit-community/qcsc-prefect/blob/main/packages/qcsc-prefect-executor/src/qcsc_prefect_executor/from_blocks.py): Main entry point for block-based execution
 - Scheduler resolution helpers such as `resolve_submission_target()` and `build_scheduler_script_filename()`
-- System-specific runners: [`run_miyabi_job()`](../packages/qcsc-prefect-executor/src/qcsc_prefect_executor/miyabi/run.py), [`run_fugaku_job()`](../packages/qcsc-prefect-executor/src/qcsc_prefect_executor/fugaku/run.py)
+- System-specific runners: [`run_miyabi_job()`](https://github.com/qiskit-community/qcsc-prefect/blob/main/packages/qcsc-prefect-executor/src/qcsc_prefect_executor/miyabi/run.py), [`run_fugaku_job()`](https://github.com/qiskit-community/qcsc-prefect/blob/main/packages/qcsc-prefect-executor/src/qcsc_prefect_executor/fugaku/run.py)
 - Automatic block resolution and job lifecycle management
 
 ---
@@ -237,9 +237,9 @@ Users can keep workflow code stable while changing behavior by:
 
 | System | Scheduler | Status | Adapter Module |
 |--------|-----------|--------|----------------|
-| **Miyabi** | PBS/Torque | ✅ Supported | [`qcsc_prefect_adapters.miyabi`](../packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/miyabi/) |
-| **Fugaku** | PJM | ✅ Supported | [`qcsc_prefect_adapters.fugaku`](../packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/fugaku/) |
-| **Slurm** | Slurm | ✅ Supported | [`qcsc_prefect_adapters.slurm`](../packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/slurm/) |
+| **Miyabi** | PBS/Torque | Supported | [`qcsc_prefect_adapters.miyabi`](https://github.com/qiskit-community/qcsc-prefect/tree/main/packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/miyabi) |
+| **Fugaku** | PJM | Supported | [`qcsc_prefect_adapters.fugaku`](https://github.com/qiskit-community/qcsc-prefect/tree/main/packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/fugaku) |
+| **Slurm** | Slurm | Supported | [`qcsc_prefect_adapters.slurm`](https://github.com/qiskit-community/qcsc-prefect/tree/main/packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/slurm) |
 
 ---
 
@@ -273,7 +273,7 @@ sequenceDiagram
 
 ### Execution Profile Model
 
-The [`ExecutionProfile`](../packages/qcsc-prefect-core/src/qcsc_prefect_core/models/execution_profile.py) is the central data model representing execution intent:
+The [`ExecutionProfile`](https://github.com/qiskit-community/qcsc-prefect/blob/main/packages/qcsc-prefect-core/src/qcsc_prefect_core/models/execution_profile.py) is the central data model representing execution intent:
 
 ```python
 @dataclass
