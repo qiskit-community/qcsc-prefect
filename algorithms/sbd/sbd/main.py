@@ -232,6 +232,8 @@ def differential_evolution_trial(
             carryover=state.carryover,
             sqd_dim=parameters.sqd_dim,
             solver_block_name=solver_block_name,
+            quantum_source=parameters.quantum_source,
+            random_seed=parameters.random_seed,
         )
         futs.append(prefect_fut)
 

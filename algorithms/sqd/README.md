@@ -32,6 +32,13 @@ After installation, you can deploy the workflow in a Prefect server:
 sqd-deploy
 ```
 
+In the Prefect UI, the flow parameters now include:
+
+- `quantum_source`: choose `real-device` or `random`
+- `random_seed`: base seed used when `quantum_source = "random"`
+
+Set `quantum_source = "random"` when you want to skip IBM Quantum Runtime and use deterministic pseudo-random bitstrings instead.
+
 Before running on Miyabi or Fugaku, create the DICE-related blocks and
 `sampler_options` variable:
 

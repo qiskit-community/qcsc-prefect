@@ -182,8 +182,14 @@ asyncio.run(my_workflow())
 
 ### 2. Portability
 
-The same workflow code runs on different HPC systems by simply changing the
-`HPCProfileBlock`. The workflow can keep a logical script stem and let
+The same workflow code runs on different HPC systems by switching the
+appropriate execution/target profile pair. In many real workflows,
+`launcher`, `modules`, and other execution settings differ across systems or
+CPU/GPU routes, so both `ExecutionProfileBlock` and `HPCProfileBlock` may
+change together. When the execution recipe is truly portable, the same
+`ExecutionProfileBlock` can still be reused across multiple targets.
+
+The workflow can keep a logical script stem and let
 `build_scheduler_script_filename()` choose the scheduler-specific suffix:
 
 ```python
@@ -192,8 +198,8 @@ from qcsc_prefect_executor.from_blocks import build_scheduler_script_filename
 # Run on Miyabi
 result = await run_job_from_blocks(
     command_block_name="cmd-simulation",
-    execution_profile_block_name="exec-simulation-mpi",
-    hpc_profile_block_name="hpc-miyabi",  # ← Change this
+    execution_profile_block_name="exec-simulation-miyabi",
+    hpc_profile_block_name="hpc-miyabi",
     work_dir="./work/simulation",
     script_filename=build_scheduler_script_filename("simulation", "miyabi"),
 )
@@ -201,8 +207,8 @@ result = await run_job_from_blocks(
 # Run on Fugaku (same workflow code!)
 result = await run_job_from_blocks(
     command_block_name="cmd-simulation",
-    execution_profile_block_name="exec-simulation-mpi",
-    hpc_profile_block_name="hpc-fugaku",  # ← Only this changes
+    execution_profile_block_name="exec-simulation-fugaku",
+    hpc_profile_block_name="hpc-fugaku",
     work_dir="./work/simulation",
     script_filename=build_scheduler_script_filename("simulation", "fugaku"),
 )

@@ -3,6 +3,8 @@
 import asyncio
 import os
 import pathlib
+from typing import Any, Literal
+
 import ffsim
 import numpy as np
 from ffsim.qiskit import PRE_INIT
@@ -171,6 +173,33 @@ class Parameters(BaseModel):
         title="SQD",
     )
 
+    quantum_source: Literal["real-device", "random"] = Field(
+        default="real-device",
+        description=(
+            "Select whether SQD sampling uses IBM Quantum Runtime "
+            "or deterministic random bitstrings."
+        ),
+        title="Quantum Source",
+    )
+
+    random_seed: int = Field(
+        default=24,
+        description="Base RNG seed used when Quantum Source is 'random'.",
+        title="Random Seed",
+        ge=0,
+    )
+
+
+def _resolve_shots(
+    *,
+    sampler_options: dict[str, Any],
+    default_shots: int = 100_000,
+) -> int:
+    params = sampler_options.get("params", {})
+    if not isinstance(params, dict):
+        raise TypeError("'params' in sampler options must be a mapping.")
+    return int(params.get("shots", default_shots))
+
 
 @flow
 async def sqd_2405_05068(
@@ -225,6 +254,8 @@ async def sqd_2405_05068(
         elec_props=elec_props,
         runner_name=runner_name,
         option_name=option_name,
+        quantum_source=parameters.quantum_source,
+        random_seed=parameters.random_seed,
     )
 
     # Convert BitArray into bitstring and probability arrays
@@ -446,6 +477,8 @@ async def sample_bitstrings(
     elec_props: ElectronicProperties,
     runner_name: str,
     option_name: str,
+    quantum_source: Literal["real-device", "random"],
+    random_seed: int,
 ) -> BitArray:
     """Sample bitstring with quantum computer.
 
@@ -461,20 +494,28 @@ async def sample_bitstrings(
     logger = get_run_logger()
     rng = np.random.default_rng(24)
 
-    try:
-        # Run on a real hardware when credentials are found.
-        runtime = await QuantumRuntime.load(runner_name)
-        options = await Variable.get(option_name)
-    except ValueError:
-        # Uniform sampling when runtime is not defined.
-        logger.warning(
-            f"QuantumRuntime block '{runner_name}' is not defined. "
-            "Falling back into random uniform sampling."
+    options = await Variable.get(option_name, default={"params": {"shots": 100_000}})
+    shots = _resolve_shots(sampler_options=options)
+
+    if quantum_source == "random":
+        logger.info(
+            "Quantum source is random. Sampling %s deterministic pseudo-random bitstrings.",
+            shots,
         )
         return generate_bit_array_uniform(
-            100_000,
+            shots,
             elec_props.num_orbitals * 2,
+            rand_seed=random_seed,
         )
+
+    try:
+        runtime = await QuantumRuntime.load(runner_name)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Quantum source 'real-device' requested but QuantumRuntime block "
+            f"'{runner_name}' is not defined. Set quantum_source='random' to use "
+            "deterministic random sampling instead."
+        ) from exc
 
     # Create ansatz circuits
     lucj_circ = create_ansatz_circuits(

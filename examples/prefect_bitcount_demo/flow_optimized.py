@@ -10,17 +10,19 @@ from uuid import uuid4
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 from prefect.variables import Variable
-from prefect_qiskit import QuantumRuntime
-from qiskit import QuantumCircuit
-from qiskit.transpiler import generate_preset_pass_manager
 
 from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 
 try:
     from options_resolver import resolve_sampler_options_and_work_dir
+    from quantum_sampling import QuantumSource, sample_bitstrings
 except ModuleNotFoundError:
     from examples.prefect_bitcount_demo.options_resolver import (
         resolve_sampler_options_and_work_dir,
+    )
+    from examples.prefect_bitcount_demo.quantum_sampling import (
+        QuantumSource,
+        sample_bitstrings,
     )
 
 BITLEN = 10
@@ -55,12 +57,13 @@ def _make_job_work_dir(base_work_dir: Path) -> Path:
 @task(name="quantum-sampling-task")
 async def run_quantum_sampling_and_prepare_input(
     *,
+    quantum_source: QuantumSource,
     runtime_block_name: str,
     options_variable_name: str,
     default_shots: int,
     work_dir: str | None,
+    random_seed: int,
 ) -> str:
-    runtime = await QuantumRuntime.load(runtime_block_name)
     options_raw = await Variable.get(
         options_variable_name,
         default={"params": {"shots": default_shots}},
@@ -69,23 +72,14 @@ async def run_quantum_sampling_and_prepare_input(
         options_raw,
         default_shots=default_shots,
     )
-
-    target = await runtime.get_target()
-
-    qc_ghz = QuantumCircuit(BITLEN)
-    qc_ghz.h(0)
-    qc_ghz.cx(0, range(1, BITLEN))
-    qc_ghz.measure_active()
-
-    pm = generate_preset_pass_manager(
-        optimization_level=3,
-        target=target,
-        seed_transpiler=123,
+    bitstrings = await sample_bitstrings(
+        quantum_source=quantum_source,
+        runtime_block_name=runtime_block_name,
+        sampler_options=sampler_options,
+        bitlen=BITLEN,
+        default_shots=default_shots,
+        random_seed=random_seed,
     )
-    isa = pm.run(qc_ghz)
-
-    results = await runtime.sampler([(isa,)], options=sampler_options)
-    bitstrings = results[0].data.meas.get_bitstrings()
 
     selected_work_dir = work_dir or options_work_dir or DEFAULT_BASE_WORK_DIR
     resolved_base_work_dir = Path(selected_work_dir).expanduser().resolve()
@@ -133,6 +127,7 @@ async def run_hpc_bitcount_from_input(
 @flow(name="prefect-bitcount-optimized-flow")
 async def prefect_bitcount_optimized_flow(
     *,
+    quantum_source: QuantumSource = "real-device",
     runtime_block_name: str = "ibm-runner",
     command_block_name: str = "cmd-bitcount-hist",
     execution_profile_block_name: str = "exec-bitcount-mpi",
@@ -141,12 +136,15 @@ async def prefect_bitcount_optimized_flow(
     default_shots: int = 100000,
     work_dir: str | None = None,
     script_filename: str = "bitcount_optimized.job",
+    random_seed: int = 24,
 ):
     job_work_dir = await run_quantum_sampling_and_prepare_input(
+        quantum_source=quantum_source,
         runtime_block_name=runtime_block_name,
         options_variable_name=options_variable_name,
         default_shots=default_shots,
         work_dir=work_dir,
+        random_seed=random_seed,
     )
     hpc_result = await run_hpc_bitcount_from_input(
         command_block_name=command_block_name,
@@ -176,12 +174,24 @@ miyabi_bitcount_optimized_flow = prefect_bitcount_optimized_flow
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run optimized BitCount tutorial flow.")
+    parser.add_argument(
+        "--quantum-source",
+        choices=("real-device", "random"),
+        default="real-device",
+        help="Choose IBM Quantum Runtime sampling or deterministic random bitstrings.",
+    )
     parser.add_argument("--runtime-block", default="ibm-runner")
     parser.add_argument("--command-block", default="cmd-bitcount-hist")
     parser.add_argument("--execution-profile-block", default="exec-bitcount-mpi")
     parser.add_argument("--hpc-profile-block", default="hpc-miyabi-bitcount")
     parser.add_argument("--options-variable", default="miyabi-bitcount-options")
     parser.add_argument("--shots", type=int, default=100000)
+    parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=24,
+        help="Base seed used when --quantum-source random is selected.",
+    )
     parser.add_argument(
         "--work-dir",
         default=None,
@@ -197,6 +207,7 @@ if __name__ == "__main__":
     print(
         asyncio.run(
             prefect_bitcount_optimized_flow(
+                quantum_source=args.quantum_source,
                 runtime_block_name=args.runtime_block,
                 command_block_name=args.command_block,
                 execution_profile_block_name=args.execution_profile_block,
@@ -205,6 +216,7 @@ if __name__ == "__main__":
                 default_shots=args.shots,
                 work_dir=args.work_dir,
                 script_filename=args.script_filename,
+                random_seed=args.random_seed,
             )
         )
     )

@@ -3,6 +3,8 @@
 import asyncio
 import os
 import pathlib
+from typing import Any, Literal
+
 import ffsim
 import numpy as np
 from ffsim.qiskit import PRE_INIT, jordan_wigner
@@ -186,6 +188,33 @@ class Parameters(BaseModel):
         title="SKQD",
     )
 
+    quantum_source: Literal["real-device", "random"] = Field(
+        default="real-device",
+        description=(
+            "Select whether SKQD sampling uses IBM Quantum Runtime "
+            "or deterministic random bitstrings."
+        ),
+        title="Quantum Source",
+    )
+
+    random_seed: int = Field(
+        default=24,
+        description="Base RNG seed used when Quantum Source is 'random'.",
+        title="Random Seed",
+        ge=0,
+    )
+
+
+def _resolve_shots(
+    *,
+    sampler_options: dict[str, Any],
+    default_shots: int = 100_000,
+) -> int:
+    params = sampler_options.get("params", {})
+    if not isinstance(params, dict):
+        raise TypeError("'params' in sampler options must be a mapping.")
+    return int(params.get("shots", default_shots))
+
 
 @flow
 async def skqd_2501_09702(
@@ -240,6 +269,8 @@ async def skqd_2501_09702(
         elec_props=elec_props,
         runner_name=runner_name,
         option_name=option_name,
+        quantum_source=parameters.quantum_source,
+        random_seed=parameters.random_seed,
     )
 
     # Convert BitArray into bitstring and probability arrays
@@ -469,6 +500,8 @@ async def sample_bitstrings(
     elec_props: ElectronicProperties,
     runner_name: str,
     option_name: str,
+    quantum_source: Literal["real-device", "random"],
+    random_seed: int,
 ) -> BitArray:
     """Sample bitstring with quantum computer.
 
@@ -484,65 +517,73 @@ async def sample_bitstrings(
     logger = get_run_logger()
     rng = np.random.default_rng(24)
 
-    try:
-        # Run on a real hardware when credentials are found.
-        runtime = await QuantumRuntime.load(runner_name)
-        options = await Variable.get(option_name)
+    options = await Variable.get(option_name, default={"params": {"shots": 100_000}})
+    shots = _resolve_shots(sampler_options=options)
 
-        # Create Trotter circuits
-        trotter_circuits = create_trotter_circuits(
-            skqd_params=parameters.skqd,
-            elec_props=elec_props,
-        )
-
-        # Transpile
-        target = await runtime.get_target()
-        isa_circuits = transpile_circuits(
-            circuits=trotter_circuits,
-            target=target,
-            circuit_params=parameters.circuit,
-            seed=rng,
-        )
-
-        # Run primitive
-        pub_results = await runtime.sampler(
-            sampler_pubs=[(isa_circuit,) for isa_circuit in isa_circuits],
-            options=options,
-        )
-
-        # Post-process bitstrings
-        bit_arrays = []
-        for result in pub_results:
-            meas_bits = result.data.meas
-            if parameters.circuit.use_reset_mitigation:
-                test_bits = result.data.test
-                bit_array = meas_bits.get_bitstrings(test_bits.bitcount() == 0)
-                bit_array = BitArray.from_samples(
-                    bit_array, num_bits=meas_bits.num_bits
-                )
-                logger.info(
-                    "Reset mitigation result:\n"
-                    f"  Before: {meas_bits.num_shots} bitstrings\n"
-                    f"  After: {bit_array.num_shots} bitstrings\n"
-                    f"  Retention rate: {bit_array.num_shots / meas_bits.num_shots}\n"
-                )
-            else:
-                bit_array = meas_bits
-            bit_arrays.append(bit_array)
-
-        # Combine the counts from the individual Trotter circuits
-        bit_array = BitArray.concatenate_shots(bit_arrays)
-
-    except ValueError:
-        # Uniform sampling when runtime is not defined.
-        logger.warning(
-            f"QuantumRuntime block '{runner_name}' is not defined. "
-            "Falling back into random uniform sampling."
+    if quantum_source == "random":
+        total_shots = shots * parameters.skqd.krylov_dim
+        logger.info(
+            "Quantum source is random. Sampling %s deterministic pseudo-random bitstrings.",
+            total_shots,
         )
         return generate_bit_array_uniform(
-            100_000,
+            total_shots,
             elec_props.num_orbitals * 2,
+            rand_seed=random_seed,
         )
+
+    try:
+        runtime = await QuantumRuntime.load(runner_name)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Quantum source 'real-device' requested but QuantumRuntime block "
+            f"'{runner_name}' is not defined. Set quantum_source='random' to use "
+            "deterministic random sampling instead."
+        ) from exc
+
+    # Create Trotter circuits
+    trotter_circuits = create_trotter_circuits(
+        skqd_params=parameters.skqd,
+        elec_props=elec_props,
+    )
+
+    # Transpile
+    target = await runtime.get_target()
+    isa_circuits = transpile_circuits(
+        circuits=trotter_circuits,
+        target=target,
+        circuit_params=parameters.circuit,
+        seed=rng,
+    )
+
+    # Run primitive
+    pub_results = await runtime.sampler(
+        sampler_pubs=[(isa_circuit,) for isa_circuit in isa_circuits],
+        options=options,
+    )
+
+    # Post-process bitstrings
+    bit_arrays = []
+    for result in pub_results:
+        meas_bits = result.data.meas
+        if parameters.circuit.use_reset_mitigation:
+            test_bits = result.data.test
+            bit_array = meas_bits.get_bitstrings(test_bits.bitcount() == 0)
+            bit_array = BitArray.from_samples(
+                bit_array, num_bits=meas_bits.num_bits
+            )
+            logger.info(
+                "Reset mitigation result:\n"
+                f"  Before: {meas_bits.num_shots} bitstrings\n"
+                f"  After: {bit_array.num_shots} bitstrings\n"
+                f"  Retention rate: {bit_array.num_shots / meas_bits.num_shots}\n"
+            )
+        else:
+            bit_array = meas_bits
+        bit_arrays.append(bit_array)
+
+    # Combine the counts from the individual Trotter circuits
+    bit_array = BitArray.concatenate_shots(bit_arrays)
 
     return bit_array
 
