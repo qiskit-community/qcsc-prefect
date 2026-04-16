@@ -219,7 +219,9 @@ python examples/prefect_bitcount_demo/create_blocks.py \
 | HPCProfileBlock | `hpc-fugaku-bitcount` | Fugaku rscgrp/group/executable/gfscache settings |
 | Prefect Variable | `fugaku-bitcount-options` | Sampler options (shots, etc.) |
 
-> Legacy `BitCounter` facade (`miyabi-tutorial`) is not created for Fugaku mode.
+> Legacy `BitCounter` facade assets are not created by default here.
+> If you need the compatibility facade, create it from a Miyabi config.
+> For cross-target demos, prefer `flow_optimized.py` and switch the execution/HPC profile pair at runtime.
 
 ---
 

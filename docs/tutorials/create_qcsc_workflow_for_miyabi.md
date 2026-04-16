@@ -31,7 +31,7 @@ You will see these terms:
   - `CommandBlock`: `cmd-bitcount-hist`
   - `ExecutionProfileBlock`: `exec-bitcount-mpi`
   - `HPCProfileBlock`: `hpc-miyabi-bitcount`
-  - `BitCounter` block: `miyabi-tutorial` (legacy-style facade)
+  - `BitCounter` block: `miyabi-tutorial` (legacy-style facade, optional)
 - **Variable**: server-side runtime parameters
   - `miyabi-bitcount-options` (optimized flow)
 
@@ -316,11 +316,20 @@ python examples/prefect_bitcount_demo/create_blocks.py \
 | CommandBlock | `cmd-bitcount-hist` | Command definition (`executable_key=bitcount_hist`) |
 | ExecutionProfileBlock | `exec-bitcount-mpi` | Nodes, MPI settings, walltime, modules |
 | HPCProfileBlock | `hpc-miyabi-bitcount` | Miyabi queue/project/executable resolution |
-| BitCounter Block | `miyabi-tutorial` | Backward-compatible facade |
 | Prefect Variable | `miyabi-bitcount-options` | Sampler options + base `work_dir` for `flow_optimized.py` |
-| Prefect Variable | `miyabi-tutorial` | Backward-compatible options name |
 
 At this stage, users do not need to define block classes manually.
+
+Legacy tutorial-style assets are opt-in and are not created by default.
+If you want the backward-compatible `BitCounter` facade, rerun:
+
+<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+```bash
+python examples/prefect_bitcount_demo/create_blocks.py \
+  --config examples/prefect_bitcount_demo/bitcount_blocks.toml \
+  --hpc-target miyabi \
+  --create-legacy-tutorial-assets
+```
 
 ![Blocks](./images/img-prefect-bitcount-block.png)
 
@@ -381,9 +390,54 @@ Why this flow is recommended:
 - HPC submission details are encapsulated in blocks.
 - The binary histogram path (`hist_u64.bin`) is efficient for larger shot counts.
 
+### Step 7A.2. Demo switching Miyabi/Fugaku by changing an execution/HPC profile pair
+
+If you want the backend-switch demo to use the recommended flow, use `flow_optimized.py`, not `flow_tutorial_style.py`.
+
+Preparation:
+
+- Keep `command_block_name` shared across both targets.
+- Use target-specific `execution_profile_block_name` values such as `exec-bitcount-miyabi` and `exec-bitcount-fugaku`.
+- Keep `options_variable_name` shared across both targets, for example `bitcount-options`.
+- If the two configs need different base directories, pass a shared `--work-dir` at runtime so the demo does not depend on variable-specific paths.
+- If the execution recipe truly matches on both systems, you may reuse one `ExecutionProfileBlock`, but that should be treated as a special case rather than the default assumption.
+
+Example runtime commands:
+
+<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+```bash
+python examples/prefect_bitcount_demo/flow_optimized.py \
+  --runtime-block ibm-runner \
+  --command-block cmd-bitcount-hist \
+  --execution-profile-block exec-bitcount-miyabi \
+  --hpc-profile-block hpc-miyabi-bitcount \
+  --options-variable bitcount-options \
+  --work-dir /work/gz00/z12345/bitcount_demo
+
+python examples/prefect_bitcount_demo/flow_optimized.py \
+  --runtime-block ibm-runner \
+  --command-block cmd-bitcount-hist \
+  --execution-profile-block exec-bitcount-fugaku \
+  --hpc-profile-block hpc-fugaku-bitcount \
+  --options-variable bitcount-options \
+  --work-dir /work/gz00/z12345/bitcount_demo
+```
+
+In this pair, the changing runtime parameters are `--execution-profile-block` and `--hpc-profile-block`.
+
 ---
 
 ## Step 7B. Run legacy tutorial-style workflow (`counter.get(bitstrings)`)
+
+If you have not created the legacy tutorial assets yet, generate them first:
+
+<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+```bash
+python examples/prefect_bitcount_demo/create_blocks.py \
+  --config examples/prefect_bitcount_demo/bitcount_blocks.toml \
+  --hpc-target miyabi \
+  --create-legacy-tutorial-assets
+```
 
 You can run `flow_tutorial_style.py` directly:
 
@@ -393,13 +447,13 @@ python examples/prefect_bitcount_demo/flow_tutorial_style.py
 ```
 
 This flow uses `BitCounter.load("miyabi-tutorial")`.
-`miyabi-tutorial` is already created in Step 6.
+`miyabi-tutorial` is created by the opt-in command above.
 
 ### Step 7B.1. Why old tutorial code still works
 
-Compatibility is provided by the `BitCounter` facade block created by `create_blocks.py`.
+Compatibility is provided by the optional `BitCounter` facade block created by `create_blocks.py`.
 
-What `create_blocks.py` prepares:
+What `create_blocks.py` prepares when you pass `--create-legacy-tutorial-assets`:
 
 - `BitCounter` block: `miyabi-tutorial`
 - `CommandBlock`: `cmd-bitcount-hist`

@@ -211,6 +211,10 @@ async def run_job_from_blocks(
     submission_target = _resolve_submission_target_from_loaded_blocks(
         hpc_block, execution_profile_block.resource_class
     )
+    resolved_script_filename = build_scheduler_script_filename(
+        script_filename,
+        submission_target.hpc_target,
+    )
     if submission_target.hpc_target in {"miyabi", "fugaku"} and not submission_target.project:
         raise ValueError("Project/Group is empty. Update HPCProfileBlock project_cpu/project_gpu.")
 
@@ -230,7 +234,7 @@ async def run_job_from_blocks(
         )
         return await run_miyabi_job(
             work_dir=resolved_work_dir,
-            script_filename=script_filename,
+            script_filename=resolved_script_filename,
             exec_profile=exec_profile,
             req=req,
             watch_poll_interval=watch_poll_interval,
@@ -253,7 +257,7 @@ async def run_job_from_blocks(
         )
         return await run_fugaku_job(
             work_dir=resolved_work_dir,
-            script_filename=script_filename,
+            script_filename=resolved_script_filename,
             exec_profile=exec_profile,
             req=req,
             watch_poll_interval=watch_poll_interval,
@@ -270,7 +274,7 @@ async def run_job_from_blocks(
         )
         return await run_slurm_job(
             work_dir=resolved_work_dir,
-            script_filename=script_filename,
+            script_filename=resolved_script_filename,
             exec_profile=exec_profile,
             req=req,
             watch_poll_interval=watch_poll_interval,

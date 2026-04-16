@@ -43,6 +43,22 @@ def _env_int(name: str) -> int | None:
     return int(raw)
 
 
+def _normalize_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if not text:
+            return None
+        if text in {"1", "true", "yes", "on"}:
+            return True
+        if text in {"0", "false", "no", "off"}:
+            return False
+    raise ValueError(f"Expected bool-compatible value, got: {value!r}")
+
+
 def _split_csv(raw: str) -> list[str] | None:
     text = raw.strip()
     if not text:
@@ -71,6 +87,14 @@ def _env_csv(*names: str) -> list[str] | None:
         values = _split_csv(os.getenv(name, ""))
         if values:
             return values
+    return None
+
+
+def _env_bool(*names: str) -> bool | None:
+    for name in names:
+        value = _normalize_bool(os.getenv(name, ""))
+        if value is not None:
+            return value
     return None
 
 
@@ -133,6 +157,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--execution-profile-block-name")
     parser.add_argument("--hpc-profile-block-name")
     parser.add_argument("--options-variable-name")
+    parser.add_argument(
+        "--create-legacy-tutorial-assets",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Create the legacy BitCounter/tutorial variable assets (opt-in; Miyabi only).",
+    )
     parser.add_argument("--tutorial-variable-name")
     parser.add_argument("--bitcounter-block-name")
     return parser.parse_args()
@@ -166,6 +196,17 @@ def _pick_value(*values: Any) -> Any:
     return None
 
 
+def _resolve_legacy_tutorial_asset_creation(
+    *,
+    requested: bool | None,
+    tutorial_variable_name: str | None,
+    bitcounter_block_name: str | None,
+) -> bool:
+    if requested is not None:
+        return requested
+    return tutorial_variable_name is not None or bitcounter_block_name is not None
+
+
 def _env_values() -> dict[str, Any]:
     return {
         "hpc_target": _env_str("BITCOUNT_HPC_TARGET"),
@@ -189,6 +230,7 @@ def _env_values() -> dict[str, Any]:
         "execution_profile_block_name": os.getenv("BITCOUNT_EXEC_PROFILE_BLOCK_NAME", "").strip() or None,
         "hpc_profile_block_name": os.getenv("BITCOUNT_HPC_PROFILE_BLOCK_NAME", "").strip() or None,
         "options_variable_name": os.getenv("BITCOUNT_OPTIONS_VARIABLE", "").strip() or None,
+        "create_legacy_tutorial_assets": _env_bool("BITCOUNT_CREATE_LEGACY_TUTORIAL_ASSETS"),
         "tutorial_variable_name": os.getenv("BITCOUNT_TUTORIAL_VARIABLE", "").strip() or None,
         "bitcounter_block_name": os.getenv("BITCOUNTER_BLOCK_NAME", "").strip() or None,
     }
@@ -206,7 +248,26 @@ def main() -> None:
         raise RuntimeError("'hpc_target' must be either 'miyabi' or 'fugaku'.")
     is_miyabi = hpc_target == "miyabi"
 
-    bit_counter_cls = _import_bitcounter_class() if is_miyabi else None
+    legacy_tutorial_requested = _resolve_legacy_tutorial_asset_creation(
+        requested=_pick_value(
+            args.create_legacy_tutorial_assets,
+            _normalize_bool(config.get("create_legacy_tutorial_assets")),
+            env.get("create_legacy_tutorial_assets"),
+        ),
+        tutorial_variable_name=_pick_value(
+            args.tutorial_variable_name,
+            config.get("tutorial_variable_name"),
+            env.get("tutorial_variable_name"),
+        ),
+        bitcounter_block_name=_pick_value(
+            args.bitcounter_block_name,
+            config.get("bitcounter_block_name"),
+            env.get("bitcounter_block_name"),
+        ),
+    )
+    create_legacy_tutorial_assets = is_miyabi and legacy_tutorial_requested
+
+    bit_counter_cls = _import_bitcounter_class() if create_legacy_tutorial_assets else None
     if bit_counter_cls is not None:
         _register_block_types(bit_counter_cls)
     else:
@@ -328,12 +389,25 @@ def main() -> None:
         )
     ).strip()
 
-    tutorial_variable_name = str(
-        _pick_value(args.tutorial_variable_name, config.get("tutorial_variable_name"), env.get("tutorial_variable_name"), "miyabi-tutorial")
-    ).strip()
-    bitcounter_block_name = str(
-        _pick_value(args.bitcounter_block_name, config.get("bitcounter_block_name"), env.get("bitcounter_block_name"), "miyabi-tutorial")
-    ).strip()
+    tutorial_variable_name: str | None = None
+    bitcounter_block_name: str | None = None
+    if create_legacy_tutorial_assets:
+        tutorial_variable_name = str(
+            _pick_value(
+                args.tutorial_variable_name,
+                config.get("tutorial_variable_name"),
+                env.get("tutorial_variable_name"),
+                "miyabi-tutorial",
+            )
+        ).strip()
+        bitcounter_block_name = str(
+            _pick_value(
+                args.bitcounter_block_name,
+                config.get("bitcounter_block_name"),
+                env.get("bitcounter_block_name"),
+                "miyabi-tutorial",
+            )
+        ).strip()
 
     CommandBlock(
         command_name="bitcount-hist",
@@ -380,7 +454,7 @@ def main() -> None:
 
     _set_variable(options_variable_name, shots, work_dir)
 
-    if is_miyabi:
+    if create_legacy_tutorial_assets:
         bit_counter_cls(
             root_dir=work_dir,
             command_block_name=cmd_block_name,
@@ -403,10 +477,17 @@ def main() -> None:
     print(f"  Work directory: {work_dir}")
     print(f"  Optimized executable: {optimized_exec}")
 
-    if is_miyabi:
+    if create_legacy_tutorial_assets:
         print(f"  BitCounter block: {bitcounter_block_name}")
         if tutorial_variable_name:
             print(f"  Tutorial variable: {tutorial_variable_name}")
+    elif legacy_tutorial_requested and not is_miyabi:
+        print("  Legacy tutorial-style assets were requested, but are only created when hpc_target=miyabi.")
+        print("  Use a Miyabi config to create the BitCounter facade.")
+        print("  For cross-target demos, use flow_optimized.py and switch the execution/HPC profile pair.")
+    elif is_miyabi:
+        print("  Legacy tutorial-style BitCounter block is not created by default.")
+        print("  Pass --create-legacy-tutorial-assets to create the optional BitCounter facade and tutorial variable.")
     else:
         print("  Legacy tutorial-style BitCounter block is not created for fugaku target.")
         print("  Use flow_optimized.py with --command-block/--execution-profile-block/--hpc-profile-block.")
