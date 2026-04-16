@@ -47,6 +47,8 @@ from qcsc_workflow_utility import (
     compute_molecular_integrals_from_fcidump,
 )
 
+DEFAULT_RUNTIME_BLOCK_NAME = "ibm-runner"
+
 
 class MoleculeGeometry(BaseModel):
     """Molecule definition by geometory and basis."""
@@ -219,7 +221,7 @@ def _resolve_shots(
 @flow
 async def skqd_2501_09702(
     parameters: Parameters,
-    runner_name: str = "skqd-runner",
+    runner_name: str = DEFAULT_RUNTIME_BLOCK_NAME,
     solver_name: str = "skqd-solver",
     option_name: str = "sampler_options",
     cache_compute_integrals: bool = False,
@@ -229,7 +231,7 @@ async def skqd_2501_09702(
 
     Args:
         parameters: Workflow parameters.
-        runner_name: Name of QuantumRunner block to load.
+        runner_name: Name of QuantumRuntime block to load.
         solver_name: Name of DiceSHCISolverJob block to load.
         option_name: Name of Variable storing sampler primitive options to load.
         cache_compute_integrals: Set True to cache compute_molecular_integrals task.
