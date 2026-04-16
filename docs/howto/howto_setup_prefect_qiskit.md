@@ -15,7 +15,7 @@ You will create Blocks for IBM Quantum access for the HPC execution environment,
 
 Connect to MDX Workflow Client.
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A z12345@mdx-workflow.example.org
 ```
@@ -24,14 +24,14 @@ ssh -A z12345@mdx-workflow.example.org
 
 Activate your virtual environment:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
 ```
 
 Install the Prefect Qiskit integration:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 uv pip install prefect-qiskit
 ```
@@ -40,14 +40,14 @@ uv pip install prefect-qiskit
 
 Switch to the Prefect profile:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect profile use mdx
 ```
 
 Update your the prefect token (Only On-Prem Prefect) if token is expired:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect-auth login
 /work/gz00/z12345/qcsc-prefect/scripts/prefect_sync_env_to_config.sh -p mdx
@@ -58,7 +58,7 @@ prefect-auth login
 
 Register the block schemas for Qiskit integration:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect block register -m prefect_qiskit
 prefect block register -m prefect_qiskit.vendors
@@ -67,7 +67,7 @@ prefect block register -m prefect_qiskit.vendors
 ### 4.2 Create IBM Quantum credentials block
 Create the IBM Quantum Credentials block:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect block create ibm-quantum-credentials
 ```
@@ -83,11 +83,11 @@ Open the displayed URL in your browser and fill in the fields below (copy/paste)
 
 The following image is the screenshot for the credential block.
 
-![Setup IBM Quantum Credentials](./images/img-ibm-cred-block.png)
+![Setup IBM Quantum Credentials](../images/img-ibm-cred-block.png)
 ### 5.3 Create `QuantumRuntime` block
 Then, enter the following:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect block create quantum-runtime
 ```
@@ -106,7 +106,7 @@ Open the URL and configure:
 | Job Analytics | Enabled |
 
 The following image is the screenshot for the runtime block.
-![Setup Quantum Runtime](./images/img-quantum-runtime-block.png)
+![Setup Quantum Runtime](../images/img-quantum-runtime-block.png)
 
 > [!NOTE]
 > If a real IBM Quantum backend such as `ibm_kawasaki` is not available, you can configure Qiskit Aer as an alternative backend.
@@ -119,7 +119,7 @@ The following image is the screenshot for the runtime block.
 > If you also opted into the legacy tutorial assets, delete `miyabi-tutorial` as well.
 
 Confirm you have access to the blocks you created:
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 prefect block ls
 ```

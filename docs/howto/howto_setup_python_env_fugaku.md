@@ -11,7 +11,7 @@ This guide explains how to set up a Python virtual environment for workflow exec
 
 Execute the interact session for Pre/Post Node in the login node.
 
-<img src="./images/icon-login-fugaku.png" alt="pc" width="70"/><br>
+<img src="../images/icon-login-fugaku.png" alt="pc" width="70"/><br>
 ```bash
 srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 ```
@@ -20,7 +20,7 @@ srun -p mem2 -n 1 --mem 4G --time=60 --pty bash -i
 
 Load Python3.12 and sqlite and Install `uv`.
 
-<img src="./images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
 ```bash
 . /vol0004/apps/oss/spack/share/spack/setup-env.sh
 spack load sqlite@3.46.0
@@ -31,7 +31,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 Use `uv` to create a virtual environment with Python 3.12:
 
-<img src="./images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
 ```bash
 uv venv ~/venv/prefect -p 3.12
 ```
@@ -42,7 +42,7 @@ This will install Python 3.12 and set up a new environment named `prefect`.
 
 Activate the virtual environment and point OpenSSL to the CA bundle installed by `certifi`:
 
-<img src="./images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
+<img src="../images/icon-prepost-fugaku.png" alt="pc" width="70"/><br>
 ```bash
 source ~/venv/prefect/bin/activate
 ```

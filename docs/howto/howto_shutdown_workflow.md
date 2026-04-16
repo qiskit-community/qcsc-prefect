@@ -2,7 +2,7 @@
 
 ## Step 1. Reconnect to the Workflow Server
 
-<img src="./images/icon-pc.png" alt="pc" width="50"/><br>
+<img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
 ssh -A z12345@mdx-workflow.example.org
 ```
@@ -11,14 +11,14 @@ ssh -A z12345@mdx-workflow.example.org
 
 Exit screen session from the terminal:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 screen -X -S sqd-workflow quit
 ```
 
 Confirm the session is removed:
 
-<img src="./images/icon-mdx.png" alt="mdx" width="50"/><br>
+<img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
 screen -ls
 ```
