@@ -320,11 +320,17 @@ In the Prefect console, click **Run** → **Custom run** and set as following. A
 | FCIDump File | `/work/gz00/z12345/qcsc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
 | SQD Subspace Dimension (Optional) | `1000000` (start small for testing) |
 | Differential Evolution Iterations (Optional)| `1` (start small for testing) |
+| Quantum Source (Optional) | `real-device` or `random` |
+| Random Seed (Optional) | `24` |
 | Solver Block Ref | `sbd_solver_job/davidson-solver` |
 
 `Solver Block Ref` means: "which `SBDSolverJob` preset should this run use?"
 - It is a stable entry point for users.
 - HPC details are still resolved through the underlying 3 blocks.
+
+`Quantum Source` controls how SQD obtains bitstrings:
+- `real-device`: use the `QuantumRuntime` block (`ibm-runner`) and submit to IBM Quantum Runtime
+- `random`: skip IBM Quantum and generate deterministic pseudo-random bitstrings with `Random Seed`
 
 > [!NOTE]
 > For this tutorial, the number of iterations is set to 1 for a quick test, but feel free to increase it as needed.

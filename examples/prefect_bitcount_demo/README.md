@@ -11,6 +11,7 @@ This example provides two execution styles:
 - `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/bitcount_blocks.example.toml`
 - `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/flow_optimized.py`
 - `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/flow_tutorial_style.py`
+- `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/quantum_sampling.py`
 - `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/get_counts_integration.py`
 - `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/build_on_miyabi.sh`
 - `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/build_on_fugaku.sh`
@@ -67,6 +68,7 @@ Miyabi example:
 
 ```bash
 python examples/prefect_bitcount_demo/flow_optimized.py \
+  --quantum-source real-device \
   --runtime-block ibm-runner \
   --command-block cmd-bitcount-hist \
   --execution-profile-block exec-bitcount-mpi \
@@ -78,6 +80,7 @@ Fugaku example:
 
 ```bash
 python examples/prefect_bitcount_demo/flow_optimized.py \
+  --quantum-source real-device \
   --runtime-block ibm-runner \
   --command-block cmd-bitcount-hist \
   --execution-profile-block exec-bitcount-fugaku \
@@ -92,6 +95,20 @@ python examples/prefect_bitcount_demo/flow_optimized.py \
 
 The scheduler script suffix is resolved from the selected `HPCProfileBlock`, so the same flow can use `.pbs` on Miyabi and `.pjm` on Fugaku without changing the flow code.
 
+If you want to run the tutorial without IBM Quantum Runtime, switch the quantum source:
+
+```bash
+python examples/prefect_bitcount_demo/flow_optimized.py \
+  --quantum-source random \
+  --random-seed 24 \
+  --command-block cmd-bitcount-hist \
+  --execution-profile-block exec-bitcount-mpi \
+  --hpc-profile-block hpc-miyabi-bitcount \
+  --options-variable miyabi-bitcount-options
+```
+
+In `random` mode, the flow skips `QuantumRuntime.load(...)` and generates deterministic pseudo-random bitstrings using the requested shot count.
+
 ## Run legacy tutorial-style flow
 
 The legacy tutorial assets are opt-in. Create them first on Miyabi:
@@ -104,7 +121,8 @@ python examples/prefect_bitcount_demo/create_blocks.py \
 ```
 
 ```bash
-python examples/prefect_bitcount_demo/flow_tutorial_style.py
+python examples/prefect_bitcount_demo/flow_tutorial_style.py \
+  --quantum-source real-device
 ```
 
 That creates these backward-compatible names:
@@ -119,6 +137,8 @@ when the stored execution profile is already compatible with the target:
 python examples/prefect_bitcount_demo/flow_tutorial_style.py \
   --bitcounter-block miyabi-tutorial \
   --options-variable miyabi-tutorial \
+  --quantum-source random \
+  --random-seed 24 \
   --hpc-profile-block-override hpc-fugaku-bitcount
 ```
 
@@ -162,6 +182,7 @@ After that, the optimized flow demo switches by changing the execution/HPC profi
 
 ```bash
 python examples/prefect_bitcount_demo/flow_optimized.py \
+  --quantum-source real-device \
   --runtime-block ibm-runner \
   --command-block cmd-bitcount-hist \
   --execution-profile-block exec-bitcount-miyabi \
@@ -170,6 +191,7 @@ python examples/prefect_bitcount_demo/flow_optimized.py \
   --work-dir /path/to/shared/bitcount_demo
 
 python examples/prefect_bitcount_demo/flow_optimized.py \
+  --quantum-source real-device \
   --runtime-block ibm-runner \
   --command-block cmd-bitcount-hist \
   --execution-profile-block exec-bitcount-fugaku \
