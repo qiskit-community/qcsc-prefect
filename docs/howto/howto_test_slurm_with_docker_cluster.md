@@ -71,6 +71,19 @@ make up
 make status
 ```
 
+> [!NOTE]
+> If `sinfo` later shows only `c1` even though you expect multiple CPU workers,
+> explicitly scale the worker service from the host machine:
+>
+> ```bash
+> cd slurm-docker-cluster
+> make scale-cpu-workers N=2
+> make status
+> ```
+>
+> This can happen if `.env` was updated after an earlier startup and the running
+> Compose application still has only one CPU worker.
+
 Open a shell in the controller:
 
 ```bash
@@ -82,6 +95,9 @@ Inside the controller, confirm that Slurm sees the worker nodes:
 ```bash
 sinfo
 ```
+
+Remember the partition name shown in the first column, such as `cpu` or
+`normal`. You will use that exact partition name in the smoke test below.
 
 Example output:
 
@@ -123,6 +139,7 @@ Enable it, create a virtual environment, and install the local packages:
 
 ```bash
 python3 -m ensurepip --upgrade
+mkdir -p .venv
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -U pip
@@ -183,8 +200,10 @@ profile = ExecutionProfile(
     launcher="srun",
     walltime="00:05:00",
 )
+# Use the partition name reported by `sinfo` on your cluster.
+# In many setups this is `cpu`; in others it may be `normal`.
 req = SlurmJobRequest(
-    partition="normal",
+    partition="cpu",
     account=None,
     executable=str(exe),
 )
@@ -253,7 +272,18 @@ make scale-cpu-workers N=4
 make status
 ```
 
+If you expected 2 CPU workers but `sinfo` still shows only `c1`, run
+`make scale-cpu-workers N=2` first to reconcile the active worker count with
+your intended setup.
+
 Then rerun the smoke test with a larger `num_nodes` value if needed.
+
+---
+
+## Next step
+
+If you want to run the BitCount demo on top of this local Slurm cluster, follow
+[`docs/tutorials/create_qcsc_workflow_for_local_slurm.md`](../tutorials/create_qcsc_workflow_for_local_slurm.md).
 
 ---
 

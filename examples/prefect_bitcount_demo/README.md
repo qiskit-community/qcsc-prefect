@@ -2,7 +2,7 @@
 
 This example provides two execution styles:
 
-- `flow_optimized.py`: block-driven execution (works on Miyabi and Fugaku)
+- `flow_optimized.py`: block-driven execution (works on Miyabi, Fugaku, and Slurm)
 - `flow_tutorial_style.py`: legacy `counter.get(bitstrings)` style with optional HPC profile override
 
 ## Files
@@ -15,6 +15,9 @@ This example provides two execution styles:
 - `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/get_counts_integration.py`
 - `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/build_on_miyabi.sh`
 - `/Users/hitomi/Project/qcsc-prefect/examples/prefect_bitcount_demo/build_on_fugaku.sh`
+
+For a local Slurm walkthrough using `slurm-docker-cluster`, see
+[`docs/tutorials/create_qcsc_workflow_for_local_slurm.md`](../../docs/tutorials/create_qcsc_workflow_for_local_slurm.md).
 
 ## Build executable
 
@@ -61,6 +64,13 @@ python examples/prefect_bitcount_demo/create_blocks.py \
   --config examples/prefect_bitcount_demo/bitcount_blocks.toml \
   --hpc-target fugaku
 ```
+
+Local Slurm:
+
+The Slurm execution path is supported by `flow_optimized.py`, but the current
+`create_blocks.py` helper does not yet generate Slurm assets automatically.
+For now, create the Slurm blocks manually as described in
+[`docs/tutorials/create_qcsc_workflow_for_local_slurm.md`](../../docs/tutorials/create_qcsc_workflow_for_local_slurm.md).
 
 ## Run optimized flow
 
