@@ -280,6 +280,13 @@ Then rerun the smoke test with a larger `num_nodes` value if needed.
 
 ---
 
+## Next step
+
+If you want to run the BitCount demo on top of this local Slurm cluster, follow
+[`docs/tutorials/create_qcsc_workflow_for_local_slurm.md`](../tutorials/create_qcsc_workflow_for_local_slurm.md).
+
+---
+
 ## Optional: rerun local unit tests inside the controller
 
 If you want to run the current local Slurm unit tests inside the controller:
