@@ -9,42 +9,48 @@ from pydantic import BaseModel, Field
 
 class CircuitParameters(BaseModel):
     """Configuration for LUCJ circuit construction."""
-    
+
     n_lucj_layers: int = Field(
         default=2,
         description="Number of LUCJ circuit block repetitions.",
         title="LUCJ Circuit Layers",
         ge=1,
     )
-    
+
     use_reset_mitigation: bool = Field(
         default=True,
         description="Set True to use reset error mitigation scheme.",
         title="Reset Mitigation",
     )
-    
+
     optimization_level: int = Field(
         default=3,
         description="Optimization level of Qiskit transpiler",
         title="Optimization Level",
         ge=0,
-        le=3,        
+        le=3,
     )
 
     sabre_max_iterations: int = Field(
         default=8,
-        description="The number of forward-backward routing iterations to refine the layout and reduce routing costs.",
+        description=(
+            "The number of forward-backward routing iterations to refine the layout "
+            "and reduce routing costs."
+        ),
         title="Sabre Max Iteration",
         ge=1,
     )
 
     sabre_swap_trials: int = Field(
         default=10,
-        description="The number of routing trials for each layout, refining gate placement for better routing.",
+        description=(
+            "The number of routing trials for each layout, refining gate placement "
+            "for better routing."
+        ),
         title="Sabre SWAP Trials",
         ge=1,
     )
-    
+
     sabre_layout_trials: int = Field(
         default=1_024,
         description="The number of random seed trials to run layout with.",
@@ -62,14 +68,14 @@ class DEParameters(BaseModel):
         title="Walkers",
         ge=4,
     )
-    
+
     iterations: int = Field(
         default=1,
         description="Number of DE optimization iterations.",
         title="Differential Evolution Iterations",
         ge=1,
     )
-    
+
     randomization_factor: float = Field(
         default=0.2,
         description="Degree of ansatz parameter perturbation from CCSD amplitude.",
@@ -102,12 +108,12 @@ class DEParameters(BaseModel):
 
 class FlowParameters(BaseModel):
     """Workflow Parameters."""
-    
+
     fcidump: str = Field(
         description="A path to pySCF FCIDump file of the target molecule.",
         title="FCIDump File",
     )
-    
+
     sqd_dim: int = Field(
         default=100_000_0,
         description="Dimension of subsampled bitstrings for diagonalization.",
@@ -130,12 +136,12 @@ class FlowParameters(BaseModel):
         title="Random Seed",
         ge=0,
     )
-    
+
     circ_params: CircuitParameters = Field(
         default_factory=CircuitParameters,
         title="Circuit Parameters",
     )
-    
+
     de_params: DEParameters = Field(
         default_factory=DEParameters,
         title="Differential Evoluation Parameters",

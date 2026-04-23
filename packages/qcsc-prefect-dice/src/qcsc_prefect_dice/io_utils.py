@@ -52,7 +52,13 @@ def _render_input_dat(
         .joinpath("templates", "input.dat.j2")
         .read_text(encoding="utf-8")
     )
-    env = jinja2.Environment()
+    env = jinja2.Environment(
+        autoescape=jinja2.select_autoescape(
+            enabled_extensions=("html", "htm", "xml"),
+            default_for_string=False,
+            default=False,
+        )
+    )
     template = env.from_string(template_text)
     return template.render(
         spin_sq=spin_sq,

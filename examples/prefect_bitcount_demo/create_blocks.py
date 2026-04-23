@@ -5,9 +5,10 @@ import json
 import os
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any
+
+import tomllib
 
 
 def _import_bitcounter_class():
@@ -103,7 +104,11 @@ def _resolve_example_path() -> Path:
 
 
 def _register_block_types(*custom_block_classes) -> None:
-    from qcsc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+    from qcsc_prefect_blocks.common.blocks import (
+        CommandBlock,
+        ExecutionProfileBlock,
+        HPCProfileBlock,
+    )
 
     block_types = [
         CommandBlock,
@@ -131,7 +136,9 @@ def _set_variable(variable_name: str, shots: int, work_dir: str) -> None:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Create Prefect blocks for BitCount tutorial (Miyabi or Fugaku).")
+    parser = argparse.ArgumentParser(
+        description=("Create Prefect blocks for BitCount tutorial (Miyabi or Fugaku).")
+    )
     parser.add_argument("--config", type=Path, help="Path to TOML/JSON config file.")
 
     parser.add_argument("--hpc-target", choices=["miyabi", "fugaku"])
@@ -213,12 +220,18 @@ def _env_values() -> dict[str, Any]:
         "project": _env_str("BITCOUNT_PROJECT", "MIYABI_PBS_PROJECT", "FUGAKU_PROJECT"),
         "group": _env_str("BITCOUNT_GROUP", "FUGAKU_GROUP", "FUGAKU_PROJECT"),
         "queue": _env_str("BITCOUNT_QUEUE", "MIYABI_PBS_QUEUE", "FUGAKU_RSCGRP"),
-        "work_dir": _env_str("BITCOUNT_WORK_DIR", "MIYABI_BITCOUNT_WORK_DIR", "FUGAKU_BITCOUNT_WORK_DIR"),
+        "work_dir": _env_str(
+            "BITCOUNT_WORK_DIR",
+            "MIYABI_BITCOUNT_WORK_DIR",
+            "FUGAKU_BITCOUNT_WORK_DIR",
+        ),
         "launcher": _env_str("BITCOUNT_LAUNCHER", "MIYABI_LAUNCHER", "FUGAKU_LAUNCHER"),
         "walltime": _env_str("BITCOUNT_WALLTIME", "MIYABI_WALLTIME", "FUGAKU_WALLTIME"),
         "num_nodes": _env_first_int("BITCOUNT_NUM_NODES", "MIYABI_NUM_NODES", "FUGAKU_NUM_NODES"),
         "mpiprocs": _env_first_int("BITCOUNT_MPIPROCS", "MIYABI_MPIPROCS", "FUGAKU_MPIPROCS"),
-        "ompthreads": _env_first_int("BITCOUNT_OMPTHREADS", "MIYABI_OMPTHREADS", "FUGAKU_OMPTHREADS"),
+        "ompthreads": _env_first_int(
+            "BITCOUNT_OMPTHREADS", "MIYABI_OMPTHREADS", "FUGAKU_OMPTHREADS"
+        ),
         "shots": _env_first_int("BITCOUNT_SHOTS"),
         "modules": _env_csv("BITCOUNT_MODULES", "MIYABI_MODULES"),
         "mpi_options": _env_csv("BITCOUNT_MPI_OPTIONS", "MIYABI_MPI_OPTIONS", "FUGAKU_MPI_OPTIONS"),
@@ -227,7 +240,9 @@ def _env_values() -> dict[str, Any]:
         "fugaku_mpi_options_for_pjm": _env_csv("FUGAKU_MPI_OPTIONS_FOR_PJM"),
         "optimized_executable": os.getenv("BITCOUNT_OPT_EXECUTABLE", "").strip() or None,
         "command_block_name": os.getenv("BITCOUNT_CMD_BLOCK_NAME", "").strip() or None,
-        "execution_profile_block_name": os.getenv("BITCOUNT_EXEC_PROFILE_BLOCK_NAME", "").strip() or None,
+        "execution_profile_block_name": (
+            os.getenv("BITCOUNT_EXEC_PROFILE_BLOCK_NAME", "").strip() or None
+        ),
         "hpc_profile_block_name": os.getenv("BITCOUNT_HPC_PROFILE_BLOCK_NAME", "").strip() or None,
         "options_variable_name": os.getenv("BITCOUNT_OPTIONS_VARIABLE", "").strip() or None,
         "create_legacy_tutorial_assets": _env_bool("BITCOUNT_CREATE_LEGACY_TUTORIAL_ASSETS"),
@@ -238,12 +253,27 @@ def _env_values() -> dict[str, Any]:
 
 def main() -> None:
     args = _parse_args()
-    from qcsc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+    from qcsc_prefect_blocks.common.blocks import (
+        CommandBlock,
+        ExecutionProfileBlock,
+        HPCProfileBlock,
+    )
 
     config = _load_config_file(args.config)
     env = _env_values()
 
-    hpc_target = str(_pick_value(args.hpc_target, config.get("hpc_target"), env.get("hpc_target"), "miyabi")).strip().lower()
+    hpc_target = (
+        str(
+            _pick_value(
+                args.hpc_target,
+                config.get("hpc_target"),
+                env.get("hpc_target"),
+                "miyabi",
+            )
+        )
+        .strip()
+        .lower()
+    )
     if hpc_target not in {"miyabi", "fugaku"}:
         raise RuntimeError("'hpc_target' must be either 'miyabi' or 'fugaku'.")
     is_miyabi = hpc_target == "miyabi"
@@ -308,16 +338,33 @@ def main() -> None:
     queue = _pick_value(args.queue, config.get("queue"), env.get("queue"))
     if not queue:
         raise RuntimeError(
-            "Set 'queue' in --config/--queue or environment (BITCOUNT_QUEUE, MIYABI_PBS_QUEUE, FUGAKU_RSCGRP)."
+            "Set 'queue' in --config/--queue or environment "
+            "(BITCOUNT_QUEUE, MIYABI_PBS_QUEUE, FUGAKU_RSCGRP)."
         )
 
     launcher_default = "mpiexec.hydra" if is_miyabi else "mpiexec"
-    launcher = str(_pick_value(args.launcher, config.get("launcher"), env.get("launcher"), launcher_default)).strip()
-    walltime = str(_pick_value(args.walltime, config.get("walltime"), env.get("walltime"), "00:15:00")).strip()
+    launcher = str(
+        _pick_value(
+            args.launcher,
+            config.get("launcher"),
+            env.get("launcher"),
+            launcher_default,
+        )
+    ).strip()
+    walltime = str(
+        _pick_value(
+            args.walltime,
+            config.get("walltime"),
+            env.get("walltime"),
+            "00:15:00",
+        )
+    ).strip()
 
     num_nodes = int(_pick_value(args.num_nodes, config.get("num_nodes"), env.get("num_nodes"), 2))
     mpiprocs = int(_pick_value(args.mpiprocs, config.get("mpiprocs"), env.get("mpiprocs"), 5))
-    ompthreads = int(_pick_value(args.ompthreads, config.get("ompthreads"), env.get("ompthreads"), 1))
+    ompthreads = int(
+        _pick_value(args.ompthreads, config.get("ompthreads"), env.get("ompthreads"), 1)
+    )
     shots = int(_pick_value(args.shots, config.get("shots"), env.get("shots"), 100000))
 
     modules_default = ["intel/2023.2.0", "impi/2021.10.0"] if is_miyabi else []
@@ -329,7 +376,12 @@ def main() -> None:
     )
 
     fugaku_gfscache = str(
-        _pick_value(args.fugaku_gfscache, config.get("fugaku_gfscache"), env.get("fugaku_gfscache"), "/vol0002")
+        _pick_value(
+            args.fugaku_gfscache,
+            config.get("fugaku_gfscache"),
+            env.get("fugaku_gfscache"),
+            "/vol0002",
+        )
     ).strip()
     fugaku_spack_modules = _normalize_str_list(
         _pick_value(
@@ -349,12 +401,20 @@ def main() -> None:
     )
 
     optimized_exec = str(
-        _pick_value(args.optimized_executable, config.get("optimized_executable"), env.get("optimized_executable"), default_optimized_exec)
+        _pick_value(
+            args.optimized_executable,
+            config.get("optimized_executable"),
+            env.get("optimized_executable"),
+            default_optimized_exec,
+        )
     ).strip()
 
     work_dir_raw = _pick_value(args.work_dir, config.get("work_dir"), env.get("work_dir"))
     if not work_dir_raw:
-        raise RuntimeError("Set 'work_dir' in --config, --work-dir, or BITCOUNT_WORK_DIR/MIYABI_BITCOUNT_WORK_DIR/FUGAKU_BITCOUNT_WORK_DIR.")
+        raise RuntimeError(
+            "Set 'work_dir' in --config, --work-dir, or "
+            "BITCOUNT_WORK_DIR/MIYABI_BITCOUNT_WORK_DIR/FUGAKU_BITCOUNT_WORK_DIR."
+        )
     work_dir = os.path.expandvars(str(work_dir_raw).strip())
 
     default_exec_block_name = "exec-bitcount-mpi" if is_miyabi else "exec-bitcount-fugaku"
@@ -362,7 +422,12 @@ def main() -> None:
     default_options_variable = "miyabi-bitcount-options" if is_miyabi else "fugaku-bitcount-options"
 
     cmd_block_name = str(
-        _pick_value(args.command_block_name, config.get("command_block_name"), env.get("command_block_name"), "cmd-bitcount-hist")
+        _pick_value(
+            args.command_block_name,
+            config.get("command_block_name"),
+            env.get("command_block_name"),
+            "cmd-bitcount-hist",
+        )
     ).strip()
     exec_block_name = str(
         _pick_value(
@@ -482,15 +547,27 @@ def main() -> None:
         if tutorial_variable_name:
             print(f"  Tutorial variable: {tutorial_variable_name}")
     elif legacy_tutorial_requested and not is_miyabi:
-        print("  Legacy tutorial-style assets were requested, but are only created when hpc_target=miyabi.")
+        print(
+            "  Legacy tutorial-style assets were requested, but are only created "
+            "when hpc_target=miyabi."
+        )
         print("  Use a Miyabi config to create the BitCounter facade.")
-        print("  For cross-target demos, use flow_optimized.py and switch the execution/HPC profile pair.")
+        print(
+            "  For cross-target demos, use flow_optimized.py and switch the "
+            "execution/HPC profile pair."
+        )
     elif is_miyabi:
         print("  Legacy tutorial-style BitCounter block is not created by default.")
-        print("  Pass --create-legacy-tutorial-assets to create the optional BitCounter facade and tutorial variable.")
+        print(
+            "  Pass --create-legacy-tutorial-assets to create the optional "
+            "BitCounter facade and tutorial variable."
+        )
     else:
         print("  Legacy tutorial-style BitCounter block is not created for fugaku target.")
-        print("  Use flow_optimized.py with --command-block/--execution-profile-block/--hpc-profile-block.")
+        print(
+            "  Use flow_optimized.py with "
+            "--command-block/--execution-profile-block/--hpc-profile-block."
+        )
 
 
 if __name__ == "__main__":

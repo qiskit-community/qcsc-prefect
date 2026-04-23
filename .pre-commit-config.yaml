@@ -13,12 +13,37 @@ repos:
     hooks:
       - id: ruff-check
         name: ruff check
-        entry: uv run ruff check --fix --exit-non-zero-on-fix
+        entry: uv run --with ruff ruff check --fix --exit-non-zero-on-fix
         language: system
         types_or: [python, pyi]
 
       - id: ruff-format
         name: ruff format
-        entry: uv run ruff format
+        entry: uv run --with ruff ruff format
         language: system
         types_or: [python, pyi]
+
+      - id: bandit
+        name: bandit
+        entry: uv run --with bandit[toml] bandit
+        args:
+          - -c
+          - pyproject.toml
+          - --severity-level
+          - medium
+          - --confidence-level
+          - medium
+        language: system
+        files: ^(packages|algorithms)/.*\.py$
+        exclude: (^|/)(tests?/|test_.*\.py$)
+
+      - id: detect-secrets
+        name: detect-secrets
+        entry: uv run --with detect-secrets detect-secrets-hook
+        args:
+          - --baseline
+          - .secrets.baseline
+          - --exclude-files
+          - (^\.secrets\.baseline$|\.ipynb$)
+          - -n
+        language: system

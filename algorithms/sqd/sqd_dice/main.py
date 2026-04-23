@@ -10,14 +10,20 @@ import numpy as np
 from ffsim.qiskit import PRE_INIT
 from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_table_artifact
-from prefect.cache_policies import NO_CACHE, INPUTS
+from prefect.cache_policies import INPUTS, NO_CACHE
 from prefect.variables import Variable
 from prefect_qiskit.runtime import QuantumRuntime
 from pydantic import BaseModel, Field
-from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
+from qcsc_prefect_dice import DiceSHCISolverJob
+from qcsc_workflow_utility import (
+    ElectronicProperties,
+    compute_molecular_integrals_from_fcidump,
+    compute_molecular_integrals_from_geometry,
+)
+from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister
 from qiskit.passmanager import ConditionalController
 from qiskit.primitives.containers import BitArray
-from qiskit.transpiler import generate_preset_pass_manager, Target
+from qiskit.transpiler import Target, generate_preset_pass_manager
 from qiskit.transpiler.passes import (
     ApplyLayout,
     BarrierBeforeFinalMeasurements,
@@ -33,16 +39,7 @@ from qiskit_addon_sqd.counts import bit_array_to_arrays, generate_bit_array_unif
 from qiskit_addon_sqd.fermion import SCIResult
 from qiskit_ibm_runtime.transpiler.passes import FoldRzzAngle
 
-from qcsc_prefect_dice import DiceSHCISolverJob
-
 from sqd_dice.subsample import postselect, subsample
-
-
-from qcsc_workflow_utility import (
-    ElectronicProperties,
-    compute_molecular_integrals_from_geometry,
-    compute_molecular_integrals_from_fcidump,
-)
 
 DEFAULT_RUNTIME_BLOCK_NAME = "ibm-runner"
 
@@ -110,19 +107,28 @@ class CircuitParameters(BaseModel):
     )
     sabre_max_iterations: int = Field(
         default=8,
-        description="Transpile: The number of forward-backward routing iterations to refine the layout and reduce routing costs.",
+        description=(
+            "Transpile: The number of forward-backward routing iterations to refine "
+            "the layout and reduce routing costs."
+        ),
         title="SABRE Max Iteration",
         ge=1,
     )
     sabre_swap_trials: int = Field(
         default=10,
-        description="Transpile: The number of routing trials for each layout, refining gate placement for better routing.",
+        description=(
+            "Transpile: The number of routing trials for each layout, refining gate "
+            "placement for better routing."
+        ),
         title="SABRE SWAP Trials",
         ge=1,
     )
     sabre_layout_trials: int = Field(
         default=10000,
-        description="Transpile: The number of random initial layouts tested, selecting the one that minimizes SWAP gates.",
+        description=(
+            "Transpile: The number of random initial layouts tested, selecting the "
+            "one that minimizes SWAP gates."
+        ),
         title="SABRE Layout Trials",
         ge=1,
     )
@@ -143,7 +149,10 @@ class SQDParameters(BaseModel):
         ge=1,
     )
     num_batches: int = Field(
-        description="Number of batches of configurations used by the different calls to the eigenstate solver.",
+        description=(
+            "Number of batches of configurations used by the different calls to the "
+            "eigenstate solver."
+        ),
         title="Batch Number",
         ge=1,
     )
@@ -464,8 +473,7 @@ def transpile_circuit(
         lambda inst: inst.operation.name not in ("rz", "barrier", "measure")
     )
     logger.info(
-        f"Circuit depth = {gate_depth}\n"
-        f"Instruction counts = {dict(isa_circuit.count_ops())}\n"
+        f"Circuit depth = {gate_depth}\nInstruction counts = {dict(isa_circuit.count_ops())}\n"
     )
     return isa_circuit
 

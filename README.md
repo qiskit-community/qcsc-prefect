@@ -54,6 +54,8 @@ Code quality checks are configured with pre-commit (`.pre-commit-config.yaml`):
 
 - `ruff check --fix`
 - `ruff format`
+- `bandit` (Python security checks for medium/high-confidence findings)
+- `detect-secrets` (secret scanning backed by `.secrets.baseline`)
 - basic repository hygiene hooks (`check-yaml`, trailing whitespace, EOF fix, merge conflict checks)
 
 ## Versioning Policy
@@ -67,6 +69,7 @@ The root project is a workspace coordinator (`qcsc-prefect-workspace`) and is no
    - `pre-commit install`
 2. Run checks before commit:
    - `pre-commit run --all-files`
+   - or let them run automatically on `git commit`
 3. Run tests as needed:
    - `uv run pytest`
 

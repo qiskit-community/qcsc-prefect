@@ -95,7 +95,7 @@ python algorithms/sbd/create_blocks.py --config algorithms/sbd/sbd_blocks.toml -
 `sbd_executable` should point to your built binary, for example:
 
 ```toml
-sbd_executable = "/work/gz00/z12345/qcsc-prefect/algorithms/sbd/native/diag"
+sbd_executable = "/work/project/qcsc-prefect/algorithms/sbd/native/diag"
 ```
 
 For memory stability on Miyabi, start from:
