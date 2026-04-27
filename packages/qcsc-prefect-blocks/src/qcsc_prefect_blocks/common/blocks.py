@@ -49,25 +49,27 @@ class HPCProfileBlock(Block):
     _block_type_slug = "hpc_profile"
 
     hpc_target: Literal["miyabi", "fugaku", "slurm"] = Field(default="miyabi", title="HPC Target")
-    
+
     # Queue/partition/resource-group names (terminology differs by system)
     queue_cpu: str = Field(default="regular-c", title="CPU Queue/Partition/Resource Group")
     queue_gpu: str = Field(default="regular-g", title="GPU Queue/Partition/Resource Group")
-    
+
     # Project/group/account
     project_cpu: str = Field(default="", title="CPU Project/Group/Account")
     project_gpu: str = Field(default="", title="GPU Project/Group/Account")
-    
+
     # Executable mapping
     executable_map: dict[str, str] = Field(default_factory=dict, title="Executable Map")
 
     # Slurm-specific options (ignored for other systems)
     slurm_qpu: str | None = Field(default=None, title="Slurm: QPU")
-    
+
     # Fugaku-specific options (ignored for other systems)
     gfscache: str | None = Field(default=None, title="Fugaku: GFS Cache Path (PJM_LLIO_GFSCACHE)")
     spack_modules: list[str] = Field(default_factory=list, title="Fugaku: Spack Modules")
-    mpi_options_for_pjm: list[str] = Field(default_factory=list, title="Fugaku: MPI Options for PJM")
+    mpi_options_for_pjm: list[str] = Field(
+        default_factory=list, title="Fugaku: MPI Options for PJM"
+    )
     pjm_resources: list[str] = Field(
         default_factory=list,
         title="Fugaku: Additional PJM -L Directives",

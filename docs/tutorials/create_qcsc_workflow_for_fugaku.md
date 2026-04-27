@@ -36,13 +36,13 @@ You will see these terms:
 ## What you need
 
 - **Accounts / IDs**: (a) Fugaku account, (b) Prefect Web Portal account (API Key), (c) IBM Cloud API key + Service CRN (Quantum)
-- **Local tools**: SSH client and a modern browser.  
+- **Local tools**: SSH client and a modern browser.
 
 ---
 
 ## Prerequisites (One-time setup)
 
-The whole process image is : 
+The whole process image is :
 
 ![Prerequisites Flow](../images/img-prerequisites-fugaku.png)
 

@@ -5,9 +5,10 @@ import json
 import os
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any
+
+import tomllib
 
 
 def _import_sbd_solver_block():
@@ -23,7 +24,11 @@ def _import_sbd_solver_block():
 
 
 def _register_block_types(*custom_block_classes) -> None:
-    from qcsc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+    from qcsc_prefect_blocks.common.blocks import (
+        CommandBlock,
+        ExecutionProfileBlock,
+        HPCProfileBlock,
+    )
 
     block_types = [
         CommandBlock,
@@ -45,7 +50,9 @@ def _set_variable(variable_name: str, value: Any) -> None:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Create Prefect blocks for SBD workflow (Miyabi or Fugaku).")
+    parser = argparse.ArgumentParser(
+        description="Create Prefect blocks for SBD workflow (Miyabi or Fugaku)."
+    )
     parser.add_argument("--config", type=Path, help="Path to TOML/JSON config file.")
 
     parser.add_argument("--hpc-target", choices=["miyabi", "fugaku"])
@@ -88,7 +95,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--shots", type=int)
     parser.add_argument(
         "--sqd-options-json",
-        help="Raw JSON for Prefect variable value (e.g. '{\"params\": {\"shots\": 50000}}').",
+        help='Raw JSON for Prefect variable value (e.g. \'{"params": {"shots": 50000}}\').',
     )
     return parser.parse_args()
 
@@ -126,9 +133,7 @@ def _normalize_str_dict(value: Any) -> dict[str, str] | None:
         return None
     if isinstance(value, dict):
         normalized = {
-            str(key).strip(): str(val).strip()
-            for key, val in value.items()
-            if str(key).strip()
+            str(key).strip(): str(val).strip() for key, val in value.items() if str(key).strip()
         }
         return normalized or None
     raise ValueError(f"Expected dict[str, str], got: {type(value)}")
@@ -151,7 +156,9 @@ def _default_block_names(*, hpc_target: str, solver_mode: str) -> dict[str, str]
     }
 
 
-def _normalize_modules_for_target(*, is_miyabi: bool, solver_mode: str, modules: list[str] | None) -> list[str]:
+def _normalize_modules_for_target(
+    *, is_miyabi: bool, solver_mode: str, modules: list[str] | None
+) -> list[str]:
     if is_miyabi and solver_mode == "gpu":
         return []
     return list(modules or [])
@@ -240,12 +247,20 @@ def main() -> None:
     config = _load_config_file(args.config)
     env = _env_values()
 
-    from qcsc_prefect_blocks.common.blocks import CommandBlock, ExecutionProfileBlock, HPCProfileBlock
+    from qcsc_prefect_blocks.common.blocks import (
+        CommandBlock,
+        ExecutionProfileBlock,
+        HPCProfileBlock,
+    )
 
     sbd_solver_cls = _import_sbd_solver_block()
     _register_block_types(sbd_solver_cls)
 
-    hpc_target = str(_pick_value(args.hpc_target, config.get("hpc_target"), env.get("hpc_target"), "miyabi")).strip().lower()
+    hpc_target = (
+        str(_pick_value(args.hpc_target, config.get("hpc_target"), env.get("hpc_target"), "miyabi"))
+        .strip()
+        .lower()
+    )
     if hpc_target not in {"miyabi", "fugaku"}:
         raise RuntimeError("'hpc_target' must be either 'miyabi' or 'fugaku'.")
     is_miyabi = hpc_target == "miyabi"
@@ -280,19 +295,27 @@ def main() -> None:
 
     queue = _pick_value(args.queue, config.get("queue"), env.get("queue"))
     if not queue:
-        raise RuntimeError("Set 'queue' in --config/--queue or SBD_QUEUE/MIYABI_PBS_QUEUE/FUGAKU_RSCGRP.")
+        raise RuntimeError(
+            "Set 'queue' in --config/--queue or SBD_QUEUE/MIYABI_PBS_QUEUE/FUGAKU_RSCGRP."
+        )
 
     work_dir = _pick_value(args.work_dir, config.get("work_dir"), env.get("work_dir"))
     if not work_dir:
         raise RuntimeError("Set 'work_dir' in --config, --work-dir, or SBD_WORK_DIR.")
 
-    sbd_executable = _pick_value(args.sbd_executable, config.get("sbd_executable"), env.get("sbd_executable"))
+    sbd_executable = _pick_value(
+        args.sbd_executable, config.get("sbd_executable"), env.get("sbd_executable")
+    )
     if not sbd_executable:
         raise RuntimeError("Set 'sbd_executable' in --config, --sbd-executable, or SBD_EXECUTABLE.")
 
     launcher_default = "mpiexec.hydra" if is_miyabi else "mpiexec"
-    launcher = str(_pick_value(args.launcher, config.get("launcher"), env.get("launcher"), launcher_default)).strip()
-    walltime = str(_pick_value(args.walltime, config.get("walltime"), env.get("walltime"), "02:00:00")).strip()
+    launcher = str(
+        _pick_value(args.launcher, config.get("launcher"), env.get("launcher"), launcher_default)
+    ).strip()
+    walltime = str(
+        _pick_value(args.walltime, config.get("walltime"), env.get("walltime"), "02:00:00")
+    ).strip()
 
     num_nodes = int(_pick_value(args.num_nodes, config.get("num_nodes"), env.get("num_nodes"), 1))
     mpiprocs = int(_pick_value(args.mpiprocs, config.get("mpiprocs"), env.get("mpiprocs"), 4))
@@ -306,16 +329,29 @@ def main() -> None:
     mpi_options = _normalize_str_list(
         _pick_value(args.mpi_options, config.get("mpi_options"), env.get("mpi_options"), [])
     )
-    pre_commands = _normalize_str_list(
-        _pick_value(args.pre_commands, config.get("pre_commands"), env.get("pre_commands"), [])
-    ) or []
+    pre_commands = (
+        _normalize_str_list(
+            _pick_value(args.pre_commands, config.get("pre_commands"), env.get("pre_commands"), [])
+        )
+        or []
+    )
     environments = _normalize_str_dict(config.get("environments")) or {}
 
     fugaku_gfscache = str(
-        _pick_value(args.fugaku_gfscache, config.get("fugaku_gfscache"), env.get("fugaku_gfscache"), "/vol0002")
+        _pick_value(
+            args.fugaku_gfscache,
+            config.get("fugaku_gfscache"),
+            env.get("fugaku_gfscache"),
+            "/vol0002",
+        )
     ).strip()
     fugaku_spack_modules = _normalize_str_list(
-        _pick_value(args.fugaku_spack_modules, config.get("fugaku_spack_modules"), env.get("fugaku_spack_modules"), [])
+        _pick_value(
+            args.fugaku_spack_modules,
+            config.get("fugaku_spack_modules"),
+            env.get("fugaku_spack_modules"),
+            [],
+        )
     )
     fugaku_mpi_options_for_pjm = _normalize_str_list(
         _pick_value(
@@ -326,26 +362,47 @@ def main() -> None:
         )
     )
 
-    task_comm_size = int(_pick_value(args.task_comm_size, config.get("task_comm_size"), env.get("task_comm_size"), 1))
-    adet_comm_size = int(_pick_value(args.adet_comm_size, config.get("adet_comm_size"), env.get("adet_comm_size"), 1))
-    bdet_comm_size = int(_pick_value(args.bdet_comm_size, config.get("bdet_comm_size"), env.get("bdet_comm_size"), 1))
+    task_comm_size = int(
+        _pick_value(args.task_comm_size, config.get("task_comm_size"), env.get("task_comm_size"), 1)
+    )
+    adet_comm_size = int(
+        _pick_value(args.adet_comm_size, config.get("adet_comm_size"), env.get("adet_comm_size"), 1)
+    )
+    bdet_comm_size = int(
+        _pick_value(args.bdet_comm_size, config.get("bdet_comm_size"), env.get("bdet_comm_size"), 1)
+    )
     block = int(_pick_value(args.block, config.get("block"), env.get("block"), 4))
     iteration = int(_pick_value(args.iteration, config.get("iteration"), env.get("iteration"), 1))
-    tolerance = float(_pick_value(args.tolerance, config.get("tolerance"), env.get("tolerance"), 1e-2))
-    carryover_ratio = float(_pick_value(args.carryover_ratio, config.get("carryover_ratio"), env.get("carryover_ratio"), 0.1))
-    solver_mode = str(_pick_value(args.solver_mode, config.get("solver_mode"), env.get("solver_mode"), "cpu")).strip()
+    tolerance = float(
+        _pick_value(args.tolerance, config.get("tolerance"), env.get("tolerance"), 1e-2)
+    )
+    carryover_ratio = float(
+        _pick_value(
+            args.carryover_ratio, config.get("carryover_ratio"), env.get("carryover_ratio"), 0.1
+        )
+    )
+    solver_mode = str(
+        _pick_value(args.solver_mode, config.get("solver_mode"), env.get("solver_mode"), "cpu")
+    ).strip()
     resource_class = "gpu" if solver_mode == "gpu" else "cpu"
     user_args = _normalize_str_list(config.get("user_args")) or []
     if is_miyabi and solver_mode == "gpu":
         if "unset OMPI_MCA_mca_base_env_list" not in pre_commands:
             pre_commands.insert(0, "unset OMPI_MCA_mca_base_env_list")
         environments.setdefault("MIYABI", "G")
-    modules = _normalize_modules_for_target(is_miyabi=is_miyabi, solver_mode=solver_mode, modules=modules)
+    modules = _normalize_modules_for_target(
+        is_miyabi=is_miyabi, solver_mode=solver_mode, modules=modules
+    )
 
     default_names = _default_block_names(hpc_target=hpc_target, solver_mode=solver_mode)
 
     command_block_name = str(
-        _pick_value(args.command_block_name, config.get("command_block_name"), env.get("command_block_name"), "cmd-sbd-diag")
+        _pick_value(
+            args.command_block_name,
+            config.get("command_block_name"),
+            env.get("command_block_name"),
+            "cmd-sbd-diag",
+        )
     ).strip()
 
     execution_profile_block_name = str(
@@ -376,7 +433,12 @@ def main() -> None:
     ).strip()
 
     options_variable_name = str(
-        _pick_value(args.options_variable_name, config.get("options_variable_name"), env.get("options_variable_name"), "sqd_options")
+        _pick_value(
+            args.options_variable_name,
+            config.get("options_variable_name"),
+            env.get("options_variable_name"),
+            "sqd_options",
+        )
     ).strip()
 
     script_filename = str(
@@ -399,7 +461,9 @@ def main() -> None:
 
     shots_default = 500000 if is_miyabi else 50000
     shots = int(_pick_value(args.shots, config.get("shots"), env.get("shots"), shots_default))
-    sqd_options_json = _pick_value(args.sqd_options_json, config.get("sqd_options_json"), env.get("sqd_options_json"))
+    sqd_options_json = _pick_value(
+        args.sqd_options_json, config.get("sqd_options_json"), env.get("sqd_options_json")
+    )
 
     CommandBlock(
         command_name="sbd-diag",

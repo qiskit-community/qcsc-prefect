@@ -159,10 +159,7 @@ def walker_sqd(
         # Isolate bitstring seed from the module seed for equivalent control with real device path.
         seed = int(
             random_seed
-            + (
-            (trial_index + walker_index) * (trial_index + walker_index + 1) // 2
-            + walker_index
-            )
+            + ((trial_index + walker_index) * (trial_index + walker_index + 1) // 2 + walker_index)
         )
         logger.info("Sampling bitstrings with RNG seed %s", seed)
         bit_array = generate_bit_array_uniform(
@@ -313,9 +310,7 @@ def subsample_close_shell(
         new_strings = ci_strs_unique[non_hf_mask]
 
     # Carryover bitstrings are always included
-    return np.concatenate(
-        ([hartreefock], ci_strs_carryover, new_strings), dtype=np.longlong
-    )
+    return np.concatenate(([hartreefock], ci_strs_carryover, new_strings), dtype=np.longlong)
 
 
 def _deduplicate_and_accumurate_probs(

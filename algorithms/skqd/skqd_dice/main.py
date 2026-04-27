@@ -7,21 +7,26 @@ from typing import Any, Literal
 
 import ffsim
 import numpy as np
+from ffsim import MolecularHamiltonian, fermion_operator
 from ffsim.qiskit import PRE_INIT, jordan_wigner
 from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_table_artifact
-from prefect.cache_policies import NO_CACHE, INPUTS
+from prefect.cache_policies import INPUTS, NO_CACHE
 from prefect.variables import Variable
 from prefect_qiskit.runtime import QuantumRuntime
 from pydantic import BaseModel, Field
+from qcsc_prefect_dice import DiceSHCISolverJob
+from qcsc_workflow_utility import (
+    ElectronicProperties,
+    compute_molecular_integrals_from_fcidump,
+    compute_molecular_integrals_from_geometry,
+)
 from qiskit import QuantumCircuit, QuantumRegister
-from qiskit.synthesis import LieTrotter
 from qiskit.circuit.library import PauliEvolutionGate
-from qiskit.transpiler import Target
-from ffsim import MolecularHamiltonian, fermion_operator
 from qiskit.passmanager import ConditionalController
 from qiskit.primitives.containers import BitArray
-from qiskit.transpiler import generate_preset_pass_manager
+from qiskit.synthesis import LieTrotter
+from qiskit.transpiler import Target, generate_preset_pass_manager
 from qiskit.transpiler.passes import (
     ApplyLayout,
     BarrierBeforeFinalMeasurements,
@@ -37,15 +42,7 @@ from qiskit_addon_sqd.counts import bit_array_to_arrays, generate_bit_array_unif
 from qiskit_addon_sqd.fermion import SCIResult
 from qiskit_ibm_runtime.transpiler.passes import FoldRzzAngle
 
-from qcsc_prefect_dice import DiceSHCISolverJob
-
 from skqd_dice.subsample import postselect, subsample
-
-from qcsc_workflow_utility import (
-    ElectronicProperties,
-    compute_molecular_integrals_from_geometry,
-    compute_molecular_integrals_from_fcidump,
-)
 
 DEFAULT_RUNTIME_BLOCK_NAME = "ibm-runner"
 
@@ -113,19 +110,28 @@ class CircuitParameters(BaseModel):
     )
     sabre_max_iterations: int = Field(
         default=8,
-        description="Transpile: The number of forward-backward routing iterations to refine the layout and reduce routing costs.",
+        description=(
+            "Transpile: The number of forward-backward routing iterations to refine "
+            "the layout and reduce routing costs."
+        ),
         title="SABRE Max Iteration",
         ge=1,
     )
     sabre_swap_trials: int = Field(
         default=10,
-        description="Transpile: The number of routing trials for each layout, refining gate placement for better routing.",
+        description=(
+            "Transpile: The number of routing trials for each layout, refining gate "
+            "placement for better routing."
+        ),
         title="SABRE SWAP Trials",
         ge=1,
     )
     sabre_layout_trials: int = Field(
         default=10000,
-        description="Transpile: The number of random initial layouts tested, selecting the one that minimizes SWAP gates.",
+        description=(
+            "Transpile: The number of random initial layouts tested, selecting the "
+            "one that minimizes SWAP gates."
+        ),
         title="SABRE Layout Trials",
         ge=1,
     )
@@ -158,7 +164,10 @@ class SKQDParameters(BaseModel):
         ge=1,
     )
     num_batches: int = Field(
-        description="Number of batches of configurations used by the different calls to the eigenstate solver.",
+        description=(
+            "Number of batches of configurations used by the different calls to the "
+            "eigenstate solver."
+        ),
         title="Batch Number",
         ge=1,
     )
@@ -343,7 +352,8 @@ async def skqd_2501_09702(
             )
             skqd_artifact.append(new_record)
         logger.info(
-            f"Best energy in SKQD iteration {round_idx}: {best_result_in_batch.energy + elec_props.nuclear_repulsion_energy} Ha."
+            f"Best energy in SKQD iteration {round_idx}: "
+            f"{best_result_in_batch.energy + elec_props.nuclear_repulsion_energy} Ha."
         )
 
     # Upload artifact
@@ -571,9 +581,7 @@ async def sample_bitstrings(
         if parameters.circuit.use_reset_mitigation:
             test_bits = result.data.test
             bit_array = meas_bits.get_bitstrings(test_bits.bitcount() == 0)
-            bit_array = BitArray.from_samples(
-                bit_array, num_bits=meas_bits.num_bits
-            )
+            bit_array = BitArray.from_samples(bit_array, num_bits=meas_bits.num_bits)
             logger.info(
                 "Reset mitigation result:\n"
                 f"  Before: {meas_bits.num_shots} bitstrings\n"

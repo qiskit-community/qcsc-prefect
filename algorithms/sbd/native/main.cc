@@ -30,7 +30,7 @@ int main(int argc, char * argv[]) {
   std::string fcidumpfile("fcidump.txt");
   std::string loadname("");
   std::string savename("");
-  
+
   int L;
   int N;
   double energy;
@@ -50,7 +50,7 @@ int main(int argc, char * argv[]) {
     fcidump = sbd::LoadFCIDump(fcidumpfile);
   }
   sbd::MpiBcast(fcidump,0,comm);
-  
+
   for(const auto & [key,value] : fcidump.header) {
     if( key == std::string("NORB") ) {
       L = std::atoi(value.c_str());

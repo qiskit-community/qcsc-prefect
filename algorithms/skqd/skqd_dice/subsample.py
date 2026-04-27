@@ -1,8 +1,8 @@
 """Modification of subsample code for presice control of subspace dimension."""
 
 from typing import Iterator
-import numpy as np
 
+import numpy as np
 from qiskit_addon_sqd.configuration_recovery import post_select_by_hamming_weight
 
 

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import tomllib
 from pathlib import Path
 from typing import Any
 
+import tomllib
 from prefect.variables import Variable
 from qcsc_prefect_dice import create_dice_blocks
 
@@ -61,7 +61,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--shots", type=int)
     parser.add_argument(
         "--sampler-options-json",
-        help="Raw JSON for Prefect variable value (e.g. '{\"params\": {\"shots\": 50000}}').",
+        help='Raw JSON for Prefect variable value (e.g. \'{"params": {"shots": 50000}}\').',
     )
     return parser.parse_args()
 
@@ -99,9 +99,7 @@ def _normalize_str_dict(value: Any) -> dict[str, str] | None:
         return None
     if isinstance(value, dict):
         normalized = {
-            str(key).strip(): str(val).strip()
-            for key, val in value.items()
-            if str(key).strip()
+            str(key).strip(): str(val).strip() for key, val in value.items() if str(key).strip()
         }
         return normalized or None
     raise ValueError(f"Expected dict[str, str], got: {type(value)}")
@@ -147,7 +145,9 @@ def main() -> None:
     args = _parse_args()
     config = _load_config_file(args.config)
 
-    hpc_target = str(_pick_value(args.hpc_target, config.get("hpc_target"), "miyabi")).strip().lower()
+    hpc_target = (
+        str(_pick_value(args.hpc_target, config.get("hpc_target"), "miyabi")).strip().lower()
+    )
     if hpc_target not in {"miyabi", "fugaku"}:
         raise RuntimeError("'hpc_target' must be either 'miyabi' or 'fugaku'.")
     defaults = _default_names(hpc_target=hpc_target)
@@ -163,9 +163,13 @@ def main() -> None:
         _pick_value(args.dice_executable, config.get("dice_executable")),
     )
 
-    mpiprocs = int(_pick_value(args.mpiprocs, config.get("mpiprocs"), 4 if hpc_target == "miyabi" else 2))
+    mpiprocs = int(
+        _pick_value(args.mpiprocs, config.get("mpiprocs"), 4 if hpc_target == "miyabi" else 2)
+    )
     options_variable_name = str(
-        _pick_value(args.options_variable_name, config.get("options_variable_name"), "sampler_options")
+        _pick_value(
+            args.options_variable_name, config.get("options_variable_name"), "sampler_options"
+        )
     ).strip()
 
     block_names = create_dice_blocks(
@@ -175,7 +179,11 @@ def main() -> None:
         root_dir=str(Path(str(work_dir)).expanduser().resolve()),
         dice_executable=str(Path(str(dice_executable)).expanduser().resolve()),
         command_block_name=str(
-            _pick_value(args.command_block_name, config.get("command_block_name"), defaults["command_block_name"])
+            _pick_value(
+                args.command_block_name,
+                config.get("command_block_name"),
+                defaults["command_block_name"],
+            )
         ).strip(),
         execution_profile_block_name=str(
             _pick_value(
@@ -192,7 +200,11 @@ def main() -> None:
             )
         ).strip(),
         solver_block_name=str(
-            _pick_value(args.solver_block_name, config.get("solver_block_name"), defaults["solver_block_name"])
+            _pick_value(
+                args.solver_block_name,
+                config.get("solver_block_name"),
+                defaults["solver_block_name"],
+            )
         ).strip(),
         command_name="sqd-dice",
         executable_key="sqd_dice_solver",
@@ -204,21 +216,35 @@ def main() -> None:
         walltime=str(_pick_value(args.walltime, config.get("walltime"), "01:00:00")).strip(),
         modules=_normalize_str_list(_pick_value(args.modules, config.get("modules"))),
         mpi_options=_normalize_str_list(
-            _pick_value(args.mpi_options, config.get("mpi_options"), _default_mpi_options(hpc_target=hpc_target, mpiprocs=mpiprocs))
+            _pick_value(
+                args.mpi_options,
+                config.get("mpi_options"),
+                _default_mpi_options(hpc_target=hpc_target, mpiprocs=mpiprocs),
+            )
         ),
-        pre_commands=_normalize_str_list(_pick_value(args.pre_commands, config.get("pre_commands"))),
+        pre_commands=_normalize_str_list(
+            _pick_value(args.pre_commands, config.get("pre_commands"))
+        ),
         environments=_normalize_str_dict(config.get("environments")),
         script_filename=str(
-            _pick_value(args.script_filename, config.get("script_filename"), defaults["script_filename"])
+            _pick_value(
+                args.script_filename, config.get("script_filename"), defaults["script_filename"]
+            )
         ).strip(),
         metrics_artifact_key=str(
-            _pick_value(args.metrics_artifact_key, config.get("metrics_artifact_key"), defaults["metrics_artifact_key"])
+            _pick_value(
+                args.metrics_artifact_key,
+                config.get("metrics_artifact_key"),
+                defaults["metrics_artifact_key"],
+            )
         ).strip(),
         select_cutoff=float(_pick_value(args.select_cutoff, config.get("select_cutoff"), 5e-4)),
         davidson_tol=float(_pick_value(args.davidson_tol, config.get("davidson_tol"), 1e-5)),
         energy_tol=float(_pick_value(args.energy_tol, config.get("energy_tol"), 1e-10)),
         max_iter=int(_pick_value(args.max_iter, config.get("max_iter"), 10)),
-        return_sci_state=bool(_pick_value(args.return_sci_state, config.get("return_sci_state"), False)),
+        return_sci_state=bool(
+            _pick_value(args.return_sci_state, config.get("return_sci_state"), False)
+        ),
         gfscache=_pick_value(args.fugaku_gfscache, config.get("fugaku_gfscache")),
         spack_modules=_normalize_str_list(
             _pick_value(args.fugaku_spack_modules, config.get("fugaku_spack_modules"))
@@ -231,7 +257,9 @@ def main() -> None:
         ),
     )
 
-    sampler_options_json = _pick_value(args.sampler_options_json, config.get("sampler_options_json"))
+    sampler_options_json = _pick_value(
+        args.sampler_options_json, config.get("sampler_options_json")
+    )
     if sampler_options_json:
         sampler_options = json.loads(str(sampler_options_json))
     else:

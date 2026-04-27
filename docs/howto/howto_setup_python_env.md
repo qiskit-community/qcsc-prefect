@@ -11,7 +11,7 @@ Before you begin, ensure the following:
 
 ## Instructions
 
-> [!IMPORTANT]  
+> [!IMPORTANT]
 > - Replace `z12345` with your actual account name.
 > - If you encounter an error indicating insufficient space in the `~` (home) directory on mdx, use the `/large/z12345` directory instead.
 

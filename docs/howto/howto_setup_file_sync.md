@@ -12,7 +12,7 @@ Before you begin, ensure the following:
 - SSH public key authentication and one-time password (OTP) are set up for the Miyabi login node.
 
 ## Instructions
-> [!IMPORTANT]  
+> [!IMPORTANT]
 > Replace `gz00` and `z12345` with your actual group and account name.
 
 ### Step 1. Log in to the Workflow Client
@@ -95,7 +95,7 @@ Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
 
 Your Miyabi shared storage is now mounted and accessible from the MDX workflow server.
 
-**Success check:** 
+**Success check:**
 
 <img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
@@ -103,7 +103,7 @@ df -h | grep "/work/<group>/<account>"
 ls -la /work/<group>/<account>
 ```
 
-**Common `sshfs` failure and recovery** 
+**Common `sshfs` failure and recovery**
 
 <img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
@@ -144,8 +144,8 @@ vi test.pbs
 ```
 
 Add the following lines:
-> [!NOTE]  
-> Replace `group_list=gz00` with your user group (project) on Miyabi.  
+> [!NOTE]
+> Replace `group_list=gz00` with your user group (project) on Miyabi.
 
 ```sh
 #!/bin/sh

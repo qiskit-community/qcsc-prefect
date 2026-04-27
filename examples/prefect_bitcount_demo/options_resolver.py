@@ -30,10 +30,7 @@ def resolve_sampler_options_and_work_dir(
         return default_options, None
 
     if not isinstance(raw_value, dict):
-        raise TypeError(
-            "Prefect Variable payload must be a mapping. "
-            f"Got: {type(raw_value)!r}"
-        )
+        raise TypeError(f"Prefect Variable payload must be a mapping. Got: {type(raw_value)!r}")
 
     raw_work_dir = raw_value.get("work_dir")
     work_dir: str | None = None
@@ -55,4 +52,3 @@ def resolve_sampler_options_and_work_dir(
         sampler_options = default_options
 
     return sampler_options, work_dir
-

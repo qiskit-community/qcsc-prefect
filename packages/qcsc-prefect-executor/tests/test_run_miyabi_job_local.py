@@ -23,7 +23,9 @@ class _LoggerStub:
 
 
 class _RuntimeStub:
-    def __init__(self, final_status: dict[str, Any], calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]]) -> None:
+    def __init__(
+        self, final_status: dict[str, Any], calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]]
+    ) -> None:
         self._final_status = final_status
         self._calls = calls
 

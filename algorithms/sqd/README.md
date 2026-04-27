@@ -76,5 +76,5 @@ This workflow internally runs SQD workflows with different flow parameters, and 
 This package is a reference implementation of the SQD experiment described in the publication.
 It is considered feature-complete and is now in maintenance mode.
 
-Further contributions are limited to bug fixes and improvements to Prefect usage patterns.  
+Further contributions are limited to bug fixes and improvements to Prefect usage patterns.
 Workflow developers may use this as a testbed for workflow technology research.

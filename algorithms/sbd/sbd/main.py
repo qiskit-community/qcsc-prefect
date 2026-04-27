@@ -1,10 +1,10 @@
 # Workflow for observability demo on Miyabi
 
+import os
+import pathlib
 from typing import Self
 
 import numpy as np
-import os
-import pathlib
 from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_table_artifact
 from prefect.cache_policies import RUN_ID, Inputs
@@ -14,16 +14,16 @@ from prefect_ray import RayTaskRunner
 from pydantic import BaseModel, Field
 from qcsc_workflow_utility.chem import (
     ElectronicProperties,
-    compute_molecular_integrals_from_fcidump,
     NpStrict1DArrayF64,
     NpStrict2DArrayF64,
+    compute_molecular_integrals_from_fcidump,
 )
-from .solver_job import SBDSolverJob
 
 from .data_io import extend_table_artifact
 from .flow_params import FlowParameters
 from .lucj import initialize_ucj_parameters
 from .np_type_extension import NpStrict2DArrayBool
+from .solver_job import SBDSolverJob
 from .sqd import walker_sqd
 
 MODULE_RNG = np.random.default_rng(seed=4574)
@@ -94,9 +94,7 @@ class OptimizerState(BaseModel):
         num_lucj_params = n_reps * (n_aa_params + n_ab_params + norb**2) + norb**2
         return OptimizerState(
             energies=np.zeros(num_walkers, dtype=np.float64),
-            populations=np.full(
-                (num_walkers, num_lucj_params), np.nan, dtype=np.float64
-            ),
+            populations=np.full((num_walkers, num_lucj_params), np.nan, dtype=np.float64),
             carryover=np.full((0, norb), np.nan, dtype=bool),
         )
 
@@ -166,9 +164,7 @@ def riken_sqd_de(
             state=state,
         )
 
-        logger.info(
-            f"Current best energy = {state.best_energy()} (walker {state.best_index})"
-        )
+        logger.info(f"Current best energy = {state.best_energy()} (walker {state.best_index})")
 
     return state.best_energy()
 
@@ -238,12 +234,8 @@ def differential_evolution_trial(
         futs.append(prefect_fut)
 
     # Collect results
-    result_energies = np.full(
-        parameters.de_params.num_walkers, np.nan, dtype=np.float64
-    )
-    result_carryovers: list[NpStrict2DArrayBool] = [
-        None
-    ] * parameters.de_params.num_walkers
+    result_energies = np.full(parameters.de_params.num_walkers, np.nan, dtype=np.float64)
+    result_carryovers: list[NpStrict2DArrayBool] = [None] * parameters.de_params.num_walkers
     records: list[dict] = [None] * parameters.de_params.num_walkers
     for walker_index, ((energy, carryover), telemery) in enumerate(futs.result()):
         result_energies[walker_index] = energy
@@ -328,7 +320,8 @@ def selection(
             continue
         delta_e = trial_energies[walker_idx] - current_state.energies[walker_idx]
         logger.info(
-            f"walker {walker_idx}: Davidson final energy = {trial_energies[walker_idx]} (ΔE = {delta_e})"
+            f"walker {walker_idx}: Davidson final energy = "
+            f"{trial_energies[walker_idx]} (ΔE = {delta_e})"
         )
         if delta_e < 0:
             # Update reference energy and population when the trial gets lower energy
@@ -342,6 +335,7 @@ def parse_block_ref(ref: str) -> tuple[str, str]:
     if len(parts) != 2 or not parts[0] or not parts[1]:
         raise ValueError(f"Invalid solver_block_ref: {ref}")
     return parts[0], parts[1]
+
 
 def deploy():
     """Deploy workflow with a local worker."""

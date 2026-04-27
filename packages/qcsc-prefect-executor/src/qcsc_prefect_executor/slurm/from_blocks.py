@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from qcsc_prefect_blocks.common.blocks import HPCProfileBlock
+
 from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 from qcsc_prefect_executor.slurm.run import SlurmRunResult
 
@@ -24,8 +25,7 @@ async def run_slurm_job_from_blocks(
     hpc_block = await HPCProfileBlock.load(hpc_profile_block_name)
     if hpc_block.hpc_target != "slurm":
         raise ValueError(
-            f"run_slurm_job_from_blocks requires hpc_target='slurm', "
-            f"got '{hpc_block.hpc_target}'."
+            f"run_slurm_job_from_blocks requires hpc_target='slurm', got '{hpc_block.hpc_target}'."
         )
 
     result = await run_job_from_blocks(

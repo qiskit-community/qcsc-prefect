@@ -2,34 +2,28 @@
 
 import io
 from typing import Annotated
+
 import numpy as np
 import scipy
-from pyscf import tools, ao2mo, cc, gto, scf
 from prefect import get_run_logger, task
 from pydantic import BaseModel
 from pydantic_numpy.helper.annotation import NpArrayPydanticAnnotation
-
+from pyscf import ao2mo, cc, gto, scf, tools
 
 # Pydantic Types
 NpStrict1DArrayF64 = Annotated[
     np.ndarray[tuple[int,], np.dtype[np.float64]],
-    NpArrayPydanticAnnotation.factory(
-        data_type=np.float64, dimensions=1, strict_data_typing=True
-    ),
+    NpArrayPydanticAnnotation.factory(data_type=np.float64, dimensions=1, strict_data_typing=True),
 ]
 
 NpStrict2DArrayF64 = Annotated[
     np.ndarray[tuple[int, int], np.dtype[np.float64]],
-    NpArrayPydanticAnnotation.factory(
-        data_type=np.float64, dimensions=2, strict_data_typing=True
-    ),
+    NpArrayPydanticAnnotation.factory(data_type=np.float64, dimensions=2, strict_data_typing=True),
 ]
 
 NpStrict4DArrayF64 = Annotated[
     np.ndarray[tuple[int, int, int, int], np.dtype[np.float64]],
-    NpArrayPydanticAnnotation.factory(
-        data_type=np.float64, dimensions=4, strict_data_typing=True
-    ),
+    NpArrayPydanticAnnotation.factory(data_type=np.float64, dimensions=4, strict_data_typing=True),
 ]
 
 

@@ -40,6 +40,7 @@ def _local_storage_dir() -> Path:
     settings = get_current_settings()
     return Path(settings.home) / "storage"
 
+
 def save_ndarray(
     file_prefix: str,
     **arrays: np.ndarray,
@@ -102,13 +103,14 @@ def load_ndarray(
     assert arr is not None
     return arr
 
+
 def extend_table_artifact(
     artifact_key: str,
     new_table: list[dict[str, Any]] | list[list[Any]],
     index: int = 0,
 ) -> UUID:
     ctx_flow = FlowRunContext.get()
-    
+
     with get_client(sync_client=True) as client:
         artifacts = client.read_artifacts(
             artifact_filter=ArtifactFilter(
@@ -120,15 +122,13 @@ def extend_table_artifact(
         )
         artifact = artifacts[index]
         current_data = json.loads(artifact.data)
-        
+
         assert isinstance(current_data, list)
         current_data.extend(new_table)
 
-        update = ArtifactUpdate(
-            data=cast(str, TableArtifact(table=current_data).format())
-        )
+        update = ArtifactUpdate(data=cast(str, TableArtifact(table=current_data).format()))
         client.update_artifact(
             artifact_id=artifact.id,
             artifact=update,
-        )    
+        )
     return artifact.id

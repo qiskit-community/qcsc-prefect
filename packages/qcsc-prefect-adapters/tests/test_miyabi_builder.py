@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from qcsc_prefect_core.models.execution_profile import ExecutionProfile
 from qcsc_prefect_adapters.miyabi.builder import MiyabiJobRequest, render_script
+from qcsc_prefect_core.models.execution_profile import ExecutionProfile
 
 
 def test_render_miyabi_script(tmp_path: Path):

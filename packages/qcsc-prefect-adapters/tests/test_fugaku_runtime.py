@@ -29,12 +29,17 @@ def test_wait_final_status_with_pjstat_fallback(monkeypatch):
         calls.append(args)
         if args == ("pjstat", "-v", "43607196"):
             return ""
-        return "43607196 test NM EXT user group 2026-02-09T00:00:00 00:00:10 00:05:00 1 1 48 0M N N 1 - 0 - - - - regular-c -"
+        return (
+            "43607196 test NM EXT user group 2026-02-09T00:00:00 00:00:10 "
+            "00:05:00 1 1 48 0M N N 1 - 0 - - - - regular-c -"
+        )
 
     monkeypatch.setattr(runtime_mod, "run_command", fake_run_command)
     rt = runtime_mod.FugakuPJMRuntime()
 
-    status = asyncio.run(rt.wait_final_status("43607196", watch_poll_interval=0.01, timeout_seconds=3))
+    status = asyncio.run(
+        rt.wait_final_status("43607196", watch_poll_interval=0.01, timeout_seconds=3)
+    )
 
     assert status["JOB_ID"] == "43607196"
     assert status["ST"] == "EXT"
@@ -55,4 +60,3 @@ def test_cancel_invokes_pjdel(monkeypatch):
     asyncio.run(rt.cancel("43607196"))
 
     assert calls == [("pjdel", "43607196")]
-

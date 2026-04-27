@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 
-from qcsc_prefect_core.models.execution_profile import ExecutionProfile
 from qcsc_prefect_adapters.base.jinja_env import make_env
+from qcsc_prefect_core.models.execution_profile import ExecutionProfile
 
 _ENV = make_env("qcsc_prefect_adapters.fugaku")
 _TEMPLATE = "batch.pjm.j2"

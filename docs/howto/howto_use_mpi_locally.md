@@ -17,21 +17,21 @@ Install the necessary compilers and MPI libraries:
 ```bash
 dnf install gcc
 dnf install gcc-c++
-dnf install openmpi openmpi-devel 
+dnf install openmpi openmpi-devel
 ```
 
 Initialize the environment module system:
 
 <img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
-source /etc/profile.d/modules.sh 
+source /etc/profile.d/modules.sh
 ```
 
 Load the OpenMPI module:
 
 <img src="../images/icon-pc.png" alt="pc" width="50"/><br>
 ```bash
-module load mpi/openmpi-x86_64 
+module load mpi/openmpi-x86_64
 ```
 
 ### Step 2. Compile Your MPI Program
@@ -43,7 +43,7 @@ Use the OpenMPI compiler wrapper to compile your source code:
 mpicxx my-program.cpp -o my-program
 ```
 
-If you're using a third-party library, it may provide its own build script. 
+If you're using a third-party library, it may provide its own build script.
 Refer to its documentation for details.
 
 ### Step 3. Run the Program
@@ -75,7 +75,7 @@ prefect concurrency-limit create "res: local" 1
 
 ### UCX-Related Segmentation Faults
 
-In shared-memory environments, UCX (Unified Communication X) may cause segmentation faults. 
+In shared-memory environments, UCX (Unified Communication X) may cause segmentation faults.
 To avoid this, switch to TCP-based communication.
 Export the following environment variables to the shell:
 

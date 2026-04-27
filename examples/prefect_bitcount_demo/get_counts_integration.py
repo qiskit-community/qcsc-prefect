@@ -9,7 +9,6 @@ from uuid import uuid4
 from prefect import task
 from prefect.blocks.core import Block
 from pydantic import Field
-
 from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 
 BITLEN = 10
@@ -39,9 +38,7 @@ def _read_counts(job_work_dir: Path, bitlen: int) -> dict[str, int]:
         raw_counts = json.loads(json_path.read_text(encoding="utf-8"))
         return {format(int(k), f"0{bitlen}b"): int(v) for k, v in raw_counts.items()}
 
-    raise FileNotFoundError(
-        f"Neither hist_u64.bin nor output.json was generated in {job_work_dir}"
-    )
+    raise FileNotFoundError(f"Neither hist_u64.bin nor output.json was generated in {job_work_dir}")
 
 
 class BitCounter(Block):
@@ -59,10 +56,16 @@ class BitCounter(Block):
 
     root_dir: str = Field(title="Root Directory")
     command_block_name: str = Field(default="cmd-bitcount-hist", title="Command Block Name")
-    execution_profile_block_name: str = Field(default="exec-bitcount-mpi", title="Execution Profile Block Name")
-    hpc_profile_block_name: str = Field(default="hpc-miyabi-bitcount", title="HPC Profile Block Name")
+    execution_profile_block_name: str = Field(
+        default="exec-bitcount-mpi", title="Execution Profile Block Name"
+    )
+    hpc_profile_block_name: str = Field(
+        default="hpc-miyabi-bitcount", title="HPC Profile Block Name"
+    )
     script_filename: str = Field(default="bitcount_facade.pbs", title="Script Filename")
-    metrics_artifact_key: str = Field(default="miyabi-bitcount-facade-metrics", title="Metrics Artifact Key")
+    metrics_artifact_key: str = Field(
+        default="miyabi-bitcount-facade-metrics", title="Metrics Artifact Key"
+    )
     bitlen: int = Field(default=BITLEN, gt=0, title="Bit Length")
     user_args: list[str] = Field(default_factory=list, title="Command Args")
 

@@ -33,9 +33,7 @@ async def main(
 ):
     counter = await BitCounter.load(bitcounter_block_name)
     if hpc_profile_block_override:
-        counter = counter.model_copy(
-            update={"hpc_profile_block_name": hpc_profile_block_override}
-        )
+        counter = counter.model_copy(update={"hpc_profile_block_name": hpc_profile_block_override})
     options_raw = await Variable.get(options_variable_name)
     sampler_options, _ = resolve_sampler_options_and_work_dir(
         options_raw,

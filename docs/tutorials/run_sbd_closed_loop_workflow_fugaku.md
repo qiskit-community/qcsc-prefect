@@ -137,7 +137,7 @@ qcsc-prefect-blocks                 0.1.0
 qcsc-prefect-core                   0.1.0
 qcsc-prefect-executor               0.1.0
 prefect-sbd                        0.1.0
-qcsc-workflow-utility              0.1.0 
+qcsc-workflow-utility              0.1.0
 sbd                                0.1.0
 ```
 
@@ -145,7 +145,7 @@ sbd                                0.1.0
 
 ### Step 3. Build the SBD solver on Fugaku Login Node (prepare the HPC executable)
 
-Create a new terminal and login to Fugaku Login Node. 
+Create a new terminal and login to Fugaku Login Node.
 Navigate to native source and build:
 
 <img src="../images/icon-login-fugaku.png" alt="login" width="70"/><br>
@@ -270,7 +270,7 @@ export PREFECT_RAY_NUM_CPUS=2
 ```
 
 > [!NOTE]
-> `SBD_TASK_RUNNER` is `ray` by default.  
+> `SBD_TASK_RUNNER` is `ray` by default.
 > If Ray is unstable in your environment, use `export SBD_TASK_RUNNER=concurrent` for troubleshooting.
 
 Deploy:

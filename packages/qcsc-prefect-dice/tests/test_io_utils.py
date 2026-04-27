@@ -4,7 +4,6 @@ import struct
 from pathlib import Path
 
 import numpy as np
-
 from qcsc_prefect_dice import io_utils
 
 
