@@ -96,7 +96,7 @@ https://us-south.appid.cloud.ibm.com/oauth/v4/xxxxxxxxx/authorization?client_id=
 
 After login, copy the URL you were redirected to and paste the 'code' parameter below.
 
-Authorization code: 
+Authorization code:
 ```
 
 ![Authorization Code](../images/img-mdx-prefect-cli-token.png)

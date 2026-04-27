@@ -15,6 +15,7 @@ class ExecutionProfile:
     - This is intentionally "template-driven" MVP.
     - Later you can evolve this into common+overrides and canonicalization.
     """
+
     command_key: str
 
     # PBS resources

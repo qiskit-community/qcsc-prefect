@@ -171,5 +171,5 @@ def find_optimal_layout(
         table=layout_info,
         key="isa-qubit-properties",
     )
-    
+
     return final_sabre_layout

@@ -2,11 +2,11 @@
 
 from .chem import (
     ElectronicProperties,
-    compute_molecular_integrals_from_geometry,
-    compute_molecular_integrals_from_fcidump,
     NpStrict1DArrayF64,
     NpStrict2DArrayF64,
     NpStrict4DArrayF64,
+    compute_molecular_integrals_from_fcidump,
+    compute_molecular_integrals_from_geometry,
 )
 
 __all__ = [

@@ -41,18 +41,14 @@ def initialize_ucj_parameters(
             orbital_rotations=tmp_operator.orbital_rotations[:-1],
             final_orbital_rotation=tmp_operator.orbital_rotations[-1],
         )
-        return truncated_ucj_op.to_parameters(
-            interaction_pairs=(aa_indices, ab_indices)
-        )
+        return truncated_ucj_op.to_parameters(interaction_pairs=(aa_indices, ab_indices))
 
     # First walker is the bare CCSD parameters
     initial_params = [_t2_to_ucj_parameters(t2=elec_props.t2)]
 
     # The rest of walkers are randomized parameters
     for _ in range(num_walkers - 1):
-        rand_values = randomization_factor * (
-            MODULE_RNG.random(elec_props.t2.shape) - 0.5
-        )
+        rand_values = randomization_factor * (MODULE_RNG.random(elec_props.t2.shape) - 0.5)
         drifted_params = _t2_to_ucj_parameters(t2=elec_props.t2 + rand_values)
         initial_params.append(drifted_params)
     return initial_params

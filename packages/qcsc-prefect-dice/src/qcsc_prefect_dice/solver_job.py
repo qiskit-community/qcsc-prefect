@@ -9,9 +9,8 @@ import numpy as np
 from prefect import get_run_logger, task
 from prefect.blocks.core import Block
 from pydantic import Field
-from qiskit_addon_sqd.fermion import SCIResult
-
 from qcsc_prefect_executor.from_blocks import run_job_from_blocks
+from qiskit_addon_sqd.fermion import SCIResult
 
 from .io_utils import make_job_work_dir, prep_dice_input_files, read_dice_output_files
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from qcsc_prefect_blocks.common.blocks import HPCProfileBlock
+
 from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 from qcsc_prefect_executor.miyabi.run import MiyabiRunResult
 

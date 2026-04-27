@@ -2,13 +2,13 @@
 
 This guide explains how to configure Prefect Qiskit integration to access IBM Quantum services from the MDX workflow server.
 
-You will create two Blocks: (1) `IBMQuantumCredentials` and (2) `QuantumRuntime`. 
+You will create two Blocks: (1) `IBMQuantumCredentials` and (2) `QuantumRuntime`.
 
-**Concept: Block** — Blocks store reusable configuration and credentials.  
+**Concept: Block** — Blocks store reusable configuration and credentials.
 You will create Blocks for IBM Quantum access for the HPC execution environment, so the Flow code remains simple.
 
 
-> [!IMPORTANT]  
+> [!IMPORTANT]
 > Replace `z12345` with your actual account name.
 
 ### Step 1: Log in to MDX Workflow Client

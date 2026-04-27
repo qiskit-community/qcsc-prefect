@@ -13,7 +13,6 @@ from prefect import get_run_logger, task
 from prefect.blocks.core import Block
 from pydantic import Field
 from pyscf.tools import fcidump
-
 from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 
 
@@ -184,8 +183,7 @@ class SBDSolverJob(Block):
         gt=0,
         title="Task Comm Size",
         description=(
-            "Size of task communicator. "
-            "Controls distribution of Hamiltonian column operations."
+            "Size of task communicator. Controls distribution of Hamiltonian column operations."
         ),
     )
     adet_comm_size: int = Field(

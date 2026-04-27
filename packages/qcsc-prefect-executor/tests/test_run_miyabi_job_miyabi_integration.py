@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from qcsc_prefect_adapters.miyabi.builder import MiyabiJobRequest
 from qcsc_prefect_core.models.execution_profile import ExecutionProfile
 from qcsc_prefect_executor.miyabi import run as run_mod

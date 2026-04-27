@@ -34,7 +34,9 @@ async def run_command(*args: str, cwd: Path | None = None) -> str:
     err = (err_b or b"").decode(errors="replace")
 
     if proc.returncode != 0:
-        raise RuntimeError(f"Command failed: {' '.join(args)} rc={proc.returncode}\nstdout:\n{out}\nstderr:\n{err}")
+        raise RuntimeError(
+            f"Command failed: {' '.join(args)} rc={proc.returncode}\nstdout:\n{out}\nstderr:\n{err}"
+        )
     return out
 
 
@@ -55,6 +57,7 @@ class MiyabiPBSRuntime:
 
     This mirrors the behavior of your existing prefect-miyabi executor.py.
     """
+
     QSTAT_OUT: ClassVar[re.Pattern] = re.compile(r"Job Id: (\d+\.\w+)\n((?:[ \t]+.*(?:\n|$))*)")
 
     async def submit(self, script_path: Path, *, cwd: Path | None = None) -> SubmitResult:

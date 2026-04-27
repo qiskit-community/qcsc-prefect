@@ -1,6 +1,6 @@
 # Custom Program for Selected Basis Diagonalization
 
-This submodule provides a custom C++ implementation for configuration recovery, 
+This submodule provides a custom C++ implementation for configuration recovery,
 adapted from the [selected basis diagonalization sample](https://github.com/r-ccs-cms/sbd/tree/main/samples/selected_basis_diagonalization) in the SBD project.
 Refer to the upstream repository for detailed information about the original software.
 

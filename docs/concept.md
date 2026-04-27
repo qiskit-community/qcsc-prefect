@@ -12,7 +12,7 @@ flowchart TD
     B --> C[ExecutionProfileBlock<br/>HOW to run]
     C --> D[HPCProfileBlock<br/>WHERE to run]
     D --> E[Executor<br/>submits to qsub/pjsub/sbatch]
-    
+
     style A fill:#e1f5ff
     style B fill:#fff4e1
     style C fill:#ffe1f5

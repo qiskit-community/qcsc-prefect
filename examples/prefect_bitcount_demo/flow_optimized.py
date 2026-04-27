@@ -10,7 +10,6 @@ from uuid import uuid4
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 from prefect.variables import Variable
-
 from qcsc_prefect_executor.from_blocks import run_job_from_blocks
 
 try:
@@ -112,11 +111,7 @@ async def run_hpc_bitcount_from_input(
         raise RuntimeError(f"Optimized BitCount job failed: exit_status={result.exit_status}")
 
     hist = _read_hist_u64(resolved_job_work_dir / "hist_u64.bin")
-    counts = {
-        format(i, f"0{BITLEN}b"): c
-        for i, c in enumerate(hist)
-        if c > 0
-    }
+    counts = {format(i, f"0{BITLEN}b"): c for i, c in enumerate(hist) if c > 0}
     return {
         "job_id": result.job_id,
         "counts": counts,

@@ -9,15 +9,13 @@ from typing import Any
 
 from prefect.artifacts import create_table_artifact
 from prefect.logging import get_run_logger
-
-from qcsc_prefect_core.models.execution_profile import ExecutionProfile
 from qcsc_prefect_adapters.miyabi.builder import (
     MiyabiJobRequest,
     render_script,
     write_script_file,
 )
 from qcsc_prefect_adapters.miyabi.runtime import MiyabiPBSRuntime
-
+from qcsc_prefect_core.models.execution_profile import ExecutionProfile
 
 MAX_LOG_SIZE = 10_000  # mirror existing behavior
 

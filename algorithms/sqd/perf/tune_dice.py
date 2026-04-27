@@ -9,10 +9,8 @@ import uuid
 from prefect import flow, get_client, get_run_logger
 from prefect.artifacts import ArtifactFilter, create_table_artifact
 from pydantic import BaseModel, Field
-
 from qcsc_prefect_blocks.common.blocks import ExecutionProfileBlock
 from qcsc_prefect_dice import DiceSHCISolverJob
-
 from sqd_dice.main import DEFAULT_RUNTIME_BLOCK_NAME, Parameters, sqd_2405_05068
 
 
@@ -24,13 +22,13 @@ async def _maybe_await(value):
 
 class DICESetup(BaseModel):
     """Control parameters in a single experiment attempt."""
-    
+
     mpiprocs: int = Field(
         description="Number of MPI process per node to request.",
         gt=0,
         title="Num MPI Processes",
     )
-    
+
     num_nodes: int = Field(
         description=(
             "Number of compute node to request. "
@@ -39,7 +37,7 @@ class DICESetup(BaseModel):
         gt=0,
         title="Num Nodes",
     )
-    
+
     subspace_dim: int = Field(
         description="SQD: Dimension d of subsampled bitstrings for diagonalization.",
         title="Subspace Dimension",
@@ -58,11 +56,11 @@ async def main(
     option_name: str = "sampler_options",
 ) -> int:
     """MPI parameter tuning of DICE solver.
-    
+
     .. note::
         SQD setup max_iterations and num_batches are fixed to 1.
         Only one HPC job is scheduled per sub-experiment.
-    
+
     Args:
         base_parameters: Base parameter of the SQD experiment.
         experiments: Parameters to overwrite.
@@ -71,14 +69,12 @@ async def main(
         option_name: Name of Variable storing sampler primitive options to load.
     """
     logger = get_run_logger()
-    
+
     records = []
     for experiment in experiments:
-        logger.info(
-            f"Running a sub experiment with {experiment}"
-        )
-        
-        tmp_name = f"tmp-solver-{uuid.uuid4().hex}"        
+        logger.info(f"Running a sub experiment with {experiment}")
+
+        tmp_name = f"tmp-solver-{uuid.uuid4().hex}"
         tmp_exec_name = f"tmp-exec-{uuid.uuid4().hex}"
 
         # Create temporary solver configuration
@@ -94,13 +90,13 @@ async def main(
         logger.debug(
             f"Created temporary solver/execution-profile blocks {tmp_name}, {tmp_exec_name}"
         )
-        
+
         # Update parameters
         current_params = base_parameters.model_copy()
         current_params.sqd.subspace_dim = experiment.subspace_dim
         current_params.sqd.max_iterations = 1
         current_params.sqd.num_batches = 1
-        
+
         try:
             state = await sqd_2405_05068(
                 parameters=current_params,
@@ -128,7 +124,7 @@ async def main(
                 logger.info(
                     f"Sub experiment {str(state.state_details.flow_run_id)} completed successfully."
                 )
-                record["energy"] = await state.result()        
+                record["energy"] = await state.result()
             # Read job report artifact
             async with get_client() as client:
                 read_job_reports = ArtifactFilter(
@@ -160,7 +156,7 @@ async def main(
         finally:
             await _maybe_await(DiceSHCISolverJob.delete(tmp_name))
             await _maybe_await(ExecutionProfileBlock.delete(tmp_exec_name))
-    
+
     await create_table_artifact(
         table=records,
         key="dice-performance",

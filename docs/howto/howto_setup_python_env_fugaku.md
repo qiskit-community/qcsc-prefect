@@ -4,7 +4,7 @@ This guide explains how to set up a Python virtual environment for workflow exec
 
 ## Instructions
 
-> [!IMPORTANT]  
+> [!IMPORTANT]
 > - Replace `u12345` with your actual account name.
 
 ### Step 1: Log in to Fugaku and execute the interact session for Pre/Post Node

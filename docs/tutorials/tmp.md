@@ -11,22 +11,22 @@ Our objective is to compute a count dictionary of sampler bitstrings using MPI p
 
 You will see these terms:
 - **Flow**: the end-to-end workflow defined in sampler_workflow.py
-- **Task**: individual steps inside the flow (e.g., runtime.sampler(...), counter.get(...)) 
+- **Task**: individual steps inside the flow (e.g., runtime.sampler(...), counter.get(...))
 - **Block**: reusable configuration + credentials stored in Prefect server
-  - `ibm-quantum-credentials` : IBM Cloud CRN + API key 
-  - `quantum-runtime` : runtime settings referencing credentials 
-  - `bit-counter` : HPC job configuration (queue, nodes, executable path, modules) 
-- **Variable**: run-time parameter stored server-side (sampler shots etc.) 
+  - `ibm-quantum-credentials` : IBM Cloud CRN + API key
+  - `quantum-runtime` : runtime settings referencing credentials
+  - `bit-counter` : HPC job configuration (queue, nodes, executable path, modules)
+- **Variable**: run-time parameter stored server-side (sampler shots etc.)
 
 ## What you need
 
 - **Accounts / IDs**: (a) Fugaku account, (b) Prefect Web Portal account (API Key), (c) IBM Cloud API key + Service CRN (Quantum)
-- **Local tools**: SSH client and a modern browser.  
+- **Local tools**: SSH client and a modern browser.
 
 ---
 ## Prerequisites (One-time setup)
 
-The whole process image is : 
+The whole process image is :
 
 ![Prerequisites Flow](../images/img-prerequisites-fugaku.png)
 
@@ -191,7 +191,7 @@ Load Fujutsu MPI library in your shell:
 spack load fujitsu-mpi@head-gcc8
 ```
 
-Compile the program. 
+Compile the program.
 
 <img src="../images/icon-fugaku.png" alt="fugaku" width="70"/><br>
 ```bash
@@ -246,7 +246,7 @@ vi get_counts_integration.py
 Add following lines to the file:
 
 ```python
-import json 
+import json
 import numpy as np
 from prefect import task
 from prefect_fugaku import FugakuJobBlock
@@ -312,7 +312,7 @@ Open it in your browser and fill in the following fields:
 | Launcher | `mpiexec` |
 | Num MPI Processes | `2` |
 | Num Nodes | `2` |
-| Root Directory | `/vol000x/mdt6/data/ra000000/u12345/fugaku_tutorial` <br> (The path to the `fugaku_tutorial` directory in Fugaku)| 
+| Root Directory | `/vol000x/mdt6/data/ra000000/u12345/fugaku_tutorial` <br> (The path to the `fugaku_tutorial` directory in Fugaku)|
 | Executable | `/vol0000/mdt6/data/ra000000/u12345/fugaku_tutorial/get_counts` <br> (The absolute path to the `get_counts` executable)|
 | group_name| `ra000000` (Your Fugaku group name) |
 | Max Elapse Time| `00:05:00`|
@@ -361,8 +361,8 @@ async def main():
     qc_ghz.cx(0, range(1, BITLEN))
     qc_ghz.measure_active()
     pm = generate_preset_pass_manager(
-        optimization_level=3, 
-        target=target, 
+        optimization_level=3,
+        target=target,
         seed_transpiler=123,
     )
     isa = pm.run(qc_ghz)

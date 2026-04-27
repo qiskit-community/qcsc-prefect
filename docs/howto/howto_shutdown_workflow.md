@@ -31,4 +31,4 @@ There are screens on:
 1 Sockets in /run/screen/S-z12345.
 ```
 > [!NOTE]
-> If you want to logout the Prefect portal, please delete the cookie for https://prefect-portal.example.org with your web browser. 
+> If you want to logout the Prefect portal, please delete the cookie for https://prefect-portal.example.org with your web browser.

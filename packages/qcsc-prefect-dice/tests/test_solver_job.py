@@ -5,10 +5,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from qiskit_addon_sqd.fermion import SCIResult
-
 from qcsc_prefect_dice import solver_job as mod
 from qcsc_prefect_dice.solver_job import DiceSHCISolverJob
+from qiskit_addon_sqd.fermion import SCIResult
 
 
 def test_run_dice_inner_runs_through_block_executor(monkeypatch, tmp_path: Path):

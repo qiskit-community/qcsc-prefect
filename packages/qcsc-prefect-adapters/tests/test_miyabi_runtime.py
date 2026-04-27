@@ -38,7 +38,9 @@ def test_wait_final_status_parses_qstat_output(monkeypatch):
     monkeypatch.setattr(runtime_mod, "run_command", fake_run_command)
     rt = runtime_mod.MiyabiPBSRuntime()
 
-    status = asyncio.run(rt.wait_final_status("12345.miyabi", watch_poll_interval=0.01, timeout_seconds=3))
+    status = asyncio.run(
+        rt.wait_final_status("12345.miyabi", watch_poll_interval=0.01, timeout_seconds=3)
+    )
 
     assert status["Job_Name"] == "test-job"
     assert status["queue"] == "normal"

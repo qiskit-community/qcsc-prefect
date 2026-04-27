@@ -26,7 +26,7 @@ You will see these terms:
   - Optimized flow task 1 (`quantum-sampling-task` in `flow_optimized.py`): quantum sampling and `input.bin` preparation
   - Optimized flow task 2 (`hpc-bitcount-task` in `flow_optimized.py`): HPC execution and count reconstruction
 - **Block**: reusable server-side configuration stored in Prefect
-  - `IBM Quantum Credentials` : IBM Cloud CRN + API key 
+  - `IBM Quantum Credentials` : IBM Cloud CRN + API key
   - `QuantumRuntime` block: `ibm-runner` (pre-created)
   - `CommandBlock`: `cmd-bitcount-hist`
   - `ExecutionProfileBlock`: `exec-bitcount-mpi`
@@ -41,7 +41,7 @@ You will see these terms:
 - **Accounts / IDs**:
   - Common: (a) MDX/Miyabi-C account (+ OTP), (b) IBM Cloud API key + Service CRN (Quantum), (c) IBMid
   - Prefect backend (choose one): On-Prem Prefect account (MDX) or Prefect Cloud account/workspace
-- **Local tools**: SSH client, an authenticator app (OTP), and a modern browser.  
+- **Local tools**: SSH client, an authenticator app (OTP), and a modern browser.
 
 ## Choose your Prefect backend (On-Prem or Cloud)
 
@@ -60,7 +60,7 @@ This tutorial supports both backends. Choose one backend first, then use the sam
 
 ## Identity & authentication checklist
 
-Before the hands-on, confirm the identity mapping below. Mismatched emails are a common cause of access failures in enterprise/on-prem environments. 
+Before the hands-on, confirm the identity mapping below. Mismatched emails are a common cause of access failures in enterprise/on-prem environments.
 
 | System | What you use to sign in | Must match other emails? (common policy) | Notes |
 |---|---|---|---|
@@ -70,19 +70,19 @@ Before the hands-on, confirm the identity mapping below. Mismatched emails are a
 | Prefect Cloud | Prefect Cloud user + API key | Not required | On free tier, metadata retention is 7 days|
 | IBM Quantum (IBM Cloud) | Service CRN + API key | No | Common for both backends |
 
-> If you see SSO-related errors on the MDX Prefect console, first confirm that the email address used for SSO matches the Prefect user email required by your environment administrator.  
+> If you see SSO-related errors on the MDX Prefect console, first confirm that the email address used for SSO matches the Prefect user email required by your environment administrator.
 
 
 ## Prerequisites (One-time setup)
 
-This section prepares stable access from your laptop to MDX and from MDX to Miyabi-C. 
-The whole process image is : 
+This section prepares stable access from your laptop to MDX and from MDX to Miyabi-C.
+The whole process image is :
 
 ![Prerequisites Flow](../images/img-prerequisites.png)
 
 Before starting, make sure:
 
-- You have completed 
+- You have completed
   - [Step1 : SSH Connection Setup for MDX and Miyabi-C with Git Configuration](../howto/howto_setup_ssh_keys_for_mdx_and_miyabi.md)
   - [Step1 : How to Set Up Python Environment on the MDX Workflow Client](../howto/howto_setup_python_env.md).
 - You have completed [Step2 : How to Set Up File Sync Between MDX and Miyabi-C](../howto/howto_setup_file_sync.md).
@@ -269,7 +269,7 @@ Differences:
 
 ## Step 5. Prepare block configuration file
 
-Back to MDX termial, 
+Back to MDX termial,
 
 <img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
