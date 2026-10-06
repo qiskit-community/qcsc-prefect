@@ -34,7 +34,7 @@ Before starting, make sure:
 > **Important**
 >
 > Slurm systems differ in partition names, account/project requirements,
-> filesystem layout, MPI configuration, and available modules. Replace
+> filesystem layout, MPI configuration and available modules. Replace
 > the example values in this tutorial with values appropriate for your
 > cluster.
 
@@ -43,14 +43,14 @@ Before starting, make sure:
 ## 0. What changes for Slurm?
 
 The workflow architecture remains the same across HPC backends. The main
-difference is how the classical SBD solver is built, configured, and
+difference is how the classical SBD solver is built, configured and
 submitted.
 
 The SBD solver uses the following reusable Blocks:
 
 -   `CommandBlock` --- **what** executable to run.
 -   `ExecutionProfileBlock` --- **how** to run it, including MPI
-    launcher, process count, walltime, modules, and related execution
+    launcher, process count, walltime, modules and related execution
     settings.
 -   `HPCProfileBlock` --- **where** to run it, including the HPC target,
     partition/queue, and project/account.
@@ -82,7 +82,7 @@ SBD executable can be accessed directly.
 
 The complete SQD experiment is represented as a Prefect Flow, including
 quantum sampling, configuration recovery, SBD diagonalization,
-iterations, and result collection.
+iterations and result collection.
 
 #### Tasks
 
@@ -349,8 +349,8 @@ You can inspect the registered Blocks with Prefect:
 ``` bash
 prefect block ls
 ```
-
 When the workflow reaches the SBD solver stage, the Slurm adapter uses the configured execution and HPC profile blocks to generate a Slurm batch script. The generated script contains the appropriate #SBATCH directives and launches the SBD executable using the configured launcher (for example, srun).
+
 ------------------------------------------------------------------------
 
 ### Step 6. Deploy the SBD workflow
@@ -389,21 +389,14 @@ run**.
 
 For an initial test, use parameters similar to:
 
-  ---------------------------------------------------------------------------------------------------
-  Field                               Value / Example
-  ----------------------------------- ---------------------------------------------------------------
-  FCIDump File                        `/path/to/qcsc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt`
-
-  SQD Subspace Dimension              `1000000`
-
-  Differential Evolution Iterations   `1`
-
-  Quantum Source                      `random` or `real-device`
-
-  Random Seed                         `24`
-
-  Solver Block Ref                    `sbd_solver_job/davidson-solver`
-  ---------------------------------------------------------------------------------------------------
+| Field | Value / Example |
+|---|---|
+| FCIDump File | `/path/to/qcsc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
+| SQD Subspace Dimension | `1000000` |
+| Differential Evolution Iterations | `1` |
+| Quantum Source | `random` or `real-device` |
+| Random Seed | `24` |
+| Solver Block Ref | `sbd_solver_job/davidson-solver` |
 
 `Solver Block Ref` selects the `SBDSolverJob` preset used by the
 workflow.
