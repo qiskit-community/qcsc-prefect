@@ -118,26 +118,24 @@ A deployment makes the Flow runnable by name from the Prefect UI or CLI.
 
 ### Step 1. Clone the repository and activate the Python environment
 
-Clone or enter your `qcsc-prefect` checkout:
+Access your Slurm cluster login node:
+
+``` bash
+ssh user@login-node
+```
+
+Clone the repository or enter your `qcsc-prefect` checkout:
 
 ``` bash
 git clone https://github.com/qiskit-community/qcsc-prefect.git
 cd qcsc-prefect
 ```
 
-Activate the Python environment you use for `qcsc-prefect`.
-
-For example:
+Create and activate a virtual environment for the workflow. For example:
 
 ``` bash
+python -m venv .venv
 source /path/to/venv/bin/activate
-```
-
-Confirm that your Prefect profile points to the intended server:
-
-``` bash
-prefect profile ls
-prefect config view
 ```
 
 ------------------------------------------------------------------------
@@ -165,15 +163,6 @@ Check the installation:
 
 ``` bash
 uv pip list | grep -E "(qcsc-prefect|sbd|qcsc)"
-```
-
-When developing from a local checkout, it is useful to confirm that
-Python is importing the package from the checkout you intend to test.
-
-For example:
-
-``` bash
-python -c "import qcsc_prefect_adapters; print(qcsc_prefect_adapters.__file__)"
 ```
 
 ------------------------------------------------------------------------
@@ -253,7 +242,7 @@ For example:
 mkdir -p /path/to/sbd_jobs
 ```
 
-Copy the Slurm example configuration:
+Copy the Slurm example configuration to create your local configuration:
 
 ``` bash
 cp algorithms/sbd/sbd_blocks.slurm.example.toml \
@@ -320,13 +309,6 @@ solver_mode = "cpu"
 For a quick functional test, the low-iteration settings in the example
 configuration are recommended before scaling the calculation.
 
-> **Important**
->
-> `sbd_blocks.toml` is a local runtime configuration and may contain
-> machine-specific paths and scheduler settings. Use
-> `sbd_blocks.slurm.example.toml` as the shareable configuration
-> template.
-
 ------------------------------------------------------------------------
 
 ### Step 5. Generate the Prefect Blocks
@@ -368,67 +350,26 @@ You can inspect the registered Blocks with Prefect:
 prefect block ls
 ```
 
+When the workflow reaches the SBD solver stage, the Slurm adapter uses the configured execution and HPC profile blocks to generate a Slurm batch script. The generated script contains the appropriate #SBATCH directives and launches the SBD executable using the configured launcher (for example, srun).
 ------------------------------------------------------------------------
 
-### Step 6. Understand the generated Slurm job
+### Step 6. Deploy the SBD workflow
 
-When the SBD solver runs, the Slurm adapter generates a batch script
-containing scheduler directives derived from the Blocks.
 
-Conceptually, the generated script resembles:
+For a long-running deployment, use a process-management mechanism appropriate for your environment such as `screen`, `tmux` or a service.
 
-``` bash
-#!/bin/bash
-#SBATCH --partition=<partition>
-#SBATCH --account=<account>
-#SBATCH --nodes=<nodes>
-#SBATCH --ntasks-per-node=<mpi-processes>
-#SBATCH --time=<walltime>
-#SBATCH --output=<work-dir>/output.out
-#SBATCH --error=<work-dir>/output.err
+For example, from the repository root, activate the Python environment and start the SBD deployment using `screen`:
 
-cd <work-dir>
-
-srun /absolute/path/to/diag <solver-arguments>
-```
-
-Optional execution settings can also provide:
-
--   environment modules,
--   pre-run shell commands,
--   environment variables,
--   OpenMP thread counts,
--   additional MPI launcher options.
-
-The generated job performs an executable preflight check before
-launching the solver so that an invalid or inaccessible executable path
-fails with a clear error.
-
-------------------------------------------------------------------------
-
-### Step 7. Deploy the SBD workflow
-
-From the repository root, activate the Python environment and start the
-SBD deployment:
-
-``` bash
+```bash
 cd /path/to/qcsc-prefect
 source /path/to/venv/bin/activate
-sbd-deploy
-```
 
-For a long-running serving process, use the process-management mechanism
-appropriate for your environment, such as `screen`, `tmux`, or a
-service.
-
-For example:
-
-``` bash
 screen -S sbd-workflow
 sbd-deploy
 ```
 
-Detach from `screen` with `<Ctrl-a>` followed by `d`.
+To detach from the `screen` session while leaving the deployment running, press `Ctrl+A`, followed by `D`.
+
 
 The serving process must remain active so that it can pick up Flow Runs
 created from the Prefect UI or CLI.
@@ -441,7 +382,7 @@ prefect deployment ls
 
 ------------------------------------------------------------------------
 
-### Step 8. Provide workflow parameters
+### Step 7. Provide workflow parameters
 
 From the Prefect UI, select the SBD deployment and choose **Run → Custom
 run**.
@@ -476,7 +417,7 @@ runtime Block and submits the sampling workload to IBM Quantum.
 
 ------------------------------------------------------------------------
 
-### Step 9. Execute and monitor the workflow
+### Step 8. Execute and monitor the workflow
 
 Submit the Flow Run from the Prefect UI.
 
@@ -517,7 +458,7 @@ convergence.
 
 ------------------------------------------------------------------------
 
-## 3. What happens when the workflow submits an SBD job?
+## 3. How the Slurm execution works
 
 The Slurm execution path keeps the scientific workflow independent of
 cluster-specific scheduler configuration.
