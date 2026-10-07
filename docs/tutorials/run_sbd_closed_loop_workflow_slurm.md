@@ -17,26 +17,10 @@ environment.
 
 Before starting, make sure:
 
--   You have access to a Slurm cluster and can submit jobs with
-    `sbatch`.
--   An MPI C++ compiler wrapper such as `mpicxx` or `mpic++` is
-    available.
--   OpenBLAS development headers and libraries are installed and
-    linkable with `-lopenblas`.
--   Git and Python are available.
--   You have a Python environment with Prefect and the `qcsc-prefect`
-    packages.
--   You have configured access to the Prefect server used for the
-    workflow.
--   If you plan to use a real quantum device, configure the required IBM
-    Quantum credentials/runtime Block.
-
-> **Important**
->
-> Slurm systems differ in partition names, account/project requirements,
-> filesystem layout, MPI configuration and available modules. Replace
-> the example values in this tutorial with values appropriate for your
-> cluster.
+- You have access to a Slurm cluster with `sbatch` and `srun` available.
+- Python 3.12 and `uv` are available on the Slurm login node.
+- OpenBLAS and an MPI C++ compiler (`mpicxx` or `mpic++`) are available for building the SBD solver.
+- If you plan to use a real quantum device, complete [How to Set Up IBM Quantum Access Credentials for Prefect](../howto/howto_setup_prefect_qiskit_slurm.md) to configure the required IBM Quantum Runtime block.
 
 ------------------------------------------------------------------------
 
@@ -88,20 +72,20 @@ iterations and result collection.
 
 Individual stages include:
 
--   quantum sampling,
--   subsampling/configuration recovery,
--   Davidson diagonalization on Slurm,
--   result collection and artifact generation.
+-   quantum sampling
+-   subsampling/configuration recovery
+-   Davidson diagonalization on Slurm
+-   result collection and artifact generation
 
 #### Blocks
 
 Blocks store reusable configuration such as:
 
--   quantum credentials/runtime configuration,
--   executable path,
--   MPI execution settings,
--   Slurm partition/account settings,
--   SBD solver parameters.
+-   quantum credentials/runtime configuration
+-   executable path
+-   MPI execution settings
+-   Slurm partition/account settings
+-   SBD solver parameters
 
 #### Variables
 
