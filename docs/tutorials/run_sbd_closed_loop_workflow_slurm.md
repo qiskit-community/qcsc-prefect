@@ -1,17 +1,29 @@
 # Run SBD Closed-loop Workflow on Slurm (qcsc-prefect)
 
-This tutorial walks through running a Sample-based Quantum
-Diagonalization (SQD) closed-loop workflow with `qcsc-prefect` on a
-Slurm-based HPC system.
+This tutorial demonstrates a Sample-based Quantum Diagonalization (SQD) workflow 
+using the `qcsc-prefect` architecture.The workflow combines quantum sampling with 
+classical processing and uses the [SBD](https://github.com/r-ccs-cms/sbd) solver to 
+diagonalize a sparse chemistry Hamiltonian on a Slurm-based HPC system, 
+with Prefect orchestrating the end-to-end workflow.
 
-The workflow combines quantum sampling and classical processing with an
-SBD Davidson diagonalization job submitted through Slurm. Prefect
-orchestrates the workflow and stores the reusable execution
-configuration in Blocks and Variables.
+The tutorial focuses on running the workflow in a generic Slurm environment 
+including building the SBD solver, configuring the Slurm execution environment 
+and executing the hybrid quantum-classical workflow.
 
 The goal is to compute the ground-state energy of the N2-Mo state while
 demonstrating how the same QCSC workflow can target a generic Slurm
 environment.
+
+> **Tip**
+>
+> You can first validate the classical workflow and Slurm execution path
+> by setting `Quantum Source` to `random`. This does not require IBM
+> Quantum access.
+>
+> After the classical pipeline is working successfully, you can configure
+> IBM Quantum access and rerun the workflow with `Quantum Source` set to
+> `real-device`.
+
 
 ## Prerequisites
 
@@ -20,8 +32,7 @@ Before starting, make sure:
 - You have access to a Slurm cluster with `sbatch` and `srun` available.
 - Python 3.12 and `uv` are available on the Slurm login node.
 - OpenBLAS and an MPI C++ compiler (`mpicxx` or `mpic++`) are available for building the SBD solver.
-- If you plan to use a real quantum device, complete [How to Set Up IBM Quantum Access Credentials for Prefect](../howto/howto_setup_prefect_qiskit_slurm.md) to configure the required IBM Quantum Runtime block.
-
+- IBM Quantum access is optional for the initial classical workflow test. If you plan to use a real quantum device, complete [How to Set Up IBM Quantum Access Credentials for Prefect on a Local Slurm Setup](../howto/howto_setup_prefect_qiskit_slurm.md).
 ------------------------------------------------------------------------
 
 ## 0. What changes for Slurm?
@@ -100,24 +111,25 @@ A deployment makes the Flow runnable by name from the Prefect UI or CLI.
 
 ## 2. Tutorial steps
 
-### Step 1. Clone the repository and activate the Python environment
+### Step 1. Set up the repository and Python environment
 
-Access your Slurm cluster login node:
+If you completed the IBM Quantum access prerequisite, navigate to the existing `qcsc-prefect` checkout and activate the Python environment:
 
-``` bash
-ssh user@login-node
+```bash
+cd /path/to/qcsc-prefect
+source .venv/bin/activate
 ```
 
-Clone the repository or enter your `qcsc-prefect` checkout:
+Otherwise, clone the `qcsc-prefect` repository:
 
-``` bash
+```bash
 git clone https://github.com/qiskit-community/qcsc-prefect.git
 cd qcsc-prefect
 ```
 
-Create and activate a virtual environment for the workflow. For example:
+Create and activate a Python 3.12 virtual environment:
 
-``` bash
+```bash
 uv venv -p 3.12
 source .venv/bin/activate
 ```
