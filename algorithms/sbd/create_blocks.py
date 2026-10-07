@@ -9,6 +9,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+
 def _import_sbd_solver_block():
     # Supports direct execution:
     # python algorithms/sbd/create_blocks.py ...
