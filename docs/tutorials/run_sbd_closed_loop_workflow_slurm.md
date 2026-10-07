@@ -182,11 +182,11 @@ bash build_sbd_slurm.sh
 
 The script:
 
-1.  selects `mpicxx` or `mpic++`,
-2.  clones the upstream SBD repository if needed,
-3.  checks out the SBD revision used by this integration,
-4.  compiles `main.cc` with C++17, OpenMP, and optimization enabled,
-5.  links the executable against OpenBLAS.
+1.  selects `mpicxx` or `mpic++`
+2.  clones the upstream SBD repository if needed
+3.  checks out the SBD revision used by this integration
+4.  compiles `main.cc` with C++17, OpenMP and optimization enabled
+5.  links the executable against OpenBLAS
 
 The upstream SBD revision is pinned by the build script so that the
 build is reproducible.
