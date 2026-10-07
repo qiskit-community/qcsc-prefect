@@ -1,12 +1,12 @@
 # Run SBD Closed-loop Workflow on Slurm (qcsc-prefect)
 
 This tutorial demonstrates a Sample-based Quantum Diagonalization (SQD) workflow 
-using the `qcsc-prefect` architecture.The workflow combines quantum sampling with 
+using the `qcsc-prefect` architecture. The workflow combines quantum sampling with 
 classical processing and uses the [SBD](https://github.com/r-ccs-cms/sbd) solver to 
 diagonalize a sparse chemistry Hamiltonian on a Slurm-based HPC system, 
 with Prefect orchestrating the end-to-end workflow.
 
-The tutorial focuses on running the workflow in a generic Slurm environment 
+The tutorial focuses on running the workflow in a generic Slurm environment, 
 including building the SBD solver, configuring the Slurm execution environment 
 and executing the hybrid quantum-classical workflow.
 
