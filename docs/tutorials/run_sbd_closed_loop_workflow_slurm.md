@@ -307,7 +307,7 @@ configuration are recommended before scaling the calculation.
 
 Before creating the Prefect blocks, make sure your Prefect client is connected to a running Prefect server.
 
-For a small or local environment, you can run the Prefect server directly on the Slurm login node:
+For a small or tutorial environment, you can run the Prefect server directly on the Slurm login node:
 
 ```bash
 prefect server start --host 0.0.0.0 --background
@@ -376,7 +376,7 @@ The output should include the following blocks:
 │ <block-id>                           │ HPC Profile       │ hpc-slurm-sbd   │ hpc-profile/hpc-slurm-sbd      │
 │ <block-id>                           │ SBD Solver Job    │ davidson-solver │ sbd-solver-job/davidson-solver │
 └──────────────────────────────────────┴───────────────────┴─────────────────┴────────────────────────────────┘
-                                List Block Types using `prefect block type ls`
+
 ```
 
 You can also verify the generated blocks from the Prefect UI:
@@ -415,7 +415,7 @@ You can also run your flow via the Prefect UI.
 
 At this point, the deployment is ready to accept flow runs. Keep the serving process running while executing the workflow.
 
-Detach from the `screen` session while leaving the deployment running, press `Ctrl+A`, followed by `D`.
+To detach from the `screen` session while leaving the deployment running, press `Ctrl+A`, followed by `D`.
 
 The serving process must remain active so that it can pick up Flow Runs created from the Prefect UI or CLI.
 
@@ -437,6 +437,7 @@ Deployments
 ```
 
 This confirms that the `riken-sqd-de/riken_sqd_de` deployment was created successfully and is available to run.
+
 ------------------------------------------------------------------------
 
 ### Step 7. Provide workflow parameters
