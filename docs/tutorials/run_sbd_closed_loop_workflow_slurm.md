@@ -134,8 +134,8 @@ cd qcsc-prefect
 Create and activate a virtual environment for the workflow. For example:
 
 ``` bash
-python -m venv .venv
-source /path/to/venv/bin/activate
+uv venv -p 3.12
+source .venv/bin/activate
 ```
 
 ------------------------------------------------------------------------
@@ -245,35 +245,25 @@ mkdir -p /path/to/sbd_jobs
 Copy the Slurm example configuration to create your local configuration:
 
 ``` bash
-cp algorithms/sbd/sbd_blocks.slurm.example.toml \
-   algorithms/sbd/sbd_blocks.toml
+cp /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.slurm.example.toml \
+   /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.toml
 ```
 
 Edit the local configuration:
 
 ``` bash
-vim algorithms/sbd/sbd_blocks.toml
+vim /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.toml
 ```
 
 At minimum, configure:
 
-  ------------------------------------------------------------------------------------------------------
-  Parameter               Example                                                Description
-  ----------------------- ------------------------------------------------------ -----------------------
-  `hpc_target`            `"slurm"`                                              Selects the Slurm
-                                                                                 backend
-
-  `project`               `"default"`                                            Slurm account/project,
-                                                                                 if required
-
-  `queue`                 `"normal"`                                             Slurm partition
-
-  `work_dir`              `"/path/to/sbd_jobs"`                                  Shared job working
-                                                                                 directory
-
-  `sbd_executable`        `"/path/to/qcsc-prefect/algorithms/sbd/native/diag"`   Absolute path to the
-                                                                                 compiled solver
-  ------------------------------------------------------------------------------------------------------
+| Parameter | Example | Description |
+|---|---|---|
+| `hpc_target` | `"slurm"` | Selects the Slurm backend |
+| `project` | `"default"` | Slurm account/project, if required |
+| `queue` | `"normal"` | Slurm partition |
+| `work_dir` | `"/path/to/sbd_jobs"` | Shared job working directory |
+| `sbd_executable` | `"/path/to/qcsc-prefect/algorithms/sbd/native/diag"` | Absolute path to the compiled solver |
 
 A minimal configuration looks like:
 
@@ -313,11 +303,36 @@ configuration are recommended before scaling the calculation.
 
 ### Step 5. Generate the Prefect Blocks
 
+#### Optional: Run a Prefect server on the login node
+
+Before creating the Prefect blocks, make sure your Prefect client is connected to a running Prefect server.
+
+For a small or local environment, you can run the Prefect server directly on the Slurm login node:
+
+```bash
+prefect server start --host 0.0.0.0 --background
+```
+
+Configure the Prefect client to use this server:
+
+```bash
+prefect config set PREFECT_API_URL=http://127.0.0.1:4200/api
+```
+
+Verify that the server is accessible:
+
+```bash
+prefect server status
+```
+
+This setup is convenient for a single-user tutorial or test environment. For a shared or production environment, use the Prefect deployment appropriate for your infrastructure.
+
+#### Create the Prefect blocks
+
 Run the block creation script using the Slurm configuration:
 
 ``` bash
-python algorithms/sbd/create_blocks.py \
-  --config algorithms/sbd/sbd_blocks.toml
+python /path/to/qcsc-prefect/algorithms/sbd/create_blocks.py --config /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.toml
 ```
 
 The script creates the reusable configuration needed by `SBDSolverJob`,
@@ -349,7 +364,25 @@ You can inspect the registered Blocks with Prefect:
 ``` bash
 prefect block ls
 ```
-When the workflow reaches the SBD solver stage, the Slurm adapter uses the configured execution and HPC profile blocks to generate a Slurm batch script. The generated script contains the appropriate #SBATCH directives and launches the SBD executable using the configured launcher (for example, srun).
+The output should include the following blocks:
+
+```text
+                                                    Blocks
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ID                                   ┃ Type              ┃ Name            ┃ Slug                           ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ <block-id>                           │ Execution Profile │ exec-sbd-mpi    │ execution-profile/exec-sbd-mpi │
+│ <block-id>                           │ HPC Command       │ cmd-sbd-diag    │ hpc-command/cmd-sbd-diag       │
+│ <block-id>                           │ HPC Profile       │ hpc-slurm-sbd   │ hpc-profile/hpc-slurm-sbd      │
+│ <block-id>                           │ SBD Solver Job    │ davidson-solver │ sbd-solver-job/davidson-solver │
+└──────────────────────────────────────┴───────────────────┴─────────────────┴────────────────────────────────┘
+                                List Block Types using `prefect block type ls`
+```
+
+You can also verify the generated blocks from the Prefect UI:
+
+![Prefect blocks generated for the Slurm-based SBD workflow](../images/img-sbd-slurm-prefect-blocks.png)
+
 
 ------------------------------------------------------------------------
 
@@ -368,11 +401,23 @@ screen -S sbd-workflow
 sbd-deploy
 ```
 
-To detach from the `screen` session while leaving the deployment running, press `Ctrl+A`, followed by `D`.
+When the deployment starts successfully, you should see output similar to:
 
+```text
+Your flow 'riken-sqd-de' is being served and polling for scheduled runs!
 
-The serving process must remain active so that it can pick up Flow Runs
-created from the Prefect UI or CLI.
+To trigger a run for this flow, use the following command:
+
+    $ prefect deployment run 'riken-sqd-de/riken_sqd_de'
+
+You can also run your flow via the Prefect UI.
+```
+
+At this point, the deployment is ready to accept flow runs. Keep the serving process running while executing the workflow.
+
+Detach from the `screen` session while leaving the deployment running, press `Ctrl+A`, followed by `D`.
+
+The serving process must remain active so that it can pick up Flow Runs created from the Prefect UI or CLI.
 
 List deployments with:
 
@@ -380,6 +425,18 @@ List deployments with:
 prefect deployment ls
 ```
 
+The output should include the SBD workflow deployment:
+
+```text
+Deployments
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ Name                          ┃ ID                                   ┃ Work Pool ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ riken-sqd-de/riken_sqd_de     │ <deployment-id>                      │           │
+└───────────────────────────────┴──────────────────────────────────────┴───────────┘
+```
+
+This confirms that the `riken-sqd-de/riken_sqd_de` deployment was created successfully and is available to run.
 ------------------------------------------------------------------------
 
 ### Step 7. Provide workflow parameters
@@ -401,53 +458,36 @@ For an initial test, use parameters similar to:
 `Solver Block Ref` selects the `SBDSolverJob` preset used by the
 workflow.
 
-For the first Slurm integration test, `random` is useful because it
-allows the classical workflow and Slurm execution path to be validated
-independently of quantum-device access.
+For the initial Slurm integration test, use `random` to validate the classical workflow and Slurm execution path without requiring access to a quantum device.
 
-When `real-device` is selected, the workflow uses the configured quantum
-runtime Block and submits the sampling workload to IBM Quantum.
+After validating the Slurm execution path, use `real-device` to run the sampling workload on IBM Quantum using the configured quantum runtime block.
 
 ------------------------------------------------------------------------
 
 ### Step 8. Execute and monitor the workflow
 
-Submit the Flow Run from the Prefect UI.
 
-The workflow will:
+After configuring the workflow parameters, click **Start Now → Submit** in the Prefect UI.
 
-1.  obtain or generate quantum samples,
-2.  perform configuration recovery,
-3.  prepare the SBD input files,
-4.  generate a Slurm batch script,
-5.  submit the Davidson diagonalization job,
-6.  wait for the Slurm job to finish,
-7.  parse the SBD output,
-8.  continue the SQD loop and record telemetry.
+The submitted flow run can be monitored from the Prefect UI. During execution, the workflow runs the classical SQD stages and submits the SBD diagonalization job to the configured Slurm cluster.
 
-You can also monitor the classical job directly with Slurm:
+![SBD workflow execution in Prefect](../images/img-sbd-slurm-workflow-run.png)
 
-``` bash
+*Execution of the SBD closed-loop workflow from the Prefect UI.*
+
+You can also monitor the submitted Slurm job from the login node:
+
+```bash
 squeue -u "$USER"
 ```
 
-Inspect the generated job directory and Slurm output files when
-troubleshooting:
+After the workflow completes, open the `sqd-telemetry` artifact in the Prefect UI to inspect the intermediate energies and workflow results.
 
-``` bash
-ls -la /path/to/sbd_jobs
-```
+![SQD telemetry artifact](../images/img-sbd-slurm-telemetry.png)
 
-The generated job directories contain the solver inputs, Slurm script,
-and output/error files associated with the SBD execution.
+*SQD telemetry generated after successful workflow execution.*
 
-After the workflow completes, inspect the `sqd-telemetry` artifact in
-Prefect. It contains intermediate energy information produced during the
-SQD workflow.
-
-For the N2 example, the final energy is expected to approach
-approximately `-134.94` Hartree when using settings sufficient for
-convergence.
+The `sqd-telemetry` artifact records the energy computed for each walker across differential evolution trials. With the fast tutorial configuration (`iteration = 1`), only `trial_index = 0` is expected. Increase `iteration` to run additional trials and observe energy convergence.
 
 ------------------------------------------------------------------------
 
@@ -559,29 +599,7 @@ python algorithms/sbd/create_blocks.py \
 
 ------------------------------------------------------------------------
 
-## 5. Files introduced for Slurm support
-
-The Slurm SBD integration uses:
-
-``` text
-algorithms/sbd/create_blocks.py
-algorithms/sbd/native/build_sbd_slurm.sh
-algorithms/sbd/sbd_blocks.slurm.example.toml
-packages/qcsc-prefect-adapters/src/qcsc_prefect_adapters/slurm/templates/batch.slurm.j2
-```
-
-The local runtime file:
-
-``` text
-algorithms/sbd/sbd_blocks.toml
-```
-
-is intended for machine-specific configuration and should not be
-committed with cluster-specific paths or settings.
-
-------------------------------------------------------------------------
-
-## 6. Recommended validation sequence
+## 5. Recommended validation sequence
 
 Before scaling the SQD calculation or enabling a real quantum device,
 validate the Slurm integration in stages:
@@ -591,7 +609,7 @@ validate the Slurm integration in stages:
 3.  Create the Slurm Prefect Blocks.
 4.  Run the workflow with a small SQD subspace and
     `quantum_source="random"`.
-5.  Confirm Slurm submission, job completion, and SBD result parsing.
+5.  Confirm Slurm submission, job completion and SBD result parsing.
 6.  Inspect the Prefect telemetry artifact.
 7.  Enable `quantum_source="real-device"` after the classical Slurm path
     is working.
