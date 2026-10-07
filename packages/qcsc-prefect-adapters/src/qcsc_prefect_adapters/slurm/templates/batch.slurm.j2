@@ -1,4 +1,4 @@
-#!/bin/bash{% if modules is defined %} -l{% endif %}
+#!/bin/bash
 #SBATCH --partition={{ partition }}
 {%- if account is defined %}
 #SBATCH --account={{ account }}

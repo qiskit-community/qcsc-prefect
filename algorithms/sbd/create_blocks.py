@@ -50,11 +50,11 @@ def _set_variable(variable_name: str, value: Any) -> None:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create Prefect blocks for SBD workflow (Miyabi or Fugaku)."
+        description="Create Prefect blocks for SBD workflow (Miyabi or Fugaku or Slurm)."
     )
     parser.add_argument("--config", type=Path, help="Path to TOML/JSON config file.")
 
-    parser.add_argument("--hpc-target", choices=["miyabi", "fugaku"])
+    parser.add_argument("--hpc-target", choices=["miyabi", "fugaku", "slurm"])
     parser.add_argument("--project")
     parser.add_argument("--group")
     parser.add_argument("--queue")
@@ -147,11 +147,18 @@ def _default_block_names(*, hpc_target: str, solver_mode: str) -> dict[str, str]
             "hpc_profile_block_name": "hpc-miyabi-sbd-gpu" if is_gpu else "hpc-miyabi-sbd",
             "solver_block_name": "davidson-solver-gpu" if is_gpu else "davidson-solver",
         }
+    if hpc_target == "fugaku":
+        return {
+            "profile_name": "sbd-gpu" if is_gpu else "sbd-mpi",
+            "execution_profile_block_name": "exec-sbd-fugaku-gpu" if is_gpu else "exec-sbd-fugaku",
+            "hpc_profile_block_name": "hpc-fugaku-sbd-gpu" if is_gpu else "hpc-fugaku-sbd",
+            "solver_block_name": "davidson-solver-gpu" if is_gpu else "davidson-solver",
+        }
     return {
         "profile_name": "sbd-gpu" if is_gpu else "sbd-mpi",
-        "execution_profile_block_name": "exec-sbd-fugaku-gpu" if is_gpu else "exec-sbd-fugaku",
-        "hpc_profile_block_name": "hpc-fugaku-sbd-gpu" if is_gpu else "hpc-fugaku-sbd",
-        "solver_block_name": "davidson-solver-gpu" if is_gpu else "davidson-solver",
+        "execution_profile_block_name": "exec-sbd-slurm-gpu" if is_gpu else "exec-sbd-slurm",
+        "hpc_profile_block_name": "hpc-slurm-sbd-gpu" if is_gpu else "hpc-slurm-sbd",
+        "solver_block_name": "davidson-solver-gpu" if is_gpu else "davidson-solver-slurm",
     }
 
 
@@ -260,9 +267,10 @@ def main() -> None:
         .strip()
         .lower()
     )
-    if hpc_target not in {"miyabi", "fugaku"}:
-        raise RuntimeError("'hpc_target' must be either 'miyabi' or 'fugaku'.")
+    if hpc_target not in {"miyabi", "fugaku", "slurm"}:
+        raise RuntimeError("'hpc_target' must be either 'miyabi' or 'fugaku' or 'slurm'.")
     is_miyabi = hpc_target == "miyabi"
+    is_fugaku = hpc_target == "fugaku"
 
     if is_miyabi:
         project = _pick_value(
@@ -273,11 +281,17 @@ def main() -> None:
             config.get("group"),
             env.get("group"),
         )
-    else:
+    elif is_fugaku:
         project = _pick_value(
             args.group,
             config.get("group"),
             env.get("group"),
+            args.project,
+            config.get("project"),
+            env.get("project"),
+        )
+    else:
+        project = _pick_value(
             args.project,
             config.get("project"),
             env.get("project"),
@@ -308,7 +322,14 @@ def main() -> None:
     if not sbd_executable:
         raise RuntimeError("Set 'sbd_executable' in --config, --sbd-executable, or SBD_EXECUTABLE.")
 
-    launcher_default = "mpiexec.hydra" if is_miyabi else "mpiexec"
+    # launcher_default = "mpiexec.hydra" if is_miyabi else "mpiexec"
+    if is_miyabi:
+        launcher_default = "mpiexec.hydra"
+    elif is_fugaku:
+        launcher_default = "mpiexec"
+    else:
+        launcher_default = "srun"
+
     launcher = str(
         _pick_value(args.launcher, config.get("launcher"), env.get("launcher"), launcher_default)
     ).strip()
@@ -440,21 +461,33 @@ def main() -> None:
         )
     ).strip()
 
+    if is_miyabi:
+        script_filename_default = "sbd_solver.pbs"
+    elif is_fugaku:
+        script_filename_default = "sbd_solver.pjm"
+    else:
+        script_filename_default = "sbd_solver.slurm"
     script_filename = str(
         _pick_value(
             args.script_filename,
             config.get("script_filename"),
             env.get("script_filename"),
-            "sbd_solver.pbs" if is_miyabi else "sbd_solver.pjm",
+            script_filename_default,
         )
     ).strip()
 
+    if is_miyabi:
+        metrics_artifact_key_default = "miyabi-sbd-metrics"
+    elif is_fugaku:
+        metrics_artifact_key_default = "fugaku-sbd-metrics"
+    else:
+        metrics_artifact_key_default = "slurm-sbd-metrics"
     metrics_artifact_key = str(
         _pick_value(
             args.metrics_artifact_key,
             config.get("metrics_artifact_key"),
             env.get("metrics_artifact_key"),
-            "miyabi-sbd-metrics" if is_miyabi else "fugaku-sbd-metrics",
+            metrics_artifact_key_default,
         )
     ).strip()
 
@@ -497,7 +530,7 @@ def main() -> None:
             project_gpu=str(project),
             executable_map={"sbd_diag": executable_path},
         ).save(hpc_profile_block_name, overwrite=True)
-    else:
+    elif is_fugaku:
         HPCProfileBlock(
             hpc_target="fugaku",
             queue_cpu=str(queue),
@@ -508,6 +541,15 @@ def main() -> None:
             gfscache=fugaku_gfscache or None,
             spack_modules=fugaku_spack_modules or [],
             mpi_options_for_pjm=fugaku_mpi_options_for_pjm or [],
+        ).save(hpc_profile_block_name, overwrite=True)
+    else:
+        HPCProfileBlock(
+            hpc_target="slurm",
+            queue_cpu=str(queue),
+            queue_gpu=str(queue),
+            project_cpu=str(project),
+            project_gpu=str(project),
+            executable_map={"sbd_diag": executable_path},
         ).save(hpc_profile_block_name, overwrite=True)
 
     sbd_solver_cls(
