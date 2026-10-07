@@ -10,6 +10,8 @@ The tutorial focuses on running the workflow in a generic Slurm environment,
 including building the SBD solver, configuring the Slurm execution environment 
 and executing the hybrid quantum-classical workflow.
 
+<img src="../images/img-sbd-closed-loop-slurm.png" alt="sbd" width="90%"/><br>
+
 The goal is to compute the ground-state energy of the N2-Mo state while
 demonstrating how the same QCSC workflow can target a generic Slurm
 environment.
@@ -110,6 +112,8 @@ A deployment makes the Flow runnable by name from the Prefect UI or CLI.
 ------------------------------------------------------------------------
 
 ## 2. Tutorial steps
+
+![SBD Setup Flow](../images/img-sbd-slurm-setup-flow.png)
 
 ### Step 1. Set up the repository and Python environment
 
