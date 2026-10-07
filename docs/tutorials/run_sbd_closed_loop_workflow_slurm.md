@@ -117,6 +117,14 @@ A deployment makes the Flow runnable by name from the Prefect UI or CLI.
 
 ### Step 1. Set up the repository and Python environment
 
+Log in to the Slurm cluster login node:
+
+```bash
+ssh <username>@<login-node>
+```
+
+The following commands should be executed on the Slurm login node.
+
 If you completed the IBM Quantum access prerequisite, navigate to the existing `qcsc-prefect` checkout and activate the Python environment:
 
 ```bash
@@ -163,6 +171,14 @@ Check the installation:
 
 ``` bash
 uv pip list | grep -E "(qcsc-prefect|sbd|qcsc)"
+
+qcsc-prefect-adapters              0.2.5
+qcsc-prefect-blocks                0.2.5
+qcsc-prefect-core                  0.2.5
+qcsc-prefect-executor              0.2.5
+qcsc-workflow-utility              0.1.0
+sbd                                0.1.0
+
 ```
 
 ------------------------------------------------------------------------
@@ -307,25 +323,8 @@ configuration are recommended before scaling the calculation.
 
 Before creating the Prefect blocks, make sure your Prefect client is connected to a running Prefect server.
 
-For a small or tutorial environment, you can run the Prefect server directly on the Slurm login node:
-
-```bash
-prefect server start --host 0.0.0.0 --background
-```
-
-Configure the Prefect client to use this server:
-
-```bash
-prefect config set PREFECT_API_URL=http://127.0.0.1:4200/api
-```
-
-Verify that the server is accessible:
-
-```bash
-prefect server status
-```
-
-This setup is convenient for a single-user tutorial or test environment. For a shared or production environment, use the Prefect deployment appropriate for your infrastructure.
+For a small or tutorial environment, you can run the Prefect server directly on the Slurm login node. 
+See [How to Run and Access a Prefect Server on a Slurm Login Node](../howto/howto_setup_prefect_server_slurm.md) for instructions on starting the server and accessing the Prefect UI from your local computer.
 
 #### Create the Prefect blocks
 
