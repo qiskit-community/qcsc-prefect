@@ -162,7 +162,6 @@ def _default_block_names(*, hpc_target: str, solver_mode: str) -> dict[str, str]
     }
 
 
-
 def _normalize_modules_for_target(
     *, is_miyabi: bool, solver_mode: str, modules: list[str] | None
 ) -> list[str]:
@@ -323,7 +322,7 @@ def main() -> None:
     if not sbd_executable:
         raise RuntimeError("Set 'sbd_executable' in --config, --sbd-executable, or SBD_EXECUTABLE.")
 
-    #launcher_default = "mpiexec.hydra" if is_miyabi else "mpiexec"
+    # launcher_default = "mpiexec.hydra" if is_miyabi else "mpiexec"
     if is_miyabi:
         launcher_default = "mpiexec.hydra"
     elif is_fugaku:
@@ -476,7 +475,6 @@ def main() -> None:
             script_filename_default,
         )
     ).strip()
-
 
     if is_miyabi:
         metrics_artifact_key_default = "miyabi-sbd-metrics"
