@@ -127,7 +127,7 @@ Save the block.
 
 <!-- IMAGE PLACEHOLDER: IBM Quantum Credentials block -->
 
-![IBM Quantum Credentials block](../images/img-slurm-ibm-quantum-credentials.png)
+![IBM Quantum Credentials block](../images/img-ibm-cred-block.png)
 
 *IBM Quantum credentials configured as a Prefect block.*
 
