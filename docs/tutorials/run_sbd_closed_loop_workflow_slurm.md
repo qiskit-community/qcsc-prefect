@@ -331,14 +331,14 @@ Run the block creation script using the Slurm configuration:
 python /path/to/qcsc-prefect/algorithms/sbd/create_blocks.py --config /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.toml
 ```
 
-The script creates the reusable configuration needed by `SBDSolverJob`,
+The script creates the reusable configuration needed by `SBDSolverJob`
 including:
 
--   a `CommandBlock` for the `diag` executable,
--   an `ExecutionProfileBlock` for MPI/Slurm execution,
--   an `HPCProfileBlock` with `hpc_target="slurm"`,
--   an `SBDSolverJob`,
--   the SQD runtime options Variable.
+-   a `CommandBlock` for the `diag` executable
+-   an `ExecutionProfileBlock` for MPI/Slurm execution
+-   an `HPCProfileBlock` with `hpc_target="slurm"`
+-   an `SBDSolverJob`
+-   the SQD runtime options Variable
 
 If you use the block-name overrides shown in the Slurm example
 configuration, the resulting names are:
