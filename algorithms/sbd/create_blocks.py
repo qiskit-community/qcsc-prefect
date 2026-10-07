@@ -271,7 +271,6 @@ def main() -> None:
         raise RuntimeError("'hpc_target' must be either 'miyabi' or 'fugaku' or 'slurm'.")
     is_miyabi = hpc_target == "miyabi"
     is_fugaku = hpc_target == "fugaku"
-    is_slurm = hpc_target == "slurm"
 
     if is_miyabi:
         project = _pick_value(
