@@ -10,67 +10,45 @@ quantum_source = "qfw"
 
 ## 1. Prerequisites
 
-The QFw-SLURM container environment should already be configured with:
+Before creating the `QFwResource` block:
 
-- QFw installed and activated
-- A valid `device-access.yaml`
-- QRMI support for the target device
-- Provider credentials available to QFw
+- The QFw-SLURM container environment must be running.
+- QFw/QRMI and the target quantum device must be configured at `/etc/openqse/qfw/device/device-access.yaml`.
+- A Prefect server must be running and the active Prefect profile must point to that server.
+- The QFw device-access configuration and provider credentials must already be available.
 
-For example:
+For Prefect server setup in the QFw-SLURM environment, see:
 
-```text
-/etc/openqse/qfw/device/device-access.yaml
-```
+[`howto_setup_prefect_server_slurm.md`](howto_setup_prefect_server_slurm.md)
 
 Provider credentials should remain in the QFw credential configuration rather than being duplicated directly in the Prefect block.
 
-## 2. Register QFw Resource Block
+## 2. Register the QFw Resource Block Type
 
-The block contains the information needed to locate and access the QFw device resource.
+The `QFwResource` block contains the information needed to locate and access a QFw device resource.
 
-Example:
+The block implementation is located at:
 
-```python
-from prefect.blocks.core import Block
-from pydantic import Field
-
-
-class QFwResource(Block):
-    device_id: str = Field(
-        description="QFw device identifier, for example ibm_fez."
-    )
-
-    device_access_config: str = Field(
-        default="/etc/openqse/qfw/device/device-access.yaml",
-        description="Path to the QFw device-access configuration.",
-    )
-
-    interface: str = Field(
-        default="qrmi",
-        description="Preferred QFw quantum interface.",
-    )
+```text
+/path/to/qcsc-prefect/algorithms/sbd/sbd/qfw_resource.py
 ```
-
-The python file is located at /path/to/qcsc-prefect/algorithms/sbd/sbd/qfw_resource.py
-
 Register the block type with Prefect:
 
 ```bash
 prefect block register -f /path/to/qcsc-prefect/algorithms/sbd/sbd/qfw_resource.py
 ```
 
-## 3. Create QFw Resource Block
+## 3. Create the QFw Resource Block Instance
 
-Create a small registration script, for example:
+Create and save the `qfw-runner` block instance using:
 
-```python
+```bash
 python /path/to/qcsc-prefect/algorithms/sbd/create_qfw_block.py
 ```
 
-## 4. Verify the Block
+## 4. Verify the Block Instance
 
-Check that the block was registered:
+Check that the named block instance was created:
 
 ```bash
 prefect block ls
