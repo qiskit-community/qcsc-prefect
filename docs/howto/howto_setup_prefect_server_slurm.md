@@ -65,6 +65,46 @@ The Prefect server listens on port `4200`.
 
 Using `--host 0.0.0.0` allows the server to be reached through port forwarding from outside the login node or container.
 
+On a fresh Prefect installation, the active profile may be `ephemeral`.
+When starting the server for the first time, Prefect may prompt you to either
+update the current profile or create a new profile.
+You can either continue using the ephemeral profile or create a dedicated profile, such as `sqd` and switch to it.
+
+For example, on a fresh installation Prefect may prompt you to create a new profile:
+
+```text
+(env) [root@login-node]# prefect server start --host 0.0.0.0 --background
+
+Prefect collects anonymous usage data to improve the product.
+To opt out: set PREFECT_SERVER_ANALYTICS_ENABLED=false on the server, or DO_NOT_TRACK=1 in the client.
+Learn more: https://docs.prefect.io/concepts/telemetry
+
+The `PREFECT_API_URL` setting for your current profile doesn't match the address of the server that's running. You need to set it to
+communicate with the server.
+? How would you like to proceed? [Use arrows to move; enter to select]
+> Create a new profile with `PREFECT_API_URL` set and switch to it
+  Set `PREFECT_API_URL` in the current profile: 'ephemeral'
+? Enter a new profile name: sqd
+Switched to new profile 'sqd'
+
+ ___ ___ ___ ___ ___ ___ _____
+| _ \ _ \ __| __| __/ __|_   _|
+|  _/   / _|| _|| _| (__  | |
+|_| |_|_\___|_| |___\___| |_|
+
+Configure Prefect to communicate with the server with:
+
+    prefect config set PREFECT_API_URL=http://0.0.0.0:4200/api
+
+View the API reference documentation at http://0.0.0.0:4200/docs
+
+Check out the dashboard at http://0.0.0.0:4200
+
+
+
+The Prefect server is running in the background. Run `prefect server stop` to stop it.
+
+```
 ## Step 3. Configure the Prefect client
 
 Configure the Prefect client in the same environment to connect to the local Prefect server:
