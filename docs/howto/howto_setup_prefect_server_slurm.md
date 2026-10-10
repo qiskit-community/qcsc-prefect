@@ -163,13 +163,25 @@ in your local web browser.
 
 ### QFw-SLURM environment
 
-If the Prefect server is running inside the `slurmctld` container, forward the local port to the container IP through the host running the QFw-SLURM environment.
+If the QFw-SLURM environment is running locally, for example on your laptop and port `4200` is exposed from the `slurmctld` container, open the Prefect UI directly in your local web browser:
 
-For example:
+```text
+http://127.0.0.1:4200
+```
+
+You can verify access first with:
 
 ```bash
-ssh -L 4200:<slurmctld-container-ip>:4200 <username>@<remote-host>
+curl http://127.0.0.1:4200/api/health
 ```
+
+If the QFw-SLURM environment is running on a remote machine, create an SSH tunnel from your local computer to port `4200` on the remote host:
+
+```bash
+ssh -L 4200:127.0.0.1:4200 <username>@<remote-host>
+```
+
+Keep the SSH connection open while using the Prefect UI.
 
 Then open:
 
@@ -177,11 +189,7 @@ Then open:
 http://127.0.0.1:4200
 ```
 
-in your local browser.
-
-The exact command depends on how the QFw-SLURM containers are deployed and accessed.
-
-If needed, the container IP can be obtained from the container runtime on the remote host.
+in your local web browser.
 
 ## Step 5. Verify Prefect from the workflow environment
 
