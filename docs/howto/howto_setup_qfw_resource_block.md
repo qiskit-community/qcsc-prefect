@@ -17,9 +17,7 @@ Before creating the `QFwResource` block:
 - A Prefect server must be running and the active Prefect profile must point to that server.
 - The QFw device-access configuration and provider credentials must already be available.
 
-For Prefect server setup in the QFw-SLURM environment, see:
-
-[`howto_setup_prefect_server_slurm.md`](howto_setup_prefect_server_slurm.md)
+For Prefect server setup in the QFw-SLURM environment, see [How to Run and Access a Prefect Server on a Slurm Login Node](howto_setup_prefect_server_slurm.md).
 
 Provider credentials should remain in the QFw credential configuration rather than being duplicated directly in the Prefect block.
 
