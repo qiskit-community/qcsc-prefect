@@ -154,6 +154,10 @@ def walker_sqd(
         telemetry.update(
             shot_retention_rate=float(bit_array.num_shots / meas_bits.num_shots),
         )
+    
+    elif quantum_source == "qfw":
+        # Quantum execution in QFw-SLURM container
+  
     else:
         # Random sampling
         # Isolate bitstring seed from the module seed for equivalent control with real device path.
