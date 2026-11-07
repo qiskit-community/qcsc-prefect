@@ -20,7 +20,9 @@ qcsc-prefect/
 │   ├── qcsc-prefect-adapters
 │   ├── qcsc-prefect-executor
 │   ├── qcsc-prefect-qiskit
-│   └── qcsc-prefect-dice
+│   ├── qcsc-prefect-dice
+│   ├── qcsc-prefect-fulqrum
+│   └── qcsc-prefect-sbd
 ├── pyproject.toml
 └── .pre-commit-config.yaml
 ```
@@ -42,6 +44,18 @@ qcsc-prefect/
   Optional native Qiskit Runtime integration utilities.
 - `packages/qcsc-prefect-dice/`
   Optional DICE SHCI solver integration.
+- `packages/qcsc-prefect-fulqrum/`
+  Optional fulqrum subspace eigensolver integration, a drop-in alternative to DICE for SQD.
+- `packages/qcsc-prefect-sbd/`
+  Optional SBD Davidson solver integration (`SBDSolverJob`).
+- `algorithms/`
+  Reference QCSC workflows. Each one has its own `pyproject.toml` and README and is
+  installed on its own.
+  - `open_loop/sqd`: sample once, then diagonalize (fulqrum by default, DICE or SBD).
+  - `open_loop/skqd`: sample once, then diagonalize (DICE or SBD).
+  - `closed_loop/sqd_de`: SQD with differential evolution of the circuit parameters
+    (SBD or DICE).
+  - `qcsc_workflow_utility`: chemistry and solver helpers shared by the workflows.
 - `examples/`
   End-to-end runnable examples for Miyabi and Fugaku.
 - `docs/`
@@ -67,6 +81,12 @@ Install the core packages plus the Python-side DICE integration with:
 
 ```bash
 pip install "qcsc-prefect[dice]"
+```
+
+Install the core packages plus the Python-side SBD integration with:
+
+```bash
+pip install "qcsc-prefect[sbd]"
 ```
 
 Install all optional integrations with:
@@ -140,6 +160,30 @@ supported and cause an error before the process starts.
 
 See [DICE Integration](./docs/howto/howto_use_dice_prefect.md) for a longer setup example.
 
+## Fulqrum Integration
+
+`qcsc-prefect-fulqrum` runs the [fulqrum](https://github.com/qiskit-community/fulqrum)
+subspace eigensolver through the same block model. Its `FulqrumSolverJob` has the same `run()`
+signature and `SCIResult` return type as `DiceSHCISolverJob`, so SQD workflows can switch
+solvers by changing the solver block.
+
+Like DICE, fulqrum itself is not installed by `pip`. Version 0.5 is not on PyPI yet, so build
+it per site with `packages/qcsc-prefect-fulqrum/native/build_fulqrum.sh`, then install
+`qcsc-prefect-fulqrum` into that environment with `--no-deps`. The compute node needs only
+numpy, scipy and fulqrum, and runs the `qcsc-fulqrum-solve` entry point. Install the package
+from the source checkout on the workflow host:
+
+```bash
+pip install -e packages/qcsc-prefect-fulqrum
+```
+
+It is not a uv workspace member, because uv would resolve its `[solver]` extra for
+`uv sync --all-packages`. Its tests still run with `uv run pytest`.
+
+See [Fulqrum Integration](./docs/howto/howto_use_fulqrum_prefect.md) for the block setup and
+[algorithms/open_loop/sqd](./algorithms/open_loop/sqd/README.md) for the `sqd` workflow, which uses
+fulqrum by default.
+
 ## Documentation
 
 - Concept and architecture:
@@ -148,6 +192,7 @@ See [DICE Integration](./docs/howto/howto_use_dice_prefect.md) for a longer setu
   - [BitCount Tutorial for Miyabi](./docs/tutorials/create_qcsc_workflow_for_miyabi.md)
   - [BitCount Tutorial for Fugaku](./docs/tutorials/create_qcsc_workflow_for_fugaku.md)
   - [Native Qiskit on Prefect](./docs/howto/howto_use_native_qiskit_prefect.md)
+  - [Fulqrum Integration](./docs/howto/howto_use_fulqrum_prefect.md)
   - [Miyabi Hello Demo](./examples/miyabi_prefect_hello_demo/README.md)
   - [Fugaku Hello Demo](./examples/fugaku_prefect_hello_demo/README.md)
 
@@ -207,6 +252,8 @@ Release notes:
 - The `pypi-publish.yml` workflow validates tag/package version consistency before publishing.
 - The DICE/SBD executable is not installed by `pip`.
 - DICE/SBD must be built separately for each target HPC environment.
+- The fulqrum solver is not installed by `pip` either; build it per site with
+  `packages/qcsc-prefect-fulqrum/native/build_fulqrum.sh`.
 - If a broken release is published, prefer yanking over deleting.
 
 ### Release Validation Note
