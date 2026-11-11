@@ -138,7 +138,7 @@ def test_each_profile_resolves_its_sbd_table(tmp_path, profile, expected):
         "sqd-sbd-mpi",
     )
     assert kwargs["sbd_executable"] == SBD_EXECUTABLE
-    assert kwargs["root_dir"] == "/shared/work/sqd"
+    assert kwargs["root_dir"] == "/shared/work/qcsc-prefect"
 
 
 def test_the_fulqrum_keys_of_a_profile_do_not_reach_the_sbd_blocks(tmp_path):
@@ -307,7 +307,7 @@ def test_dry_run_with_the_example_qrmi_table(tmp_path, capsys):
     create_blocks.main(["--config", str(_sbd_config(tmp_path, qrmi=True)), "--dry-run"])
     printed = json.loads(capsys.readouterr().out)
     assert set(printed) == {"blocks", "qrmi_blocks", "runtime_block", "advanced_block"}
-    assert printed["qrmi_blocks"]["python_executable"].endswith("/venv/sqd-node/bin/python")
+    assert printed["qrmi_blocks"]["python_executable"].endswith("/venv/qcsc-node/bin/python")
     assert printed["runtime_block"]["scheduler"] == "slurm"
 
 
